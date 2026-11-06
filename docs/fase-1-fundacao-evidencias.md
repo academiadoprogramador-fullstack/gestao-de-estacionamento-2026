@@ -4,7 +4,7 @@ Este registro distingue verificações reproduzidas localmente de gates que aind
 
 ## Verificações locais
 
-- `dotnet build backend/Estacionamento.slnx --no-restore`: aprovado, sem warnings ou erros.
+- `dotnet build backend/Estacionamento.slnx --no-restore`: aprovado na estrutura original, sem warnings ou erros. Após a reorganização, o caminho correspondente é `app/backend/Estacionamento.slnx`.
 - MSTest contra SQL Server real: 4 testes arquiteturais e 15 testes de integração aprovados; os testes exercitam migrações, bootstrap local e sua ausência em `Testing`, Identity, sessão, autorização, antiforgery, logs, cache e Data Protection.
 - Migração inicial em banco SQL Server de teste separado e vazio: aplicada e esquema técnico validado sem tabelas operacionais.
 - `dotnet format Estacionamento.slnx --verify-no-changes --no-restore`: aprovado.

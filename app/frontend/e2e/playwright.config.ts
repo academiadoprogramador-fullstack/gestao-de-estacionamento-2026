@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'node:path';
+
+dotenv.config({ path: path.resolve(__dirname, '.env'), quiet: true });
 
 export default defineConfig({
   testDir: './specs',
@@ -30,7 +34,7 @@ export default defineConfig({
       },
     },
     {
-      command: 'npm --prefix ../../frontend start',
+      command: 'npm --prefix .. start',
       url: 'https://localhost:4200',
       ignoreHTTPSErrors: true,
       reuseExistingServer: !process.env.CI,

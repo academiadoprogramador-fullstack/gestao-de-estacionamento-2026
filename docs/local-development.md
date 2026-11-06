@@ -1,13 +1,13 @@
 # Configuração local de desenvolvimento
 
-A API encerra o startup antes de abrir qualquer endpoint quando uma configuração obrigatória estiver ausente ou inválida. Em desenvolvimento local, use o User Secrets da API (`backend/src/Estacionamento.Api/Estacionamento.Api.csproj`) para a conexão e senhas sintéticas; o `.env` do Docker Compose serve apenas ao contêiner SQL Server. Não coloque credenciais ou chaves em arquivos versionados. User Secrets não é criptografado e não deve guardar credenciais de produção.
+A API encerra o startup antes de abrir qualquer endpoint quando uma configuração obrigatória estiver ausente ou inválida. Em desenvolvimento local, use o User Secrets da API (`app/backend/src/Estacionamento.Api/Estacionamento.Api.csproj`) para a conexão e senhas sintéticas; o `.env` do Docker Compose serve apenas ao contêiner SQL Server. Não coloque credenciais ou chaves em arquivos versionados. User Secrets não é criptografado e não deve guardar credenciais de produção.
 
 | Chave de configuração (equivalente no ambiente) | Obrigatória | Uso |
 | --- | --- | --- |
 | `ConnectionStrings__Identity` | Sim | Conexão com banco SQL Server isolado para o ambiente atual. |
 | `Security__SpaOrigin` | Sim | Origem HTTPS permitida para a SPA, sem caminho adicional. |
 | `DataProtection__KeyRingPath` | Sim | Diretório persistente de Data Protection isolado por ambiente. |
-| `MSSQL_SA_PASSWORD` | Ao iniciar SQL Server Compose | Senha local do SQL Server Developer; pode ser definida em `backend/.env` (ignorado pelo Git) ou no ambiente do shell. Não a compartilhe entre ambientes. |
+| `MSSQL_SA_PASSWORD` | Ao iniciar SQL Server Compose | Senha local do SQL Server Developer; pode ser definida em `app/backend/.env` (ignorado pelo Git) ou no ambiente do shell. Não a compartilhe entre ambientes. |
 | `TEST_SQLSERVER_CONNECTION` | Ao executar testes de integração | Conexão dedicada ao banco SQL Server de teste. |
 | `TEST_MIGRATION_SQLSERVER_CONNECTION` | Ao verificar a migração inicial | Conexão para um banco SQL Server de teste vazio e isolado. |
 | `TEST_VALET_PASSWORD`, `TEST_CASHIER_PASSWORD`, `TEST_ADMIN_PASSWORD` | Ao executar integração/E2E | Senhas sintéticas dos bancos de teste isolados; nunca use as senhas da base local de desenvolvimento. |
@@ -17,11 +17,11 @@ A API encerra o startup antes de abrir qualquer endpoint quando uma configuraç�
 
 A duração de inatividade da sessão pode ser configurada por `Authentication__IdleTimeoutSeconds` (padrão local de 1200 segundos).
 
-Em `Development`, o startup da API aplica migrações pendentes e provisiona idempotentemente as três contas/papéis sintéticos antes de abrir endpoints. Falha de conexão ou ausência de qualquer senha impede o startup. Senhas vêm do User Secrets/ambiente e não são redefinidas para contas já existentes. Fora de `Development` não há migração nem provisionamento automático; o comando legado `dotnet run --project backend/src/Estacionamento.Api -- --provision-synthetic-accounts` permanece disponível somente no ambiente local.
+Em `Development`, o startup da API aplica migrações pendentes e provisiona idempotentemente as três contas/papéis sintéticos antes de abrir endpoints. Falha de conexão ou ausência de qualquer senha impede o startup. Senhas vêm do User Secrets/ambiente e não são redefinidas para contas já existentes. Fora de `Development` não há migração nem provisionamento automático; o comando legado `dotnet run --project app/backend/src/Estacionamento.Api -- --provision-synthetic-accounts` permanece disponível somente no ambiente local.
 
-O `backend/docker-compose.yml` exige `MSSQL_SA_PASSWORD` e não fornece valor padrão. Para iniciar o banco com a senha definida em `backend/.env`, execute `cd backend && docker compose up -d`; o arquivo é local e não deve ser versionado. Uma variável já definida no shell tem precedência sobre o `.env`. Use a mesma senha na conexão da API; se o volume do banco já existir, alterar apenas o `.env` não altera a senha do SQL Server existente. A origem, o caminho do key ring e as conexões não possuem fallback silencioso. Configurações e chaves de teste devem permanecer separadas de quaisquer valores ou recursos de produção.
+O `app/backend/docker-compose.yml` exige `MSSQL_SA_PASSWORD` e não fornece valor padrão. Para iniciar o banco com a senha definida em `app/backend/.env`, execute `cd app/backend && docker compose up -d`; o arquivo é local e não deve ser versionado. Uma variável já definida no shell tem precedência sobre o `.env`. Use a mesma senha na conexão da API; se o volume do banco já existir, alterar apenas o `.env` não altera a senha do SQL Server existente. A origem, o caminho do key ring e as conexões não possuem fallback silencioso. Configurações e chaves de teste devem permanecer separadas de quaisquer valores ou recursos de produção.
 
-O projeto da API já tem `UserSecretsId`. Para configurar ou atualizar os valores locais (sem incluir segredos no repositório), execute de `backend/`:
+O projeto da API já tem `UserSecretsId`. Para configurar ou atualizar os valores locais (sem incluir segredos no repositório), execute de `app/backend/`:
 
 ```bash
 dotnet user-secrets set 'ConnectionStrings:Identity' 'Server=localhost,14333;Database=EstacionamentoDev;User Id=sa;Password=SENHA_DO_ARQUIVO_BACKEND_DOT_ENV;Encrypt=True;TrustServerCertificate=True' --project src/Estacionamento.Api
@@ -41,7 +41,7 @@ O harness Playwright serve a SPA em `https://localhost:4200` e encaminha somente
 Em `Development`, as migrações são aplicadas automaticamente no startup, exclusivamente ao banco local configurado. Para revisar o SQL antes de atualizar um banco de teste e para migrações controladas fora desse ambiente, use os comandos explícitos abaixo com uma conexão de teste dedicada:
 
 ```bash
-cd backend
+cd app/backend
 dotnet tool restore
 ConnectionStrings__Identity="$IDENTITY_TEST_CONNECTION" dotnet dotnet-ef migrations script --idempotent --project src/Estacionamento.Infrastructure/Estacionamento.Infrastructure.csproj --startup-project src/Estacionamento.Api/Estacionamento.Api.csproj
 ConnectionStrings__Identity="$IDENTITY_TEST_CONNECTION" dotnet dotnet-ef database update --project src/Estacionamento.Infrastructure/Estacionamento.Infrastructure.csproj --startup-project src/Estacionamento.Api/Estacionamento.Api.csproj

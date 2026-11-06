@@ -18,20 +18,20 @@ O serviço de valet tradicional, embora conveniente para o cliente, é propenso 
 
 ```bash
 # Frontend: instalar dependências travadas, executar testes e build
-cd frontend
+cd app/frontend
 npm ci
 npm test -- --watch=false
 npm run build
 
 # Smoke E2E local da SPA/API (requer SQL Server local e Chromium do Playwright)
-cd ../tests/e2e
+cd ../../tests/e2e
 npm ci
 npx playwright install chromium
 # Configure TEST_SQLSERVER_CONNECTION, TEST_VALET_PASSWORD, TEST_CASHIER_PASSWORD e TEST_ADMIN_PASSWORD com valores locais não versionados.
 npm test
 
 # Backend
-cd ../../backend
+cd ../../app/backend
 dotnet restore Estacionamento.slnx --locked-mode
 dotnet build Estacionamento.slnx --no-restore
 dotnet test Estacionamento.slnx --no-restore

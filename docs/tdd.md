@@ -56,18 +56,19 @@ flowchart LR
 Estrutura proposta (DT-01–05, DT-10):
 
 ```text
-frontend/                         Angular 22
-  src/app/core/                   sessão, transporte HTTP, erros, guards
-  src/app/features/               check-in, vagas, retirada, cobrança, admin, relatórios
-  src/app/shared/                 componentes acessíveis, formatação, estados
-backend/
-  Estacionamento.slnx
-  src/Estacionamento.Api/         controllers, DTOs, políticas, middleware, composição
-  src/Estacionamento.Application/ casos de uso, portas, projeções, autorizações de ação
-  src/Estacionamento.Domain/      entidades, valores, regras e eventos de domínio
-  src/Estacionamento.Infrastructure/ EF Core, Identity, criptografia, auditoria, consultas
-  tests/Estacionamento.UnitTests/
-  tests/Estacionamento.IntegrationTests/
+app/
+  frontend/                       Angular 22
+    src/app/core/                 sessão, transporte HTTP, erros, guards
+    src/app/features/             check-in, vagas, retirada, cobrança, admin, relatórios
+    src/app/shared/               componentes acessíveis, formatação, estados
+  backend/
+    Estacionamento.slnx
+    src/Estacionamento.Api/       controllers, DTOs, políticas, middleware, composição
+    src/Estacionamento.Application/ casos de uso, portas, projeções, autorizações de ação
+    src/Estacionamento.Domain/    entidades, valores, regras e eventos de domínio
+    src/Estacionamento.Infrastructure/ EF Core, Identity, criptografia, auditoria, consultas
+    tests/Estacionamento.UnitTests/
+    tests/Estacionamento.IntegrationTests/
 tests/e2e/                        Playwright
 ```
 

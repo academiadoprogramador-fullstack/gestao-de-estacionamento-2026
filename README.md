@@ -13,3 +13,28 @@
 ## Introdução
 
 O serviço de valet tradicional, embora conveniente para o cliente, é propenso a ineficiências: perda de tickets, dificuldade em localizar veículos, falta de transparência na cobrança, gestão manual de vagas e dificuldade em comprovar eventuais danos aos veículos. Isso pode levar à insatisfação do cliente, perda de receita e custos operacionais elevados.
+
+## Verificações locais
+
+```bash
+# Frontend: instalar dependências travadas, executar testes e build
+cd frontend
+npm ci
+npm test -- --watch=false
+npm run build
+
+# Smoke E2E local da SPA/API (requer SQL Server local e Chromium do Playwright)
+cd ../tests/e2e
+npm ci
+npx playwright install chromium
+# Configure TEST_SQLSERVER_CONNECTION, TEST_VALET_PASSWORD, TEST_CASHIER_PASSWORD e TEST_ADMIN_PASSWORD com valores locais não versionados.
+npm test
+
+# Backend
+cd ../../backend
+dotnet restore Estacionamento.slnx --locked-mode
+dotnet build Estacionamento.slnx --no-restore
+dotnet test Estacionamento.slnx --no-restore
+```
+
+O harness inicia a API como processo separado e serve a SPA por HTTPS local, encaminhando `/api/*` a um upstream fixo em loopback. O smoke verifica login/logout, cookie host-only `Secure`/`HttpOnly`, expiração, autorização e ausência de chamadas cross-site. Configure as variáveis conforme [`docs/local-development.md`](docs/local-development.md). Essa topologia de desenvolvimento não comprova isolamento de ingresso, TLS entre sites ou autenticação de rede na futura publicação Azure; esses gates seguem pendentes.

@@ -1,0 +1,10 @@
+{
+  "/api": {
+    "target": "http://127.0.0.1:5188",
+    "secure": false,
+    "changeOrigin": false,
+    "headers": {
+      "X-Forwarded-Proto": "https"
+    }
+  }
+}

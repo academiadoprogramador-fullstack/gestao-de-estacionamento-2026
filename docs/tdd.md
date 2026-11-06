@@ -61,6 +61,7 @@ app/
     src/app/core/                 sessão, transporte HTTP, erros, guards
     src/app/features/             check-in, vagas, retirada, cobrança, admin, relatórios
     src/app/shared/               componentes acessíveis, formatação, estados
+    e2e/                         Playwright
   backend/
     Estacionamento.slnx
     src/Estacionamento.Api/       controllers, DTOs, políticas, middleware, composição
@@ -69,7 +70,6 @@ app/
     src/Estacionamento.Infrastructure/ EF Core, Identity, criptografia, auditoria, consultas
     tests/Estacionamento.UnitTests/
     tests/Estacionamento.IntegrationTests/
-tests/e2e/                        Playwright
 ```
 
 Dependências: Api → Application e Infrastructure (composição); Infrastructure → Application/Domain; Application → Domain; Domain → nenhuma camada externa. Separar funcionalidades internamente por módulo/caso de uso, não por controllers inchados nem repositório genérico. DTOs nunca expõem entidades EF ou número de documento por padrão. Frontend por funcionalidade, com Signals para estado local/derivado e Signal Forms para entrada/validação; chamadas HTTP na camada de serviços; rotas/guards apenas complementam a autorização da API. Polling pausa em aba inativa, usa cancelamento e evita requisições sobrepostas; mutation sempre força releitura (DT-08).

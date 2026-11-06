@@ -24,14 +24,14 @@ npm test -- --watch=false
 npm run build
 
 # Smoke E2E local da SPA/API (requer SQL Server local e Chromium do Playwright)
-cd ../../tests/e2e
+cd e2e
 npm ci
 npx playwright install chromium
-# Configure TEST_SQLSERVER_CONNECTION, TEST_VALET_PASSWORD, TEST_CASHIER_PASSWORD e TEST_ADMIN_PASSWORD com valores locais não versionados.
+# Copie .env.example para .env e preencha a conexão e senhas do banco isolado de testes.
 npm test
 
 # Backend
-cd ../../app/backend
+cd ../../backend
 dotnet restore Estacionamento.slnx --locked-mode
 dotnet build Estacionamento.slnx --no-restore
 dotnet test Estacionamento.slnx --no-restore

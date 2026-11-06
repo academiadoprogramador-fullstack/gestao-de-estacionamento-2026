@@ -6,6 +6,8 @@
 **Origem:** solicitação de PRD baseada em `docs/entrevista.md`, contexto de `README.md` e esclarecimentos do solicitante nesta conversa.  
 **Escopo:** MVP de uma unidade de valet/estacionamento.
 
+**Ajuste de desenvolvimento local (06/11/2026, confirmado pelo solicitante):** em `Development`, a API deve aplicar as migrações versionadas e provisionar idempotentemente os três perfis/contas sintéticas antes de aceitar requisições, com credenciais externas obrigatórias. Falhas de banco ou credenciais impedem a inicialização. Outros ambientes não executam esse bootstrap; migrações de homologação/produção continuam sujeitas a revisão e aprovação explícitas. Aceite: iniciar sobre banco local vazio cria esquema e contas, reiniciar não duplica contas, configuração ausente falha antes de servir e ambiente não Development não migra nem provisiona.
+
 ## 1. Resumo executivo
 
 Centralizar o atendimento do valet, desde a entrada até a entrega do veículo, com identificação do atendimento, localização da vaga, fila de retirada, cobrança padronizada e histórico auditável. O objetivo é reduzir espera, divergências financeiras e incerteza sobre a ocupação e as condições dos veículos, dando à administração informações confiáveis sobre a operação.

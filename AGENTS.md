@@ -14,3 +14,8 @@ Para novas funcionalidades e alterações de comportamento, executar o fluxo com
 4. **Pull Request:** somente após implementação e verificações aplicáveis, abrir PR da feature branch para a `main` com o template de `.github/pull_request_template.md`, relacionando requisitos, decisões e especificações, descrevendo testes executados e pendências. Integrar na `main` por meio do PR, após revisão, aprovações e verificações exigidas; não fazer merge direto nem contornar proteções da branch.
 
 Em mudanças com documentos existentes, reutilizar e atualizar os artefatos pertinentes em vez de recriá-los. Se uma etapa não se aplicar (por exemplo, correção puramente editorial), registrar a justificativa no PR; não tratar pendências de validação ou aprovação como concluídas.
+
+## Commits
+
+- Dividir as mudanças em commits pequenos, atômicos e focados, agrupando arquivos por unidade lógica ou tarefa. Evitar misturar documentação, refatorações e funcionalidades sem relação.
+- Cada commit deve ser verificável e ter uma mensagem descritiva. Não fazer commit de trabalho incompleto que não passe nas verificações necessárias.

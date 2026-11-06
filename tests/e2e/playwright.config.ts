@@ -13,7 +13,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'dotnet run --project ../../backend/src/Estacionamento.Api --no-build --no-launch-profile --urls http://127.0.0.1:5188',
+      command: 'dotnet run --project ../../app/backend/src/Estacionamento.Api --no-build --no-launch-profile --urls http://127.0.0.1:5188',
       url: 'http://127.0.0.1:5188/healthz',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
@@ -30,7 +30,7 @@ export default defineConfig({
       },
     },
     {
-      command: 'npm --prefix ../../frontend start',
+      command: 'npm --prefix ../../app/frontend start',
       url: 'https://localhost:4200',
       ignoreHTTPSErrors: true,
       reuseExistingServer: !process.env.CI,

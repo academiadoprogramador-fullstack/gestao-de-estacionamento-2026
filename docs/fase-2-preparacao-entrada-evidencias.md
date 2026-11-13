@@ -12,8 +12,9 @@
 | --- | --- | --- |
 | Restore travado | `cd app/backend && dotnet restore Estacionamento.slnx --locked-mode` | Passou em 13/11/2026. |
 | Build backend + OpenAPI | `cd app/backend && dotnet build Estacionamento.slnx --no-restore --tl:off` | Passou, 0 avisos e 0 erros; documento gerado em `src/Estacionamento.Api/obj/Estacionamento.Api.json`. |
+| Contrato OpenAPI de erros | `dotnet test tests/Estacionamento.IntegrationTests/Estacionamento.IntegrationTests.csproj --no-build --filter FullyQualifiedName~OpenApiErrorContractTests --tl:off` após o build | Passou: verifica `application/problem+json`, schema/extensions opcionais e preservação de media types de sessão no JSON gerado. |
 | Formatação backend | `cd app/backend && dotnet format whitespace Estacionamento.slnx --verify-no-changes --no-restore` | Passou, sem diferenças. |
-| Testes backend | `dotnet test Estacionamento.slnx --no-build --tl:off` com SQL Server local e senhas sintéticas no ambiente | Execução final completa: Unit 12/12, Integration 55/55, Architecture 4/4 (71/71), em bases de teste dedicadas. |
+| Testes backend | `dotnet test Estacionamento.slnx --no-build --tl:off` com SQL Server local e senhas sintéticas no ambiente | Execução completa após a correção OpenAPI: Unit 12/12, Integration 56/56, Architecture 4/4 (72/72), em bases de teste dedicadas. |
 | Testes frontend | `cd app/frontend && npm test` | Passou após as correções: 44/44 em 6 arquivos Vitest, incluindo respostas assíncronas fora de ordem, check-in pendente/replay, resumo de validação e paginação. |
 | Build frontend | `cd app/frontend && npm run build` | Passou em modo de produção. |
 | Formatação frontend/E2E | `npx prettier --check` nos arquivos TypeScript/CSS alterados | Passou após formatação final. |
@@ -45,8 +46,8 @@ Os segredos foram fornecidos somente por variáveis de ambiente/arquivo local ig
 
 ## Pendências e limites
 
-- Executar o roteiro manual de acessibilidade descrito em [`local-development.md`](local-development.md#roteiro-local-de-acessibilidade-da-ui); os testes verificam semântica e foco básico, mas não declaram conformidade normativa.
-- A validação manual de acessibilidade segue pendente. A inspeção do OpenAPI gerado confirmou referências genéricas a `ProblemDetails`, mas o artefato não declara `application/problem+json` nem as extensões `code`, `correlationId` e `errors`; o runtime e os testes HTTP confirmam o contrato efetivo. A correção da descrição OpenAPI fica registrada como pendência técnica, sem invalidar os gates de runtime. PR, revisão, aprovação, merge e arquivamento não foram realizados.
+- O solicitante confirmou que executou e aprovou o roteiro manual de acessibilidade descrito em [`local-development.md`](local-development.md#roteiro-local-de-acessibilidade-da-ui). Navegador, dispositivo, tecnologia assistiva e observações detalhadas não foram informados; portanto, não se declara conformidade normativa nem compatibilidade além da validação relatada.
+- PR, revisão, aprovação e merge não foram realizados.
 - Permanecem fora desta change aprovação de privacidade/retencão, operação, implantação e migrações Azure; conferir pendências e gates do PRD/TDD antes de qualquer publicação.
 
 ## Correções e evidências de regressão
@@ -56,4 +57,4 @@ Os segredos foram fornecidos somente por variáveis de ambiente/arquivo local ig
 - **V2-04/05:** testes cobrem mensagens/resumo/foco nas três telas administrativas, impedimento de requisição inválida, navegação das páginas de vaga/tarifa e recuperação por recarga após falha inicial, sem apagar campos do check-in.
 - **V2-06:** testes diretos do filtro garantem code/correlation, errors de campo e preservação do contrato de sessão; integração executa sexta tentativa e verifica 429, `application/problem+json`, correlation e ausência de senha.
 - **V2-07:** testes sem conectar recusam catálogo system DB, ambiente e catálogo ausente; teste completo usou `EstacionamentoReview_*`, `EstacionamentoReviewMigration_*`, e E2E uma base dedicada nova.
-- Build frontend, Vitest 44/44, build backend/OpenAPI, format, testes backend 71/71 e tipagem/E2E Playwright 4/4 passaram. Evidências e limites completos: PRD §5.2–5.3 e TDD §7.1; gates não substituem avaliação manual de acessibilidade ou homologação.
+- Build frontend, Vitest 44/44, build backend/OpenAPI, teste do contrato OpenAPI, format, testes backend 72/72 e tipagem/E2E Playwright 4/4 passaram; a correção OpenAPI passou build/format e suíte backend completa. Evidências e limites completos: PRD §5.2–5.3 e TDD §7.1; gates não substituem avaliação manual de acessibilidade ou homologação.

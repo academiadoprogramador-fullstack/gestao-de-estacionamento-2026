@@ -41,3 +41,14 @@ O sistema SHALL impedir cache das respostas privadas e omitir documento, vistori
 #### Scenario: Inspeção de sucesso e erro
 - **WHEN** são executados check-in, leitura sensível, acesso indevido e falha inesperada
 - **THEN** respostas privadas não são cacheáveis e logs/erros não revelam conteúdo sensível ou stack trace ao cliente
+
+### Requirement: Contrato OpenAPI de erros operacionais
+O documento OpenAPI gerado SHALL descrever respostas de erro operacionais fora dos endpoints de sessão com media type `application/problem+json` e schema Problem Details incluindo propriedades padrão e extensões opcionais `code`, `correlationId` e `errors`. O schema de `errors` SHALL representar um mapa de nomes de campo a arrays de strings. Os contratos de sessão SHALL permanecer inalterados.
+
+#### Scenario: Consumidor lê resposta de erro documentada
+- **WHEN** um consumidor inspeciona o OpenAPI gerado para uma operação operacional com resposta 4xx/5xx
+- **THEN** encontra somente `application/problem+json` e schema com propriedades padrão e extensões opcionais compatíveis com o runtime
+
+#### Scenario: Contrato de sessão
+- **WHEN** um consumidor inspeciona as operações `/api/v1/session`
+- **THEN** as respostas e media types de sessão permanecem conforme o contrato existente

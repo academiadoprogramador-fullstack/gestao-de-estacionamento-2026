@@ -15,9 +15,14 @@ public sealed class IdentityMigrationTests
             ?? Environment.GetEnvironmentVariable("TEST_SQLSERVER_CONNECTION")
             ?? throw new InvalidOperationException(
                 "Set TEST_SQLSERVER_CONNECTION to an isolated SQL Server test database.");
-        var databaseConnection = new SqlConnectionStringBuilder(configuredConnection);
+        var variableName = Environment.GetEnvironmentVariable("TEST_MIGRATION_SQLSERVER_CONNECTION") is null
+            ? "TEST_SQLSERVER_CONNECTION"
+            : "TEST_MIGRATION_SQLSERVER_CONNECTION";
+        var databaseConnection = DedicatedSqlTestDatabase.ParseAndValidate(configuredConnection, variableName);
         var databaseName = databaseConnection.InitialCatalog;
         Assert.IsFalse(string.IsNullOrWhiteSpace(databaseName), "The test connection must name its isolated database.");
+        Assert.IsFalse(new[] { "master", "model", "msdb", "tempdb" }.Contains(databaseName, StringComparer.OrdinalIgnoreCase),
+            "Migration tests must never target a SQL Server system database.");
 
         var adminConnection = new SqlConnectionStringBuilder(configuredConnection)
         {
@@ -37,7 +42,7 @@ public sealed class IdentityMigrationTests
             .UseSqlServer(databaseConnection.ConnectionString)
             .Options;
         await using var db = new IdentityDbContext(options);
-        await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync("20261106175524_InitialIdentity");
 
         var tables = await db.Database.SqlQueryRaw<string>(
                 "SELECT TABLE_NAME AS [Value] FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'")

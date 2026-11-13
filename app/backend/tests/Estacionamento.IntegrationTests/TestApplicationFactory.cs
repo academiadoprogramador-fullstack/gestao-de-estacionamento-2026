@@ -2,6 +2,13 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using Estacionamento.Application.Abstractions;
+using Estacionamento.Infrastructure.Persistence;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Data.SqlClient;
 
 namespace Estacionamento.IntegrationTests;
 
@@ -13,12 +20,24 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
 
     private readonly string environmentName;
 
-    public TestApplicationFactory(string environmentName = "Testing", string? connectionString = null, bool omitValetPassword = false)
+    private readonly bool failSensitiveReadAudit;
+
+    public TestApplicationFactory(
+        string environmentName = "Testing",
+        string? connectionString = null,
+        bool omitValetPassword = false,
+        bool failSensitiveReadAudit = false)
     {
+        var configuredConnection = connectionString ?? Environment.GetEnvironmentVariable("TEST_SQLSERVER_CONNECTION")
+            ?? throw new InvalidOperationException("Set TEST_SQLSERVER_CONNECTION to a dedicated Estacionamento* SQL Server test database.");
+        DedicatedSqlTestDatabase.ParseAndValidate(configuredConnection, "TEST_SQLSERVER_CONNECTION");
         this.environmentName = environmentName;
-        SetEnvironmentVariable("ConnectionStrings__Identity", connectionString ?? Environment.GetEnvironmentVariable("TEST_SQLSERVER_CONNECTION"));
+        this.failSensitiveReadAudit = failSensitiveReadAudit;
+        SetEnvironmentVariable("ConnectionStrings__Identity", configuredConnection);
         SetEnvironmentVariable("Security__SpaOrigin", "https://localhost");
         SetEnvironmentVariable("DataProtection__KeyRingPath", KeyRingPath);
+        SetEnvironmentVariable("Idempotency__Hmac__ActiveKeyVersion", "1");
+        SetEnvironmentVariable("Idempotency__Hmac__Keys__1", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
         SetEnvironmentVariable("Authentication__IdleTimeoutSeconds", "2");
         SetEnvironmentVariable("SyntheticAccounts__ValetPassword", omitValetPassword ? "" : Environment.GetEnvironmentVariable("TEST_VALET_PASSWORD"));
         SetEnvironmentVariable("SyntheticAccounts__CashierPassword", Environment.GetEnvironmentVariable("TEST_CASHIER_PASSWORD"));
@@ -29,6 +48,15 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment(environmentName);
         builder.ConfigureLogging(logging => logging.AddProvider(LogCapture));
+        if (failSensitiveReadAudit)
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IAuditWriter>();
+                services.AddScoped<IAuditWriter>(provider =>
+                    new FailingSensitiveReadAuditWriter(provider.GetRequiredService<EfAuditStore>()));
+            });
+        }
     }
 
     protected override void Dispose(bool disposing)
@@ -52,6 +80,25 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
     {
         originalEnvironment.TryAdd(key, Environment.GetEnvironmentVariable(key));
         Environment.SetEnvironmentVariable(key, value);
+    }
+
+    private sealed class FailingSensitiveReadAuditWriter(IAuditWriter inner) : IAuditWriter
+    {
+        public Task AppendAsync(
+            Guid actorId,
+            string action,
+            Guid? targetId,
+            DateTimeOffset occurredAtUtc,
+            IReadOnlyDictionary<string, string> metadata,
+            CancellationToken cancellationToken)
+        {
+            if (action is "attendance.document.read" or "attendance.entry-inspection.read")
+            {
+                throw new InvalidOperationException("Injected sensitive-read audit failure.");
+            }
+
+            return inner.AppendAsync(actorId, action, targetId, occurredAtUtc, metadata, cancellationToken);
+        }
     }
 }
 

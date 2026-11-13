@@ -26,6 +26,10 @@ public sealed class DevelopmentBootstrapTests
                 var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
                 Assert.AreEqual(3, await db.Users.CountAsync(user => user.Email!.EndsWith("@local.example.invalid")));
                 Assert.AreEqual(3, await db.Roles.CountAsync());
+                Assert.AreEqual(1, await db.DailyRateConfigurations.CountAsync());
+                Assert.AreEqual(1, await db.AccessAdministrationControls.CountAsync());
+                Assert.AreEqual(0, await db.DailyRates.CountAsync());
+                Assert.AreEqual(0, await db.ParkingSpaces.CountAsync());
                 Assert.IsFalse((await db.Database.GetPendingMigrationsAsync()).Any());
             }
         }
@@ -55,6 +59,52 @@ public sealed class DevelopmentBootstrapTests
             using var factory = new TestApplicationFactory("Development", connectionString, omitValetPassword: true);
             var error = Assert.ThrowsExactly<InvalidOperationException>(() => factory.CreateClient());
             StringAssert.Contains(error.Message, "SyntheticAccounts:ValetPassword");
+        }
+        finally
+        {
+            await DeleteTestDatabaseAsync(connectionString);
+        }
+    }
+
+    [TestMethod]
+    public async Task Development_restart_does_not_restore_administratively_changed_synthetic_account()
+    {
+        var connectionString = NewTestDatabaseConnection();
+        const string changedPassword = "Changed!Valet_2026X";
+        try
+        {
+            using (var firstFactory = new TestApplicationFactory("Development", connectionString))
+            using (var client = firstFactory.CreateClient())
+            {
+                Assert.IsTrue((await client.GetAsync("/healthz")).IsSuccessStatusCode);
+                await using var scope = firstFactory.Services.CreateAsyncScope();
+                var manager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<EmployeeAccount>>();
+                var account = await manager.FindByEmailAsync("manobrista@local.example.invalid");
+                Assert.IsNotNull(account);
+                Assert.IsTrue((await manager.RemoveFromRoleAsync(account, EmployeeRoles.Valet)).Succeeded);
+                Assert.IsTrue((await manager.AddToRoleAsync(account, EmployeeRoles.Cashier)).Succeeded);
+                account.IsActive = false;
+                Assert.IsTrue((await manager.UpdateSecurityStampAsync(account)).Succeeded);
+                Assert.IsTrue((await manager.UpdateAsync(account)).Succeeded);
+                Assert.IsTrue((await manager.ChangePasswordAsync(account,
+                    Environment.GetEnvironmentVariable("TEST_VALET_PASSWORD")!, changedPassword)).Succeeded);
+            }
+
+            using (var restartedFactory = new TestApplicationFactory("Development", connectionString))
+            using (var restartedClient = restartedFactory.CreateClient())
+            {
+                Assert.IsTrue((await restartedClient.GetAsync("/healthz")).IsSuccessStatusCode);
+                await using var scope = restartedFactory.Services.CreateAsyncScope();
+                var manager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<EmployeeAccount>>();
+                var account = await manager.FindByEmailAsync("manobrista@local.example.invalid");
+                Assert.IsNotNull(account);
+                Assert.IsFalse(account.IsActive);
+                Assert.IsTrue(await manager.IsInRoleAsync(account, EmployeeRoles.Cashier));
+                Assert.IsFalse(await manager.IsInRoleAsync(account, EmployeeRoles.Valet));
+                Assert.IsTrue(await manager.CheckPasswordAsync(account, changedPassword));
+                Assert.IsFalse(await manager.CheckPasswordAsync(account,
+                    Environment.GetEnvironmentVariable("TEST_VALET_PASSWORD")!));
+            }
         }
         finally
         {

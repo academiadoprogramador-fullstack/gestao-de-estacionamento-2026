@@ -39,6 +39,7 @@ public sealed class SyntheticAccountProvisioner(
             }
 
             var user = await userManager.FindByEmailAsync(account.Email);
+            var isNewAccount = user is null;
             if (user is null)
             {
                 user = new EmployeeAccount
@@ -53,7 +54,7 @@ public sealed class SyntheticAccountProvisioner(
                 logger.LogInformation("Provisioned synthetic employee account for role {Role}.", account.Role);
             }
 
-            if (!await userManager.IsInRoleAsync(user, account.Role))
+            if (isNewAccount && !await userManager.IsInRoleAsync(user, account.Role))
             {
                 var addRoleResult = await userManager.AddToRoleAsync(user, account.Role);
                 EnsureSucceeded(addRoleResult, $"assigning role '{account.Role}' to synthetic account");

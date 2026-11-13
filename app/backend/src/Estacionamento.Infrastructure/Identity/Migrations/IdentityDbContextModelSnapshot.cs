@@ -81,7 +81,9 @@ namespace Estacionamento.Infrastructure.Identity.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedEmail")
-                        .HasDatabaseName("EmailIndex");
+                        .IsUnique()
+                        .HasDatabaseName("EmailIndex")
+                        .HasFilter("[NormalizedEmail] IS NOT NULL");
 
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
@@ -117,6 +119,304 @@ namespace Estacionamento.Infrastructure.Identity.Migrations
                         .HasFilter("[NormalizedName] IS NOT NULL");
 
                     b.ToTable("AspNetRoles", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.AccessAdministrationControlRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AccessAdministrationControl", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.AttendanceRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DailyRateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("DailyRateSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("EncryptedDocument")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<DateTimeOffset>("EnteredAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("NormalizedPlate")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("OperatorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OwnerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PublicIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DailyRateId");
+
+                    b.HasIndex("OperatorId");
+
+                    b.HasIndex("PublicIdentifier")
+                        .IsUnique();
+
+                    b.HasIndex("NormalizedPlate", "EnteredAtUtc", "Id");
+
+                    b.ToTable("Attendances", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.AuditEventRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AttendanceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("MetadataJson")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("AttendanceId", "OccurredAtUtc", "Id");
+
+                    b.ToTable("AuditEvents", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.DailyRateConfigurationRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("CurrentRateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrentRateId");
+
+                    b.ToTable("DailyRateConfiguration", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.DailyRateRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset>("PublishedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("PublishedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublishedById");
+
+                    b.ToTable("DailyRates", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.EntryInspectionRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AttendanceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EncryptedText")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("RecordedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("AttendanceId")
+                        .IsUnique();
+
+                    b.ToTable("EntryInspections", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.IdempotentResultRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AlgorithmVersion")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("AttendanceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("ContentHmac")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varbinary(32)");
+
+                    b.Property<Guid>("Key")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttendanceId");
+
+                    b.HasIndex("ActorId", "Operation", "Key")
+                        .IsUnique();
+
+                    b.ToTable("IdempotentResults", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.OccupancyRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AttendanceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("EndedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("SpaceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("StartedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("AttendanceId")
+                        .IsUnique();
+
+                    b.HasIndex("SpaceId")
+                        .IsUnique()
+                        .HasFilter("[EndedAtUtc] IS NULL");
+
+                    b.ToTable("Occupancies", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.ParkingSpaceRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("ParkingSpaces", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -220,6 +520,104 @@ namespace Estacionamento.Infrastructure.Identity.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.AttendanceRow", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Persistence.DailyRateRow", null)
+                        .WithMany()
+                        .HasForeignKey("DailyRateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identity.EmployeeAccount", null)
+                        .WithMany()
+                        .HasForeignKey("OperatorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.AuditEventRow", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identity.EmployeeAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Persistence.AttendanceRow", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.DailyRateConfigurationRow", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Persistence.DailyRateRow", "CurrentRate")
+                        .WithMany()
+                        .HasForeignKey("CurrentRateId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CurrentRate");
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.DailyRateRow", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identity.EmployeeAccount", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.EntryInspectionRow", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identity.EmployeeAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Persistence.AttendanceRow", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.IdempotentResultRow", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identity.EmployeeAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Persistence.AttendanceRow", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Estacionamento.Infrastructure.Persistence.OccupancyRow", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identity.EmployeeAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Persistence.AttendanceRow", null)
+                        .WithMany()
+                        .HasForeignKey("AttendanceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Persistence.ParkingSpaceRow", null)
+                        .WithMany()
+                        .HasForeignKey("SpaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

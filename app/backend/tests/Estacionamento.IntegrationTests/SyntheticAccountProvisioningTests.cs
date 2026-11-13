@@ -16,6 +16,7 @@ public sealed class SyntheticAccountProvisioningTests
     {
         var connectionString = Environment.GetEnvironmentVariable("TEST_SQLSERVER_CONNECTION")
             ?? throw new InvalidOperationException("Set TEST_SQLSERVER_CONNECTION for SQL Server integration tests.");
+        DedicatedSqlTestDatabase.ParseAndValidate(connectionString, "TEST_SQLSERVER_CONNECTION");
         var passwords = new Dictionary<string, string?>
         {
             ["SyntheticAccounts:ValetPassword"] = Environment.GetEnvironmentVariable("TEST_VALET_PASSWORD"),

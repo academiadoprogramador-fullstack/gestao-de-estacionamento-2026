@@ -1,6 +1,4 @@
 ﻿namespace Estacionamento.Application;
 
-public class Class1
-{
-
-}
+/// <summary>Assembly marker retained for architectural boundary tests.</summary>
+public sealed class Class1;

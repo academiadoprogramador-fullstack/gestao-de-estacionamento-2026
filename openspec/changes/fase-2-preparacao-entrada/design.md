@@ -21,6 +21,10 @@ As três specs existentes de sessão, edge e ambiente são preservadas, com uma 
 - Não mudar mecanismo de autenticação, topologia ou versões-base sem necessidade comprovada.
 - Não interpretar dados sintéticos como tarifa, moeda, fuso, mapa de vagas ou política de privacidade aprovados.
 
+### Correção posterior — contrato OpenAPI de erros
+
+O middleware/filtro emite erros operacionais como `application/problem+json`. A inspeção inicial do documento gerado encontrou media types padrão e schema `ProblemDetails` sem extensões; a correção adicionou `ProblemDetailsOpenApiDocumentTransformer` ao pipeline de geração. Ele alinha respostas 4xx/5xx de operações fora de `/api/v1/session` ao runtime: schema de Problem Details com extensões opcionais `code`, `correlationId` e `errors`; respostas de sessão não são reescritas. `OpenApiErrorContractTests` verifica o JSON gerado no build, incluindo media type, shape dos schemas e preservação de sessão.
+
 ## Decisions
 
 ### D2-01 — Casos de uso e persistência única

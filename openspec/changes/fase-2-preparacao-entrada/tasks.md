@@ -73,7 +73,7 @@ Planejamento da Fase 2 em execução. Referências: `docs/prd.md`, `docs/tdd.md`
 - [x] 10.2 Executar cenários E2E transversais de tarifa A/B, vaga ocupada, tentativa repetida após resposta perdida, revogação e teclado; verificar cookies/CSRF e ausência de chamadas cross-site, sem simular retirada/liberação fora desta fase.
 - [x] 10.3 Executar restore/build/test/format backend e testes/build frontend e E2E pelos comandos locais documentados, inclusive regressões da Fase 1; verificar todas as suítes aplicáveis e registrar falhas/bloqueios reais, nunca aprovação presumida.
 - [x] 10.4 Consolidar `docs/fase-2-preparacao-entrada-evidencias.md` com comandos, resultados, matriz RF/spec/teste e limites, atualizando README/caminhos se necessário; verificar gate local de autorização, entrada atômica, snapshot, idempotência e impossibilidade de dupla ocupação, mantendo pendências Azure/privacidade/operação abertas.
-- [x] 10.5 Validar coerência final de proposta/design/specs/documentação com decisões efetivas usando `openspec validate fase-2-preparacao-entrada --strict` e revisar o diff; verificar tarefas marcadas somente com evidência e mudanças agrupadas em commits pequenos, focados e verificáveis na feature branch. Gating final passou; limitação da descrição OpenAPI e validação manual de acessibilidade estão explicitamente registradas nas evidências/TDD.
+- [x] 10.5 Validar coerência final de proposta/design/specs/documentação com decisões efetivas usando `openspec validate fase-2-preparacao-entrada --strict` e revisar o diff; verificar tarefas marcadas somente com evidência e mudanças agrupadas em commits pequenos, focados e verificáveis na feature branch. A limitação OpenAPI identificada na revisão foi corrigida em 12.1; conclusão do roteiro manual local de acessibilidade foi confirmada pelo solicitante, sem declaração de conformidade normativa.
 
 ## 11. Correções da revisão (PRD §5.3 / TDD §7.1)
 
@@ -82,10 +82,14 @@ As tarefas abaixo corrigem lacunas dos critérios já aprovados em D2-07–09, s
 - [x] 11.1 V2-01: descartar respostas obsoletas de busca, detalhe, histórico e leitura sensível após troca/fechamento/destruição da tela; Vitest cobre respostas A/B fora de ordem para documento, vistoria, histórico, detalhe e busca, sem anexar documento de A ao detalhe de B.
 - [x] 11.2 V2-02: preservar tentativa/chave em memória e proteger saída por rota/logout/reload desde o envio inicial pendente, sem tratar cancelamento como rollback; Vitest verifica POST pendente, guard, logout, beforeunload, destruição e callback tardio. Confirmação explícita do diálogo de browser ainda pode perder estado em memória, conforme decisão de não persistir no navegador.
 - [x] 11.3 V2-03: resolver rejeições definitivas após replay sem bloqueio permanente, preservar dados para correção e não gerar nova chave automaticamente; Vitest cobre timeout seguido de 400/404/409/422 e mantém rejeição sem code como resultado incerto.
-- [x] 11.4 V2-04: apresentar erros de validação administrativos por campo/resumo com foco e feedback textual; Vitest cobre funcionários, vaga e tarifa, foco do resumo e ausência de chamadas inválidas. Roteiro manual/formal continua pendente.
+- [x] 11.4 V2-04: apresentar erros de validação administrativos por campo/resumo com foco e feedback textual; Vitest cobre funcionários, vaga e tarifa, foco do resumo e ausência de chamadas inválidas. Solicitante confirmou conclusão/aprovação do roteiro manual local; validação formal permanece pendente.
 - [x] 11.5 V2-05: paginar seleção de vagas livres e histórico de tarifas, oferecer recarga sem perder formulário; Vitest cobre 101 vagas, 45 tarifas e recuperação de disponibilidade/tarifa após falha inicial.
 - [x] 11.6 V2-06: uniformizar erros operacionais em Problem Details com code/correlation ID/errors de validação, preservando contratos de sessão; filtro/middleware têm testes diretos e integração valida 429 na sexta tentativa, headers, corpo e ausência de senha.
 - [x] 11.7 V2-07: impedir factory/provisionador/migration de teste de usar banco reservado/sem catálogo; testes sem conexão verificam rejeição e as suítes passaram em SQL Server com catálogos dedicados. Atualização de PRD/TDD/evidências registrada.
+
+## 12. Alinhamento do contrato OpenAPI
+
+- [x] 12.1 Alinhar respostas de erro operacionais no OpenAPI gerado ao runtime (`application/problem+json`, schema base e extensões opcionais `code`, `correlationId` e `errors`), preservando contratos de sessão; validar media type e schema por testes automatizados do documento gerado. Build/format passaram sem avisos; teste do documento gerado passou e suíte backend completa passou 72/72 (12 unitários, 56 integração, 4 arquitetura).
 
 ## Workflow follow-up
 

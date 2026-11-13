@@ -6,6 +6,8 @@
 **Origem:** solicitação de PRD baseada em `docs/entrevista.md`, contexto de `README.md` e esclarecimentos do solicitante nesta conversa.  
 **Escopo:** MVP de uma unidade de valet/estacionamento.
 
+**Atualização de acompanhamento e revisão (13/11/2026):** a change [`fase-2-preparacao-entrada`](../openspec/changes/fase-2-preparacao-entrada/proposal.md) teve proposta, sete specs delta, design e tarefas explicitamente aprovados pelo solicitante em 13/11/2026 para implementação e verificação **locais**, sem alterar as regras comerciais deste PRD. Esta revisão distingue capacidades presentes, resultados de testes e lacunas encontradas na validação do código; não constitui nova aprovação nem conclusão do gate da Fase 2. A aprovação original e as pendências pré-implantação permanecem válidas.
+
 **Ajuste de desenvolvimento local (06/11/2026, confirmado pelo solicitante):** em `Development`, a API deve aplicar as migrações versionadas e provisionar idempotentemente os três perfis/contas sintéticas antes de aceitar requisições, com credenciais externas obrigatórias. Falhas de banco ou credenciais impedem a inicialização. Outros ambientes não executam esse bootstrap; migrações de homologação/produção continuam sujeitas a revisão e aprovação explícitas. Aceite: iniciar sobre banco local vazio cria esquema e contas, reiniciar não duplica contas, configuração ausente falha antes de servir e ambiente não Development não migra nem provisiona.
 
 ## 1. Resumo executivo
@@ -46,6 +48,43 @@ O administrador deverá validar definições, periodicidade de acompanhamento e 
 **Evoluções posteriores:** fotos de vistoria, múltiplas unidades, integrações de pagamento, comunicação automática com cliente e permissões customizadas; dependem de validação de valor e viabilidade.
 
 **Fora do MVP:** processamento de pagamentos por provedor, autoatendimento do cliente, reconhecimento automático de placa, importação automática de planilhas e emissão fiscal integrada. O documento não presume obrigação fiscal específica.
+
+### 5.1. Recorte aprovado da Fase 2 — preparação e entrada
+
+A Fase 2 detalha RF-01–03, configuração/snapshot de RF-07, acessos de RF-10 e histórico de RF-11, com RNF-01–05/07. O escopo aprovado compreende:
+
+- Administração de funcionários sem autorregistro: criação com credencial inicial e um ou mais dos três perfis fixos, alteração de perfis e ativação/desativação auditadas, sem apagar autoria nem permitir remover o último administrador ativo. Mudanças concorrentes não sobrescrevem acessos silenciosamente. Após mudança confirmada, a sessão anterior é recusada na próxima requisição protegida, inclusive na repetição de uma entrada; exige-se novo login.
+- Cadastro administrativo de vagas de código único normalizado, consulta paginada por código/situação pelos três perfis e ocupação exclusiva vinculada à entrada. A disponibilidade exibida não reserva vaga; a decisão final é do servidor. A UI aprovada prevê atualização configurável, após comandos e ao recuperar foco, sem sobreposição de consultas e com pausa em aba inativa.
+- Publicação administrativa de versões imutáveis de tarifa positiva, com histórico e controle de concorrência. Não há tarifa comercial inicial predefinida. Entrada sem tarifa é bloqueada; a versão e o valor capturados não mudam após publicação posterior.
+- Entrada completa somente por caixa/administrador, com horário e operador do servidor, identificador único, documento e vistoria textual protegidos. Atendimento, snapshot, vistoria, ocupação, auditoria e resultado de repetição segura são confirmados juntos ou integralmente desfeitos. Mesma ação repetida com mesmo conteúdo retorna a entrada original; chave reutilizada com conteúdo diferente gera conflito.
+- Busca exata normalizada por placa ou identificador, paginada e distinguindo visitas, sem impor unicidade de placa. Listagens não incluem documento completo nem vistoria. Detalhe e histórico são projetados pelo servidor: manobrista não recebe snapshot de tarifa nem outros dados financeiros. Documento completo exige leitura explícita de caixa/administrador; vistoria admite os três perfis. A auditoria da leitura deve confirmar antes de retornar conteúdo sensível; falha impede sua exposição.
+- Navegação autenticada por perfil e feedback acessível. Sem sessão válida, a interface limpa o estado de sessão e exige autenticação; acesso sem permissão é apresentado como negado, sem substituir a autorização da API. Sessão não é persistida em storage do navegador. A interface de entrada planejada mantém tentativa de resultado desconhecido e sua chave apenas em memória, permite repetição explícita sem alterar conteúdo e limpa dados sensíveis após confirmação, sem presumir emissão de ticket.
+
+**Limites desta fatia:** não inclui pedido/conferência de retirada, cálculo de diárias, fila de retirada, pagamento, desconto/estorno, exceção de entrega, vistoria de saída, liberação de vaga ou relatórios. Essas funcionalidades continuam no MVP, mas em fases posteriores. Não há botão de liberação demonstrativa, ticket físico/canal de envio, CI, Azure, IaC ou CD nesta change.
+
+**Estado revisado em 13/11/2026:** as lacunas V2-01–07 da revisão foram corrigidas no código/testes e as verificações existentes estão sendo repetidas; o resultado e o estado do checklist constam em [`fase-2-preparacao-entrada-evidencias.md`](fase-2-preparacao-entrada-evidencias.md). Isso não equivale a aceite operacional, PR ou validação normativa de acessibilidade. A tarefa 10.5 permanece aberta para revisão final/coerência e commits segundo o fluxo do projeto. Nenhum commit, push, PR, merge ou publicação é presumido realizado.
+
+### 5.2. Capacidades presentes e limites verificados
+
+| Capacidade adicionada | RFs atendidos nesta fatia | Estado e limite da entrega observada |
+| --- | --- | --- |
+| Equipe e acesso | RF-10, parte de RF-11 | Administração de e-mail, senha inicial, perfis e estado; concorrência, último admin ativo e revogação na próxima requisição são controles do servidor. Não inclui convite, recuperação de senha ou perfis customizados. |
+| Preparação e disponibilidade | RF-02 | Cadastro, filtros, paginação e polling de vagas na consulta. Seletor do check-in paginado em grupos de 100 e com atualização explícita; não reserva nem libera vaga, e não faz polling independente. |
+| Tarifa versionada | Parte de RF-07 | Publicação, snapshot imutável e histórico de 20 versões por página com paginação/atualização estão implementados. Não há cálculo de permanência, desconto, estorno ou pagamento. |
+| Entrada e recuperação de resposta perdida | RF-01/02, parte de RF-07/11 | Entrada atômica e replay no servidor; UI preserva tentativa/chave apenas em memória, bloqueia saída por rota/logout durante POST, avisa antes de saída do browser e trata rejeições definitivas sem gerar nova chave automaticamente. Não há recuperação após o usuário confirmar saída do browser/recarregar; decisão de não persistir dados no navegador permanece. |
+| Busca, detalhe e leitura sensível | RF-03/10, parte de RF-11 | Busca exata, visitas distintas, paginação e projeções por perfil no servidor. Leitura explícita/auditada. Revisões de seleção invalidam resposta tardia de busca/detalhe/histórico/documento/vistoria, inclusive após fechar/sair. |
+| Segurança e usabilidade local | RNF-01–04/07 | Cookie HttpOnly, antiforgery, criptografia de campo, auditoria e não-cache; erros administrativos textuais com resumo/foco e semântica aria; erros operacionais em Problem Details com código/correlação, limiter de login em 429. Avaliação manual de acessibilidade continua pendente. |
+
+Os objetivos de desempenho, recuperação, privacidade e operação reais continuam sujeitos às seções 8 e 12; a existência de polling, criptografia ou testes locais não os encerra.
+
+### 5.3. Correções e limites residuais da revisão da Fase 2
+
+- **V2-01 — concorrência de leitura:** corrigida com revisão de seleção/invalidadores e testes de respostas fora de ordem, troca/fechamento/destruição incluindo conteúdo sensível. Autorização e auditoria continuam controles independentes no servidor.
+- **V2-02/03 — saída e replay:** POST pendente passa a bloquear navegação e logout; `beforeunload` solicita confirmação; callbacks após destruição não reidratam dados. Rejeições definitivas `400/404/409/422` liberam o formulário preservando valores e sem criar chave/reenvio automático; rejeição de antiforgery ou outro resultado não classificado permanece incerta para replay seguro. Se o usuário confirmar a saída do browser, conteúdo em memória pode ser perdido — não foi introduzido armazenamento no navegador.
+- **V2-04 — validação:** funcionários, vaga e tarifa exibem mensagem de validação textual, marcam campos inválidos, associam resumo e focam o resumo; testes de formulário inválido impedem chamada à API. O roteiro manual/formal de acessibilidade segue pendente.
+- **V2-05 — consulta completa:** seletor de vagas navega páginas de 100 e atualiza explicitamente preservando o formulário; histórico de tarifas navega páginas de 20 e permite nova carga após falha. Estes tamanhos são paginação técnica, não regras de negócio.
+- **V2-06/07 — contratos e isolamento:** erros operacionais incluem `application/problem+json`, `code` e `correlationId` (e `errors` quando aplicável); respostas de sessão mantêm contrato anterior. Login excedente responde 429 com teste da sexta tentativa. Test factories/fluxos de provisionamento e migração recusam catálogos fora do padrão dedicado `Estacionamento*`; isto é proteção lexical de teste, não segregação de infraestrutura/credenciais.
+- Critérios de teste, execução e limites residuais constam no TDD §7.1 e evidências; nenhum achado altera requisito comercial aprovado.
 
 ## 6. Jornadas e casos de uso
 

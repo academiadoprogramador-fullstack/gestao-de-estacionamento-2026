@@ -20,6 +20,7 @@ public sealed class SessionController(
     [HttpGet("antiforgery")]
     [AllowAnonymous]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(typeof(AntiforgeryResponse), StatusCodes.Status200OK)]
     public IActionResult GetAntiforgeryToken()
     {
         var tokens = antiforgery.GetAndStoreTokens(HttpContext);
@@ -29,6 +30,10 @@ public sealed class SessionController(
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting("login")]
+    [ProducesResponseType(typeof(SessionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var user = await userManager.FindByEmailAsync(request.Email);
@@ -59,6 +64,8 @@ public sealed class SessionController(
     [HttpGet]
     [Authorize]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(typeof(SessionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetSession()
     {
         var user = await userManager.GetUserAsync(User);
@@ -72,6 +79,8 @@ public sealed class SessionController(
 
     [HttpPost("logout")]
     [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Logout()
     {
         await signInManager.SignOutAsync();
@@ -81,6 +90,9 @@ public sealed class SessionController(
     [HttpGet("admin/verify")]
     [Authorize(Roles = EmployeeRoles.Administrator)]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public IActionResult VerifyAdministrator()
         => Ok(new { authorized = true });
 

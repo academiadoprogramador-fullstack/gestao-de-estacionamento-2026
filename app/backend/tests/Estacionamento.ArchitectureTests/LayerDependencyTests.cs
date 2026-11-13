@@ -9,7 +9,7 @@ public sealed class LayerDependencyTests
     public void Domain_does_not_reference_other_application_layers()
     {
         AssertDoesNotReference(
-            typeof(Estacionamento.Domain.Class1).Assembly,
+            typeof(Estacionamento.Domain.Parking.ParkingSpace).Assembly,
             "Estacionamento.Application",
             "Estacionamento.Infrastructure",
             "Estacionamento.Api");

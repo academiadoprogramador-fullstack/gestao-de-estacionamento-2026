@@ -1,28 +1,69 @@
 using Estacionamento.Api.Configuration;
 using Estacionamento.Infrastructure.Identity;
+using Estacionamento.Application.Abstractions;
+using Estacionamento.Infrastructure.Security;
+using Estacionamento.Infrastructure.Persistence;
+using Estacionamento.Api.Middleware;
+using Estacionamento.Application.Employees;
+using Estacionamento.Application.Parking;
+using Estacionamento.Application.Billing;
+using Estacionamento.Application.Idempotency;
+using Estacionamento.Application.Security;
+using Estacionamento.Api.Security;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.HttpOverrides;
+using Estacionamento.Api.Filters;
+using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-RuntimeConfiguration.ValidateRequired(builder.Configuration);
-
-var connectionString = builder.Configuration.GetConnectionString("Identity")!;
-var keyRingPath = builder.Configuration["DataProtection:KeyRingPath"]!;
-Directory.CreateDirectory(keyRingPath);
-if (!OperatingSystem.IsWindows())
+var isOpenApiGeneration = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
+if (!isOpenApiGeneration)
 {
-    File.SetUnixFileMode(keyRingPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    RuntimeConfiguration.ValidateRequired(builder.Configuration);
 }
 
-builder.Services.AddDbContext<IdentityDbContext>(options => options.UseSqlServer(connectionString));
+var connectionString = builder.Configuration.GetConnectionString("Identity")
+    ?? (isOpenApiGeneration ? "Server=localhost;Database=OpenApiDesignTime;User Id=sa;Password=OpenApiDesignTimeOnly!;TrustServerCertificate=True" : null)!;
+var keyRingPath = builder.Configuration["DataProtection:KeyRingPath"]
+    ?? (isOpenApiGeneration ? Path.Combine(Path.GetTempPath(), "estacionamento-openapi-keyring") : null)!;
+if (!isOpenApiGeneration)
+{
+    Directory.CreateDirectory(keyRingPath);
+    if (!OperatingSystem.IsWindows())
+    {
+        File.SetUnixFileMode(keyRingPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+}
+
+builder.Services.AddDbContextFactory<IdentityDbContext>(options => options.UseSqlServer(connectionString));
+builder.Services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+builder.Services.AddScoped<IEmployeeDirectory, EfEmployeeDirectory>();
+builder.Services.AddScoped<EmployeeAdministration>();
+builder.Services.AddScoped<ISpaceDirectory, EfSpaceDirectory>();
+builder.Services.AddScoped<SpaceAvailability>();
+builder.Services.AddScoped<IDailyRateDirectory, EfDailyRateDirectory>();
+builder.Services.AddScoped<DailyRateAdministration>();
+builder.Services.AddScoped<ICheckInStore, EfCheckInStore>();
+builder.Services.AddScoped<VehicleCheckIn>();
+builder.Services.AddScoped<IAttendanceDirectory, EfAttendanceDirectory>();
+builder.Services.AddScoped<AttendanceQuery>();
+builder.Services.AddSingleton<IUseCaseAuthorizer, RoleUseCaseAuthorizer>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentActor, HttpCurrentActor>();
+builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddScoped<EfAuditStore>();
+builder.Services.AddScoped<IAuditWriter>(services => services.GetRequiredService<EfAuditStore>());
+builder.Services.AddScoped<IAuditReader>(services => services.GetRequiredService<EfAuditStore>());
 builder.Services.AddDataProtection()
     .SetApplicationName("GestaoEstacionamento.Local")
     .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+builder.Services.AddSingleton<IFieldProtector, DataProtectionFieldProtector>();
+builder.Services.AddSingleton<ICheckInContentHmac, ConfiguredCheckInContentHmac>();
 builder.Services.AddIdentityCore<EmployeeAccount>()
     .AddRoles<EmployeeRole>()
     .AddEntityFrameworkStores<IdentityDbContext>()
@@ -33,6 +74,7 @@ builder.Services.Configure<IdentityOptions>(options =>
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 });
+builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);
 builder.Services.AddScoped<SyntheticAccountProvisioner>();
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
 builder.Services.ConfigureApplicationCookie(options =>
@@ -66,15 +108,69 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var http = context.HttpContext;
+        var correlationId = http.Response.Headers["X-Correlation-ID"].ToString();
+        http.Response.ContentType = "application/problem+json";
+        var problem = new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Status = StatusCodes.Status429TooManyRequests,
+            Title = "Too Many Requests",
+            Type = "https://httpstatuses.com/429",
+            Instance = http.Request.Path,
+            Extensions = { ["code"] = "login_rate_limited", ["correlationId"] = correlationId }
+        };
+        await http.Response.WriteAsync(
+            System.Text.Json.JsonSerializer.Serialize(problem, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)),
+            cancellationToken);
+    };
     options.AddFixedWindowLimiter("login", limiter =>
     {
         limiter.PermitLimit = 5;
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.QueueLimit = 0;
-    }));
-builder.Services.AddControllers();
+    });
+});
+builder.Services.AddControllers(options => options.Filters.Add<ApiProblemDetailsFilter>());
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
+app.UseMiddleware<PrivateResponseMiddleware>();
+app.Use(async (context, next) =>
+{
+    await next();
+    if (!context.Request.Path.StartsWithSegments("/api/v1/session")
+        && !context.Response.HasStarted
+        && context.Response.StatusCode >= 400
+        && string.IsNullOrEmpty(context.Response.ContentType)
+        && (context.Response.ContentLength is null or 0))
+    {
+        var status = context.Response.StatusCode;
+        context.Response.ContentType = "application/problem+json";
+        await context.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Status = status,
+            Title = Microsoft.AspNetCore.WebUtilities.ReasonPhrases.GetReasonPhrase(status),
+            Type = $"https://httpstatuses.com/{status}",
+            Instance = context.Request.Path,
+            Extensions =
+            {
+                ["code"] = status switch
+                {
+                    StatusCodes.Status401Unauthorized => "unauthenticated",
+                    StatusCodes.Status403Forbidden => "forbidden",
+                    StatusCodes.Status404NotFound => "not_found",
+                    StatusCodes.Status429TooManyRequests => "rate_limited",
+                    _ => "request_rejected"
+                },
+                ["correlationId"] = context.Response.Headers["X-Correlation-ID"].ToString()
+            }
+        });
+    }
+});
 
 var provisionOnly = args.Contains("--provision-synthetic-accounts", StringComparer.Ordinal);
 if (provisionOnly && !app.Environment.IsDevelopment())
@@ -105,22 +201,6 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 });
 app.UseRateLimiter();
 app.UseAuthentication();
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/api/v1/session"))
-    {
-        context.Response.OnStarting(() =>
-        {
-            context.Response.Headers.CacheControl = "private, no-store, no-cache, max-age=0";
-            context.Response.Headers.Pragma = "no-cache";
-            context.Response.Headers.Expires = "0";
-            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-            return Task.CompletedTask;
-        });
-    }
-
-    await next();
-});
 app.Use(async (context, next) =>
 {
     var method = context.Request.Method;
@@ -156,6 +236,14 @@ app.Use(async (context, next) =>
 });
 
 app.UseAuthorization();
+if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("OpenApi:Expose"))
+{
+    app.MapOpenApi().RequireAuthorization(
+        new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireRole(Estacionamento.Infrastructure.Identity.EmployeeRoles.Administrator)
+            .Build());
+}
+
 app.MapGet("/healthz", () => Results.Ok(new { status = "ready" })).AllowAnonymous();
 app.MapControllers();
 

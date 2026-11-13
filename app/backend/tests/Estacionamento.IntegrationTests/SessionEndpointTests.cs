@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Estacionamento.Api.Controllers;
 using Estacionamento.Infrastructure.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -98,6 +99,44 @@ public sealed class SessionEndpointTests
     }
 
     [TestMethod]
+    public async Task Login_limiter_rejects_sixth_request_with_problem_details_and_429()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"),
+            HandleCookies = true
+        });
+        await PrepareDatabaseAndAccounts(factory);
+        await BootstrapCsrf(client);
+
+        HttpResponseMessage? response = null;
+        for (var attempt = 1; attempt <= 6; attempt++)
+        {
+            response = await client.PostAsJsonAsync("/api/v1/session/login", new
+            {
+                email = $"unknown-{attempt}@local.example.invalid",
+                password = "Synthetic!Invalid2026"
+            });
+            if (attempt < 6)
+            {
+                Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+                response.Dispose();
+            }
+        }
+
+        Assert.IsNotNull(response);
+        Assert.AreEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.AreEqual("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.IsTrue(response.Headers.Contains("X-Correlation-ID"));
+        var body = await response.Content.ReadAsStringAsync();
+        StringAssert.Contains(body, "login_rate_limited");
+        StringAssert.Contains(body, response.Headers.GetValues("X-Correlation-ID").Single());
+        Assert.IsFalse(body.Contains("Synthetic!Invalid2026", StringComparison.Ordinal));
+        response.Dispose();
+    }
+
+    [TestMethod]
     public async Task Session_expires_after_the_configured_idle_timeout()
     {
         using var factory = new TestApplicationFactory();
@@ -166,6 +205,81 @@ public sealed class SessionEndpointTests
         Assert.AreEqual(HttpStatusCode.OK, adminAccess.StatusCode);
     }
 
+    [TestMethod]
+    public async Task Existing_cookie_is_rejected_after_role_change_and_inactivation()
+    {
+        var connection = CreateIsolatedConnection();
+        try
+        {
+            using var factory = new TestApplicationFactory(connectionString: connection.ConnectionString);
+            using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                BaseAddress = new Uri("https://localhost"),
+                HandleCookies = true
+            });
+            await BootstrapCsrf(client);
+            await PrepareDatabaseAndAccounts(factory);
+            await ResetLockoutAndAssertPassword(factory, "manobrista@local.example.invalid", "TEST_VALET_PASSWORD");
+
+            var login = await client.PostAsJsonAsync("/api/v1/session/login", new
+            {
+                email = "manobrista@local.example.invalid",
+                password = RequiredEnvironmentVariable("TEST_VALET_PASSWORD")
+            });
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+            Assert.AreEqual(HttpStatusCode.OK, (await client.GetAsync("/api/v1/session")).StatusCode);
+
+            using (var scope = factory.Services.CreateScope())
+            {
+                var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<EmployeeAccount>>();
+                var account = await users.FindByEmailAsync("manobrista@local.example.invalid");
+                Assert.IsNotNull(account);
+                Assert.IsTrue((await users.RemoveFromRoleAsync(account, EmployeeRoles.Valet)).Succeeded);
+                Assert.IsTrue((await users.AddToRoleAsync(account, EmployeeRoles.Cashier)).Succeeded);
+                Assert.IsTrue((await users.UpdateSecurityStampAsync(account)).Succeeded);
+            }
+
+            var staleSession = await client.GetAsync("/api/v1/session");
+            Assert.AreEqual(HttpStatusCode.Unauthorized, staleSession.StatusCode);
+            await BootstrapCsrf(client);
+            var freshLogin = await client.PostAsJsonAsync("/api/v1/session/login", new
+            {
+                email = "manobrista@local.example.invalid",
+                password = RequiredEnvironmentVariable("TEST_VALET_PASSWORD")
+            });
+            Assert.AreEqual(HttpStatusCode.OK, freshLogin.StatusCode);
+            var freshSession = await client.GetAsync("/api/v1/session");
+            var session = await freshSession.Content.ReadFromJsonAsync<SessionResponse>();
+            Assert.IsNotNull(session);
+            CollectionAssert.Contains(session.Roles.ToArray(), EmployeeRoles.Cashier);
+            CollectionAssert.DoesNotContain(session.Roles.ToArray(), EmployeeRoles.Valet);
+            Assert.AreEqual(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/session/admin/verify")).StatusCode);
+
+            using (var scope = factory.Services.CreateScope())
+            {
+                var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<EmployeeAccount>>();
+                var account = await users.FindByEmailAsync("manobrista@local.example.invalid");
+                Assert.IsNotNull(account);
+                account.IsActive = false;
+                Assert.IsTrue((await users.UpdateSecurityStampAsync(account)).Succeeded);
+                Assert.IsTrue((await users.UpdateAsync(account)).Succeeded);
+            }
+
+            Assert.AreEqual(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/session")).StatusCode);
+            await BootstrapCsrf(client);
+            var inactiveLogin = await client.PostAsJsonAsync("/api/v1/session/login", new
+            {
+                email = "manobrista@local.example.invalid",
+                password = RequiredEnvironmentVariable("TEST_VALET_PASSWORD")
+            });
+            Assert.AreEqual(HttpStatusCode.Unauthorized, inactiveLogin.StatusCode);
+        }
+        finally
+        {
+            await DropDatabaseAsync(connection);
+        }
+    }
+
     internal static async Task PrepareDatabaseAndAccounts(TestApplicationFactory factory)
     {
         using var scope = factory.Services.CreateScope();
@@ -216,4 +330,21 @@ public sealed class SessionEndpointTests
     private static string RequiredEnvironmentVariable(string name)
         => Environment.GetEnvironmentVariable(name)
             ?? throw new InvalidOperationException($"Set {name} for API integration tests.");
+
+    private static SqlConnectionStringBuilder CreateIsolatedConnection()
+    {
+        var configured = Environment.GetEnvironmentVariable("TEST_SQLSERVER_CONNECTION")
+            ?? throw new InvalidOperationException("Set TEST_SQLSERVER_CONNECTION to an isolated SQL Server test server.");
+        return new SqlConnectionStringBuilder(configured) { InitialCatalog = $"EstacionamentoSession_{Guid.NewGuid():N}" };
+    }
+
+    private static async Task DropDatabaseAsync(SqlConnectionStringBuilder connection)
+    {
+        await using var admin = new SqlConnection(new SqlConnectionStringBuilder(connection.ConnectionString) { InitialCatalog = "master" }.ConnectionString);
+        await admin.OpenAsync();
+        await using var command = admin.CreateCommand();
+        command.CommandText = $"IF DB_ID(@databaseName) IS NOT NULL BEGIN ALTER DATABASE [{connection.InitialCatalog}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{connection.InitialCatalog}]; END";
+        command.Parameters.AddWithValue("@databaseName", connection.InitialCatalog);
+        await command.ExecuteNonQueryAsync();
+    }
 }

@@ -8,5 +8,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/Estacionamento.ArchitectureTests/Estacionamento.ArchitectureTests.csproj" />
     <Project Path="tests/Estacionamento.IntegrationTests/Estacionamento.IntegrationTests.csproj" />
+    <Project Path="tests/Estacionamento.UnitTests/Estacionamento.UnitTests.csproj" />
   </Folder>
 </Solution>

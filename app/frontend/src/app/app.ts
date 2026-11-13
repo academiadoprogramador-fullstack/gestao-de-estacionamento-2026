@@ -1,8 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, viewChild } from '@angular/core';
 import { email, form, FormField, required, submit } from '@angular/forms/signals';
 import { LucideShieldCheck } from '@lucide/angular';
+import { RouterLink, RouterOutlet } from '@angular/router';
 import { AuthService } from './core/auth/auth.service';
+import { Router } from '@angular/router';
 
 interface LoginModel {
   email: string;
@@ -10,14 +12,17 @@ interface LoginModel {
 }
 
 @Component({
-  imports: [FormField, LucideShieldCheck],
+  imports: [FormField, LucideShieldCheck, RouterLink, RouterOutlet],
   selector: 'app-root',
   styleUrl: './app.css',
   templateUrl: './app.html',
 })
 export class App implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly routedPage = viewChild(RouterOutlet);
   protected readonly session = this.auth.session;
+  protected readonly accessDenied = this.auth.accessDenied;
   protected readonly busy = signal(false);
   protected readonly errorMessage = signal('');
   protected readonly loginModel = signal<LoginModel>({ email: '', password: '' });
@@ -28,7 +33,7 @@ export class App implements OnInit {
   });
 
   ngOnInit(): void {
-    void this.auth.refreshSession();
+    void this.auth.ensureSession();
   }
 
   async onSubmit(event: Event): Promise<void> {
@@ -39,6 +44,8 @@ export class App implements OnInit {
       await submit(this.loginForm, async () => {
         await this.auth.login(this.loginModel());
         this.loginModel.update((value) => ({ ...value, password: '' }));
+        const returnUrl = new URLSearchParams(globalThis.location.search).get('returnUrl');
+        await this.router.navigateByUrl(returnUrl?.startsWith('/') ? returnUrl : '/dashboard');
       });
     } catch (error) {
       this.errorMessage.set(
@@ -52,10 +59,15 @@ export class App implements OnInit {
   }
 
   async logout(): Promise<void> {
+    const page = this.routedPage()?.isActivated
+      ? (this.routedPage()?.component as { confirmNavigationAway?: () => boolean })
+      : null;
+    if (page?.confirmNavigationAway && !page.confirmNavigationAway()) return;
     this.errorMessage.set('');
     this.busy.set(true);
     try {
       await this.auth.logout();
+      await this.router.navigateByUrl('/login');
     } catch {
       this.errorMessage.set('Não foi possível encerrar a sessão. Tente novamente.');
     } finally {

@@ -4,6 +4,7 @@ using Estacionamento.Application.Abstractions;
 using Estacionamento.Infrastructure.Security;
 using Estacionamento.Infrastructure.Persistence;
 using Estacionamento.Api.Middleware;
+using Estacionamento.Api.OpenApi;
 using Estacionamento.Application.Employees;
 using Estacionamento.Application.Parking;
 using Estacionamento.Application.Billing;
@@ -135,7 +136,7 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 builder.Services.AddControllers(options => options.Filters.Add<ApiProblemDetailsFilter>());
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<ProblemDetailsOpenApiDocumentTransformer>());
 
 var app = builder.Build();
 app.UseMiddleware<PrivateResponseMiddleware>();

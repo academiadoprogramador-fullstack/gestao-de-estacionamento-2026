@@ -68,7 +68,7 @@ Use **User Secrets do .NET em Development** para os segredos do backend e **`app
 | --- | --- | --- |
 | **Senha administrativa do SQL local** (`MSSQL_SA_PASSWORD`) | Preparação da infraestrutura | Inicializar a imagem SQL Server. Fornecer externamente ao Compose, nunca como valor literal no YAML. Não usar a conta administrativa como usuário normal da API. |
 | **Conexão e credencial do banco local da API** | Backend em Development | Acessar somente o catálogo de desenvolvimento e aplicar suas migrations pendentes. Manter a conexão sensível em User Secrets. |
-| **Senhas iniciais das contas sintéticas** | Inicialização local | Provisionar idempotentemente contas representando os três perfis. Não utilize senhas padrão publicadas ou credenciais compartilhadas. |
+| **E-mails e senhas das contas sintéticas** | Inicialização local em Development | Configurar todas as contas dos três perfis em User Secrets. Não use credenciais padrão publicadas ou compartilhadas; não coloque `ContasSinteticas` em `appsettings.Development.json`. |
 | **Chaves simétricas JWT HS256** | Autenticação | Assinar e validar tokens com chave aleatória de 32 bytes por versão. Manter uma ativa para emissão e anteriores apenas durante a validade dos tokens correspondentes, sem RSA ou certificado. Nunca entregar essas chaves ao frontend. |
 | **Chaves AES-256 versionadas** | Cifragem de campos no backend e recuperação | Cifrar documento, textos de vistoria e justificativas com AES-GCM. Manter uma chave ativa para escrita e as anteriores para leitura enquanto dados ou backups dependerem delas, sem certificado PFX ou key ring de Data Protection. |
 | **Access Key ID e Secret Access Key do R2** | Armazenamento de fotos | Acessar somente o bucket privado autorizado para o ambiente. Separe as credenciais de testes e publicação. |
@@ -86,12 +86,15 @@ Forneça valores próprios para cada ambiente. A tabela descreve os segredos nec
   },
   "ContasSinteticas": {
     "Administrador": {
+      "Email": "<EMAIL_SINTETICO_ADMIN>",
       "Senha": "<SENHA_EXCLUSIVA_DO_ADMINISTRADOR>"
     },
     "Caixa": {
+      "Email": "<EMAIL_SINTETICO_CAIXA>",
       "Senha": "<SENHA_EXCLUSIVA_DO_CAIXA>"
     },
     "Manobrista": {
+      "Email": "<EMAIL_SINTETICO_MANOBRISTA>",
       "Senha": "<SENHA_EXCLUSIVA_DO_MANOBRISTA>"
     }
   },
@@ -118,6 +121,64 @@ Forneça valores próprios para cada ambiente. A tabela descreve os segredos nec
 
 O JSON é ilustrativo e contém **somente placeholders**. Não o salve com valores reais em `appsettings*.json` versionados. Cada chave AES ou JWT deve ter **32 bytes gerados com aleatoriedade criptográfica**, representados em Base64; Base64 não cifra nem protege a chave. São 32 bytes aleatórios antes da codificação, não uma senha ou string de 32 caracteres.
 
+Toda a seção `ContasSinteticas`, incluindo e-mails e senhas, pertence a User Secrets em Development. Não crie essa seção em `appsettings.Development.json`; o exemplo acima é somente a estrutura externa de User Secrets, não um `appsettings*.json`. Os três identificadores de perfil são fixos. A API valida previamente as três entradas, e-mails aceitos/únicos após normalização e senhas presentes, sem registrar seus valores.
+
+**Exemplo de `appsettings.Development.json` — parâmetros não sensíveis complementares aos User Secrets:**
+
+```json
+{
+  "AllowedHosts": "localhost;127.0.0.1",
+  "ConfiguracaoRegional": {
+    "Cultura": "pt-BR",
+    "FusoHorario": "America/Sao_Paulo",
+    "Moeda": "BRL"
+  },
+  "Autenticacao": {
+    "Jwt": {
+      "Emissor": "gestao-estacionamento-development",
+      "Audiencia": "gestao-estacionamento-api-development",
+      "VersaoAtiva": "v1",
+      "DuracaoAcessoMinutos": 15,
+      "DuracaoSessaoHoras": 8,
+      "ToleranciaRelogioSegundos": 30,
+      "RotacaoChaveDias": 90
+    }
+  },
+  "ProtecaoDados": {
+    "VersaoAtiva": "v1"
+  },
+  "Cors": {
+    "OrigensPermitidas": [
+      "https://localhost:4200",
+      "https://localhost:4300"
+    ]
+  },
+  "Operacao": {
+    "IntervaloPollingSegundos": 30
+  },
+  "ArmazenamentoFotos": {
+    "R2": {
+      "Endpoint": "https://<ACCOUNT_ID>.r2.cloudflarestorage.com",
+      "RegiaoAssinatura": "auto",
+      "Bucket": "<BUCKET_PRIVADO_DE_DESENVOLVIMENTO>"
+    },
+    "Limites": {
+      "MaximoFotosPorVistoria": 5,
+      "TamanhoMaximoArquivoMiB": 5,
+      "AvisoConsumoPercentual": 70,
+      "BloqueioConsumoPercentual": 80
+    }
+  },
+  "Retencao": {
+    "DadosOperacionaisDias": 90,
+    "HistoricoDias": 365,
+    "LogsTecnicosDias": 30
+  }
+}
+```
+
+Este é um exemplo de **configuração não secreta**, com nomes destinados a corresponder às opções tipadas do backend; URLs/origens, bucket e nomes de propriedades devem ser ajustados ao ambiente e implementados de forma consistente com o TDD. Os dois endereços CORS são exemplos locais HTTPS, não garantem que o servidor de desenvolvimento use essas portas. As versões ativas `v1` devem corresponder às chaves com o mesmo identificador nos User Secrets. Não inclua `ContasSinteticas`, connection strings com senha, chaves JWT/AES ou Access Key/Secret Access Key do R2 neste arquivo.
+
 Configure `Autenticacao:Jwt:VersaoAtiva` com o identificador da chave de emissão, por exemplo `v1`, em `appsettings*.json`; esse identificador não é segredo. Os valores de `Autenticacao:Jwt:Chaves:<versao>` ficam somente na configuração externa sensível. A assinatura é HS256; a mesma chave secreta permite emitir e validar, por isso não existe chave pública para distribuição. Na rotação de 90 dias, preserve as anteriores para validação até expirar o último token correspondente mais a tolerância de 30 segundos.
 
 Configure `ProtecaoDados:VersaoAtiva` com o identificador da chave de escrita, por exemplo `v1`, em `appsettings*.json`; esse identificador não é segredo. Os valores de `ProtecaoDados:Chaves:<versao>` ficam somente na configuração externa sensível. Na rotação, acrescente uma nova chave/versão, preserve as anteriores e não reutilize identificadores com outro material. As chaves AES são exclusivas por ambiente e finalidade, sem reutilização da chave JWT ou dos backups.
@@ -136,11 +197,11 @@ Na publicação, forneça segredos por **variáveis de ambiente/App Settings do 
 
 1. Prepare as dependências, parâmetros não sensíveis, User Secrets e credenciais locais.
 2. Inicie somente o SQL Server pelo Compose, aguarde a verificação de saúde e prepare o catálogo/usuário dedicado.
-3. Inicie o backend no host em **Development**. A inicialização aplica automaticamente as **migrations pendentes** e provisiona as contas sintéticas necessárias, **antes de aceitar requisições**.
+3. Inicie o backend no host em **Development**. Após validar a configuração de User Secrets, a inicialização aplica automaticamente as **migrations pendentes** e, **imediatamente após o sucesso delas**, provisiona somente as contas sintéticas ausentes. A API começa a aceitar requisições apenas após o provisionamento bem-sucedido.
 4. Inicie o Angular no host e acesse a interface pelo navegador.
 5. Execute integração/E2E em instância e catálogos de teste separados, sem tocar nos dados de desenvolvimento.
 
-Falhas de banco, configuração ou migration interrompem a inicialização da API. Reinícios preservam o esquema e não duplicam contas. Fora de Development, execute migrations separadamente pelas fixtures de teste ou pelo procedimento controlado de publicação.
+Falhas de banco, configuração, migration ou provisionamento interrompem a inicialização da API. Reinícios preservam o esquema e não duplicam nem atualizam e-mail, senha, perfis ou estado das contas existentes. Fora de Development, execute migrations pelas fixtures de teste ou pelo procedimento controlado de publicação; o startup não provisiona contas.
 
 Pare a infraestrutura preservando seus volumes. Não remova dados para resolver erros de senha ou migration; a limpeza do ambiente de desenvolvimento exige ação explícita.
 

@@ -1,0 +1,163 @@
+# Gestão de Estacionamento
+
+Uma plataforma para organizar o atendimento de estacionamentos e serviços de valet: da entrada do veículo à entrega, com controle de vagas, cobrança e histórico das condições do carro.
+
+> **Uso acadêmico:** utilize exclusivamente dados fictícios, sem documentos, placas ou fotos reais identificáveis.
+
+## Por que este projeto?
+
+Tickets perdidos, dificuldade para localizar veículos, cobrança manual e falta de registros das vistorias podem causar demora e divergências. O sistema reúne essas informações em um só lugar, com responsabilidades claras para a equipe e acompanhamento de cada atendimento.
+
+O sistema atende **uma unidade** de estacionamento. A publicação acadêmica utiliza serviços gratuitos, sujeitos a cotas e possíveis interrupções, sem garantia de disponibilidade contínua.
+
+## Funcionalidades
+
+| Funcionalidade | O que você pode fazer |
+| --- | --- |
+| **Entrada do veículo** | Registrar placa, modelo, titular e observações obrigatórias da vistoria; atribuir uma vaga livre e gerar um identificador para exibir e copiar. |
+| **Vagas e localização** | Consultar vagas livres/ocupadas e encontrar atendimentos por placa ou identificador, distinguindo visitas anteriores do mesmo veículo. |
+| **Retirada organizada** | Acompanhar pedidos aguardando, em busca e entregues, com horários e responsáveis; conferir presencialmente a identidade do titular. |
+| **Cobrança padronizada** | Calcular diárias de 24 horas iniciadas, com mínimo de uma diária, usando a tarifa da entrada. O valor é fixado no pedido de retirada. |
+| **Pagamentos e ajustes** | Registrar pagamentos integrais em dinheiro, cartão ou Pix; acompanhar saldos e permitir descontos/estornos justificados por administrador. |
+| **Vistoria e entrega** | Registrar observações de saída, verificar as condições para entrega e liberar a vaga uma única vez, preservando o histórico. |
+| **Fotos das vistorias** | Acrescentar fotos opcionais de entrada e saída, mantendo o texto obrigatório e o acesso privado. |
+| **Gestão e relatórios** | Consultar recebimentos, cobranças, pendências, atendimentos e ocupação por dia, semana e mês. |
+| **Equipe e histórico** | Administrar acessos por função e acompanhar quem registrou cada ação relevante. |
+
+### Perfis de acesso
+
+- **Manobrista:** consulta veículos, vagas e fila, registra início da busca e vistoria de saída; não acessa dados financeiros ou documento completo.
+- **Caixa/atendente:** registra entradas, pedidos, pagamentos e entregas, conforme as regras do atendimento.
+- **Administrador:** gerencia equipe, vagas e tarifas, acompanha relatórios e registra ajustes e exceções justificadas.
+
+### Regras de uso
+
+- As observações textuais das vistorias de entrada e saída são obrigatórias; as fotos são opcionais.
+- São permitidas até **5 fotos por vistoria**, com até **5 MiB por arquivo**, em JPEG, PNG ou WebP estáticos. As imagens são normalizadas e seus metadados removidos antes do armazenamento privado.
+- Anexe fotos de entrada após salvar a vistoria e antes do pedido de retirada; fotos de saída, após salvar a vistoria e antes de confirmar a entrega.
+- A ausência de fotos ou uma falha isolada do armazenamento não impede um atendimento textual válido.
+- Exatas 24 horas de permanência correspondem a uma diária; qualquer fração além disso inicia a segunda. Alterações posteriores de tarifa não mudam a tarifa daquele atendimento.
+- Pagamentos são **registros manuais**, sem processamento bancário ou confirmação automática de Pix/cartão.
+- Não é permitida retirada por terceiro ou com titular ausente, inclusive por exceção administrativa.
+- O sistema não inclui autoatendimento do cliente, múltiplas unidades, operação offline ou emissão fiscal integrada. Impressão e envio de ticket não são obrigatórios.
+
+## Desenvolvimento local
+
+### Dependências
+
+| Dependência | Finalidade |
+| --- | --- |
+| **SDK .NET 10** | Executar, desenvolver e testar o backend no computador do desenvolvedor. |
+| **Node.js LTS e npm compatíveis com Angular 22** | Instalar dependências e executar o frontend. Consulte a [matriz oficial de compatibilidade](https://angular.dev/reference/versions). |
+| **Docker Engine e plugin Docker Compose** (`docker compose`) | Executar o SQL Server local por meio de `compose.yml`. |
+| **Host compatível com SQL Server Linux em container** | As imagens oficiais têm suporte documentado em x86-64 Intel/AMD; não presumir compatibilidade com ARM/emulação. Reservar recursos para SQL Server, API e frontend. |
+| **Navegador e terminal** | Utilizar a aplicação, testar o fluxo e executar as ferramentas de desenvolvimento. |
+| **Certificados HTTPS locais confiáveis** | Executar frontend e API em origens HTTPS distintas e validar o acesso entre elas. |
+
+Use versões compatíveis do Angular CLI, ferramentas EF e demais dependências de projeto. O SQL Server utiliza a edição **Developer, apenas para desenvolvimento/testes**, respeitando sua licença e requisitos.
+
+**Não é necessário instalar o SQL Server diretamente no host.** O Compose cuida somente da infraestrutura; Angular e backend são executados fora dos containers para facilitar depuração, recarga automática e uso de User Secrets.
+
+Contas Azure não são necessárias para o fluxo local. A integração com armazenamento de fotos exige conta e bucket Cloudflare R2; a publicação exige acesso à assinatura Azure. Não crie serviços pagos automaticamente.
+
+### Configurações e Secrets necessários
+
+Use **User Secrets do .NET em Development** para os segredos do backend e **`appsettings*.json` apenas para parâmetros não sensíveis**. User Secrets mantém valores fora do repositório, mas não os cifra.
+
+| Segredo ou material protegido | Onde é necessário | Para que serve |
+| --- | --- | --- |
+| **Senha administrativa do SQL local** (`MSSQL_SA_PASSWORD`) | Preparação da infraestrutura | Inicializar a imagem SQL Server. Fornecer externamente ao Compose, nunca como valor literal no YAML. Não usar a conta administrativa como usuário normal da API. |
+| **Conexão e credencial do banco local da API** | Backend em Development | Acessar somente o catálogo de desenvolvimento e aplicar suas migrations pendentes. Manter a conexão sensível em User Secrets. |
+| **Senhas iniciais das contas sintéticas** | Inicialização local | Provisionar idempotentemente contas representando os três perfis. Não utilize senhas padrão publicadas ou credenciais compartilhadas. |
+| **Chaves simétricas JWT HS256** | Autenticação | Assinar e validar tokens com chave aleatória de 32 bytes por versão. Manter uma ativa para emissão e anteriores apenas durante a validade dos tokens correspondentes, sem RSA ou certificado. Nunca entregar essas chaves ao frontend. |
+| **Chaves AES-256 versionadas** | Cifragem de campos no backend e recuperação | Cifrar documento, textos de vistoria e justificativas com AES-GCM. Manter uma chave ativa para escrita e as anteriores para leitura enquanto dados ou backups dependerem delas, sem certificado PFX ou key ring de Data Protection. |
+| **Access Key ID e Secret Access Key do R2** | Armazenamento de fotos | Acessar somente o bucket privado autorizado para o ambiente. Separe as credenciais de testes e publicação. |
+| **Credenciais próprias de testes** | Integração/E2E | Preparar bancos e dados sintéticos isolados, sem reutilizar o banco Development nem carregar User Secrets pessoais em Testing. |
+| **Chave ou senha de cifragem dos backups** | Rotina de cópias e exercícios de recuperação | Proteger as cópias locais de SQL, imagens e chaves; guardar o segredo de recuperação separadamente. |
+
+Forneça valores próprios para cada ambiente. A tabela descreve os segredos necessários, sem divulgar credenciais ou valores de exemplo reutilizáveis.
+
+**Exemplo de estrutura dos User Secrets locais do backend** — substitua os placeholders e corresponda os nomes às opções de configuração da API:
+
+```json
+{
+  "ConnectionStrings": {
+    "Estacionamento": "<CONEXAO_SQL_LOCAL_COM_USUARIO_E_SENHA_DA_API>"
+  },
+  "ContasSinteticas": {
+    "Administrador": {
+      "Senha": "<SENHA_EXCLUSIVA_DO_ADMINISTRADOR>"
+    },
+    "Caixa": {
+      "Senha": "<SENHA_EXCLUSIVA_DO_CAIXA>"
+    },
+    "Manobrista": {
+      "Senha": "<SENHA_EXCLUSIVA_DO_MANOBRISTA>"
+    }
+  },
+  "Autenticacao": {
+    "Jwt": {
+      "Chaves": {
+        "v1": "<CHAVE_JWT_ALEATORIA_DE_32_BYTES_EM_BASE64>"
+      }
+    }
+  },
+  "ProtecaoDados": {
+    "Chaves": {
+      "v1": "<CHAVE_AES_ALEATORIA_DE_32_BYTES_EM_BASE64>"
+    }
+  },
+  "ArmazenamentoFotos": {
+    "R2": {
+      "AccessKeyId": "<ACCESS_KEY_ID_DO_AMBIENTE>",
+      "SecretAccessKey": "<SECRET_ACCESS_KEY_DO_AMBIENTE>"
+    }
+  }
+}
+```
+
+O JSON é ilustrativo e contém **somente placeholders**. Não o salve com valores reais em `appsettings*.json` versionados. Cada chave AES ou JWT deve ter **32 bytes gerados com aleatoriedade criptográfica**, representados em Base64; Base64 não cifra nem protege a chave. São 32 bytes aleatórios antes da codificação, não uma senha ou string de 32 caracteres.
+
+Configure `Autenticacao:Jwt:VersaoAtiva` com o identificador da chave de emissão, por exemplo `v1`, em `appsettings*.json`; esse identificador não é segredo. Os valores de `Autenticacao:Jwt:Chaves:<versao>` ficam somente na configuração externa sensível. A assinatura é HS256; a mesma chave secreta permite emitir e validar, por isso não existe chave pública para distribuição. Na rotação de 90 dias, preserve as anteriores para validação até expirar o último token correspondente mais a tolerância de 30 segundos.
+
+Configure `ProtecaoDados:VersaoAtiva` com o identificador da chave de escrita, por exemplo `v1`, em `appsettings*.json`; esse identificador não é segredo. Os valores de `ProtecaoDados:Chaves:<versao>` ficam somente na configuração externa sensível. Na rotação, acrescente uma nova chave/versão, preserve as anteriores e não reutilize identificadores com outro material. As chaves AES são exclusivas por ambiente e finalidade, sem reutilização da chave JWT ou dos backups.
+
+A repetição segura dos comandos usa **SHA-256 do conteúdo canônico versionado**, sem segredo HMAC de idempotência e sem guardar o corpo da requisição. Isso não remove o HMAC-SHA-256 usado internamente pelo JWT HS256, cuja chave é independente. Autorização, transações e regras de replay continuam obrigatórias. Hash não anonimiza conteúdo previsível nem o protege contra descoberta por tentativa; esse risco é aceito apenas no escopo sintético.
+
+Forneça `MSSQL_SA_PASSWORD` separadamente ao processo Compose, sem reutilizá-la na conexão normal da API. Credenciais de Testing pertencem ao processo de testes; a chave/senha dos backups fica protegida separadamente do backend.
+
+URL da API, origens permitidas, moeda/fuso, limites de upload, emissor/audiência JWT e identificação do bucket/endpoint R2 são configurações, não senhas. Nunca incluir chaves AES/JWT ou credenciais SQL/R2 no frontend.
+
+**Atenção ao Compose:** ele não lê User Secrets automaticamente. Forneça ao processo Compose somente os valores de que ele precisa, sem copiar todo o perfil de segredos para o container. Não versione `.env` com credenciais, certificados privados ou `secrets.json`; não publique dumps de configuração ou segredos em logs.
+
+Na publicação, forneça segredos por **variáveis de ambiente/App Settings do App Service**, sem dependência obrigatória de Key Vault. O acesso ao Azure SQL utiliza identidade gerenciada, sem senha do banco no cliente.
+
+### Fluxo de execução
+
+1. Prepare as dependências, parâmetros não sensíveis, User Secrets e credenciais locais.
+2. Inicie somente o SQL Server pelo Compose, aguarde a verificação de saúde e prepare o catálogo/usuário dedicado.
+3. Inicie o backend no host em **Development**. A inicialização aplica automaticamente as **migrations pendentes** e provisiona as contas sintéticas necessárias, **antes de aceitar requisições**.
+4. Inicie o Angular no host e acesse a interface pelo navegador.
+5. Execute integração/E2E em instância e catálogos de teste separados, sem tocar nos dados de desenvolvimento.
+
+Falhas de banco, configuração ou migration interrompem a inicialização da API. Reinícios preservam o esquema e não duplicam contas. Fora de Development, execute migrations separadamente pelas fixtures de teste ou pelo procedimento controlado de publicação.
+
+Pare a infraestrutura preservando seus volumes. Não remova dados para resolver erros de senha ou migration; a limpeza do ambiente de desenvolvimento exige ação explícita.
+
+## Documentação
+
+- [Requisitos do produto — PRD](docs/prd.md): escopo, jornadas, regras de negócio e critérios de aceite.
+- [Desenho técnico — TDD](docs/tdd.md): arquitetura, configuração, segurança e infraestrutura local.
+- [Entrevista de levantamento](docs/entrevista.md): contexto inicial **fictício** que motivou o projeto.
+
+## Tecnologias
+
+[![.NET](https://img.shields.io/badge/.NET-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![SQL Server](https://img.shields.io/badge/Microsoft_SQL_Server-CC2927?style=for-the-badge&logo=mssqlserver&logoColor=white)](https://learn.microsoft.com/sql/sql-server/tutorials-for-sql-server/)
+[![OpenAPI / Swagger](https://img.shields.io/badge/OpenAPI%20%2F%20Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://swagger.io/)
+[![Entity Framework Core](https://img.shields.io/badge/Entity%20Framework%20Core-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://learn.microsoft.com/ef/core/)
+[![ASP.NET Core Identity](https://img.shields.io/badge/ASP.NET%20Core%20Identity-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://learn.microsoft.com/aspnet/core/security/authentication/identity)
+[![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Angular](https://img.shields.io/badge/Angular-DD0031?style=for-the-badge&logo=angular&logoColor=white)](https://angular.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Lucide Icons](https://img.shields.io/badge/Lucide%20Icons-F56565?style=for-the-badge&logo=lucide&logoColor=white)](https://lucide.dev/)

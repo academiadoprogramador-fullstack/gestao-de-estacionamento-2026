@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="titulo descricao">
+<title id="titulo">Vistoria de saída e entrega</title>
+<desc id="descricao">Protótipo com dados sintéticos. Consulte a cena editável e as regras no índice.</desc>
+<defs><marker id="seta" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="#172554"/></marker></defs>
+<rect x="0" y="0" width="1200" height="900" rx="8" fill="#ffffff" stroke="#ffffff"/>
+<text x="32" y="50" font-family="Arial, sans-serif" font-size="30" fill="#172554">
+<tspan x="32" dy="0">Vistoria de saída e entrega</tspan>
+</text>
+<text x="32" y="80" font-family="Arial, sans-serif" font-size="16" fill="#475569">
+<tspan x="32" dy="0">PROTÓTIPO · Caixa · dados sintéticos</tspan>
+</text>
+<rect x="32" y="104" width="1136" height="48" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+<text x="48" y="135" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="48" dy="0">Gestão de Estacionamento  /  Caixa</tspan>
+</text>
+<text x="32" y="840" font-family="Arial, sans-serif" font-size="16" fill="#475569">
+<tspan x="32" dy="0">RF-02/09/11/13 · PRD §5.5/5.6</tspan>
+</text>
+<text x="32" y="870" font-family="Arial, sans-serif" font-size="16" fill="#475569">
+<tspan x="32" dy="0">Wireframe de discussão. Não é interface executável nem evidência de conformidade.</tspan>
+</text>
+<rect x="32" y="176" width="728" height="606" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+<text x="52" y="212" font-family="Arial, sans-serif" font-size="18" fill="#475569">
+<tspan x="52" dy="0">/delivery/:withdrawalId</tspan>
+</text>
+<rect x="52" y="240" width="688" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="66" y="261" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="66" dy="0">Pedido | ATD-DEMO-001 · Aguardando</tspan>
+</text>
+<rect x="52" y="296" width="688" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="66" y="317" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="66" dy="0">Vistoria de saída * | Texto obrigatório já salvo</tspan>
+</text>
+<rect x="52" y="352" width="688" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="66" y="373" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="66" dy="0">Autoria | funcionário e horário do servidor</tspan>
+</text>
+<rect x="52" y="408" width="688" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="66" y="429" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="66" dy="0">Fotos opcionais | 2 de 5 · Adicionar / Consultar</tspan>
+</text>
+<rect x="52" y="464" width="688" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="66" y="485" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="66" dy="0">Conferência | Aprovada</tspan>
+</text>
+<rect x="52" y="520" width="688" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="66" y="541" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="66" dy="0">Saldo exigível | R$ 0,00</tspan>
+</text>
+<rect x="52" y="576" width="688" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="66" y="597" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="66" dy="0">[ ] Confirmo a entrega ao titular presente</tspan>
+</text>
+<rect x="52" y="632" width="688" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="66" y="653" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="66" dy="0">Após confirmar | entregue e vaga A-03 liberada</tspan>
+</text>
+<rect x="784" y="176" width="384" height="382" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+<text x="804" y="216" font-family="Arial, sans-serif" font-size="22" fill="#172554">
+<tspan x="804" dy="0">Regras e permissões</tspan>
+</text>
+<text x="804" y="260" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="804" dy="0">Os três perfis registram/leem a</tspan>
+<tspan x="804" dy="22.5">vistoria.</tspan>
+</text>
+<text x="804" y="308" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="804" dy="0">Só caixa/admin confirmam entrega.</tspan>
+</text>
+<text x="804" y="356" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="804" dy="0">Texto salvo não pode ser editado.</tspan>
+</text>
+<text x="804" y="404" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="804" dy="0">Fotos: JPEG/PNG/WebP, até 5 MiB.</tspan>
+</text>
+<text x="804" y="452" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="804" dy="0">Sem foto não bloqueia entrega.</tspan>
+</text>
+<text x="804" y="500" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="804" dy="0">Ao entregar: fecha inclusão de</tspan>
+<tspan x="804" dy="22.5">fotos.</tspan>
+</text>
+<rect x="784" y="582" width="384" height="200" rx="8" fill="#fff7ed" stroke="#c2410c"/>
+<text x="804" y="622" font-family="Arial, sans-serif" font-size="22" fill="#172554">
+<tspan x="804" dy="0">Estado / bloqueio</tspan>
+</text>
+<text x="804" y="664" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="804" dy="0">Sem vistoria textual: confirmar</tspan>
+<tspan x="804" dy="22.5">desabilitado.</tspan>
+</text>
+<text x="804" y="719" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="804" dy="0">Divergência/saldo: exige exceção</tspan>
+<tspan x="804" dy="22.5">vigente de admin.</tspan>
+</text>
+<rect x="52" y="718" width="180" height="48" rx="8" fill="#bfdbfe" stroke="#2563eb"/>
+<text x="64" y="749" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="64" dy="0">Adicionar foto</tspan>
+</text>
+<rect x="248" y="718" width="198" height="48" rx="8" fill="#bfdbfe" stroke="#2563eb"/>
+<text x="260" y="749" font-family="Arial, sans-serif" font-size="18" fill="#172554">
+<tspan x="260" dy="0">Confirmar</tspan>
+<tspan x="260" dy="22.5">entrega</tspan>
+</text>
+</svg>

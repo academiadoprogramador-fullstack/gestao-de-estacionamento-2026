@@ -1,0 +1,178 @@
+{
+  "telas": [
+    {
+      "id": "01-acesso",
+      "titulo": "Acesso da equipe",
+      "perfil": "Funcionário",
+      "rota": "/login",
+      "requisitos": "RF-10 · RNF-01/04 · TDD §6.2",
+      "principal": ["E-mail | caixa@exemplo.invalid", "Senha | ********", "Entrar"],
+      "apoio": ["Conta fornecida pelo administrador.", "Sem autorregistro.", "Cliente do valet não acessa o sistema.", "Senha mínima: 8 caracteres."],
+      "estado": ["Credenciais inválidas ou acesso bloqueado.", "Excesso de tentativas: aguarde e tente novamente."],
+      "acoes": ["Entrar"]
+    },
+    {
+      "id": "02-entrada",
+      "titulo": "Registrar entrada",
+      "perfil": "Caixa",
+      "rota": "/check-in",
+      "requisitos": "RF-01/02/07/10/11 · PRD §5.1",
+      "principal": ["Placa | FIC0001 (sintética)", "Modelo | Veículo de demonstração", "Titular | Pessoa Sintética 01", "Documento | DOC-FICTICIO-01", "Vaga livre | A-03 · atualizar lista", "Vistoria de entrada * | Observações textuais obrigatórias", "Horário e operador | registrados pelo servidor"],
+      "apoio": ["Vaga selecionada não é reserva.", "Sem vaga ou tarifa: entrada bloqueada.", "Tarifa da entrada é preservada.", "Identificador aparece após confirmação.", "Copiar identificador; sem ticket obrigatório."],
+      "estado": ["Fotos opcionais: anexar à vistoria salva.", "Não enviar fotos antes de confirmar a entrada."],
+      "acoes": ["Registrar entrada"]
+    },
+    {
+      "id": "03-atendimentos",
+      "titulo": "Buscar e consultar atendimento",
+      "perfil": "Caixa",
+      "rota": "/attendances",
+      "requisitos": "RF-03/10/11/13 · PRD §5.1/5.6",
+      "principal": ["Busca exata | Placa OU identificador", "ATD-DEMO-001 | FIC0001 | A-03 | Ativo", "ATD-DEMO-000 | FIC0001 | B-01 | Entregue", "Detalhe selecionado | ATD-DEMO-001", "Documento completo | oculto · leitura explícita", "Vistoria de entrada | leitura explícita", "Histórico | operador, horário e evento"],
+      "apoio": ["Visitas distintas, mesmo veículo.", "Resultados paginados.", "Ler documento / vistoria registra auditoria.", "Fotos da entrada: até 5, após salvar texto.", "Inclusão de fotos fecha no pedido de retirada."],
+      "estado": ["Não há resultados: revise o filtro.", "Resposta atrasada não troca a seleção atual."],
+      "acoes": ["Buscar", "Solicitar retirada"]
+    },
+    {
+      "id": "04-fila",
+      "titulo": "Fila de retirada",
+      "perfil": "Manobrista",
+      "rota": "/withdrawals",
+      "requisitos": "RF-02/05/10/11 · TDD §4.2",
+      "principal": ["Filtro | Aguardando / Em busca / Entregue", "ATD-DEMO-001 | FIC0001 | A-03 | Aguardando", "ATD-DEMO-002 | FIC0002 | A-08 | Em busca", "ATD-DEMO-003 | FIC0003 | B-02 | Entregue", "Ação no pedido aguardando | Iniciar busca", "Ação no pedido | Abrir vistoria de saída", "Entregue | horário e responsável disponíveis"],
+      "apoio": ["Atualização: 30 s e após ações/foco.", "Pausada em aba inativa.", "Sem finanças ou documento completo.", "Manobrista não confirma entrega.", "Disponibilidade é informativa."],
+      "estado": ["Lista temporariamente indisponível.", "Manter último estado identificado como desatualizado."],
+      "acoes": ["Atualizar fila"]
+    },
+    {
+      "id": "05-pedido",
+      "titulo": "Pedido e conferência presencial",
+      "perfil": "Caixa",
+      "rota": "/attendances · ação de retirada",
+      "requisitos": "RF-04/06/07/11 · PRD §5.4",
+      "principal": ["Atendimento | ATD-DEMO-001 · FIC0001 · A-03", "Titular registrado | Pessoa Sintética 01", "Documento | Ler para conferência · acesso auditado", "[ ] Declaro que o titular está presente", "Resultado | ( ) Aprovado   ( ) Divergente", "Tempo e diárias | calculados ao registrar pedido", "Tarifa | snapshot da entrada, sem edição"],
+      "apoio": ["Sem ticket: localizar por placa.", "Não fotografar documento pessoal.", "Divergência não apaga o pedido/cálculo.", "Pedido divergente bloqueia entrega normal.", "Segundo pedido do mesmo ciclo é recusado."],
+      "estado": ["Titular ausente ou terceiro: retirada bloqueada.", "Administrador não contorna essa exclusão."],
+      "acoes": ["Registrar pedido"]
+    },
+    {
+      "id": "06-caixa",
+      "titulo": "Cobrança e pagamentos",
+      "perfil": "Administrador",
+      "rota": "/cashier/:attendanceId",
+      "requisitos": "RF-06/07/08/10/11 · PRD F3-R01–04",
+      "principal": ["Atendimento | ATD-DEMO-001 · valores sintéticos", "Permanência fixada | 25 h · 2 diárias", "Tarifa snapshot | R$ 20,00 · base R$ 40,00", "Descontos | R$ 0,00 · cobrado R$ 40,00", "Pago líquido | R$ 0,00 · saldo R$ 40,00", "Pagamento | R$ 40,00 integral · sem edição parcial", "Forma | ( ) Dinheiro  ( ) Cartão  ( ) Pix", "Lançamentos | histórico imutável e paginado"],
+      "apoio": ["Pagamento é registro manual.", "Sem confirmação bancária automática.", "Só admin: desconto monetário / estorno integral.", "Ajustes exigem justificativa.", "Estorno reabre saldo; não apaga original."],
+      "estado": ["Sem pagamento parcial, excedente ou troco.", "Pagamento/ajuste invalida exceção financeira antiga."],
+      "acoes": ["Registrar pagamento", "Ajustes: só admin"]
+    },
+    {
+      "id": "07-entrega",
+      "titulo": "Vistoria de saída e entrega",
+      "perfil": "Caixa",
+      "rota": "/delivery/:withdrawalId",
+      "requisitos": "RF-02/09/11/13 · PRD §5.5/5.6",
+      "principal": ["Pedido | ATD-DEMO-001 · Aguardando", "Vistoria de saída * | Texto obrigatório já salvo", "Autoria | funcionário e horário do servidor", "Fotos opcionais | 2 de 5 · Adicionar / Consultar", "Conferência | Aprovada", "Saldo exigível | R$ 0,00", "[ ] Confirmo a entrega ao titular presente", "Após confirmar | entregue e vaga A-03 liberada"],
+      "apoio": ["Os três perfis registram/leem a vistoria.", "Só caixa/admin confirmam entrega.", "Texto salvo não pode ser editado.", "Fotos: JPEG/PNG/WebP, até 5 MiB.", "Sem foto não bloqueia entrega.", "Ao entregar: fecha inclusão de fotos."],
+      "estado": ["Sem vistoria textual: confirmar desabilitado.", "Divergência/saldo: exige exceção vigente de admin."],
+      "acoes": ["Adicionar foto", "Confirmar entrega"]
+    },
+    {
+      "id": "08-administracao",
+      "titulo": "Equipe, vagas e tarifas",
+      "perfil": "Administrador",
+      "rota": "/employees · /spaces · /daily-rates",
+      "requisitos": "RF-02/07/10/11 · PRD §5.1",
+      "principal": ["Abas | Equipe / Vagas / Tarifas", "Equipe | e-mail · perfis · ativo/inativo", "Novo funcionário | e-mail e credencial inicial externa", "Perfis | Manobrista / Caixa / Administrador", "Vagas | código único · livre/ocupada · paginação", "Tarifas | versões imutáveis e histórico", "Nova diária | valor positivo com duas casas", "Concorrência | recarregar antes de sobrescrever"],
+      "apoio": ["Não remover último administrador ativo.", "Alterar acesso revoga sessões anteriores.", "Sem autorregistro/convite/recuperação de senha.", "Sem tarifa comercial automática.", "Nova tarifa não altera entradas anteriores."],
+      "estado": ["Sem tarifa: novas entradas bloqueadas.", "Sem vaga livre: check-in não conclui."],
+      "acoes": ["Salvar cadastro", "Publicar tarifa"]
+    },
+    {
+      "id": "09-relatorios",
+      "titulo": "Relatórios por período",
+      "perfil": "Administrador",
+      "rota": "Relatórios · rota visual a especificar",
+      "requisitos": "RF-12 · RNF-02/05 · TDD §5.3",
+      "principal": ["Período | Dia / Semana / Mês", "Data | 16/11/2026 · America/Sao_Paulo", "Recebimentos | bruto R$ 40,00 · estornos R$ 0,00", "Recebido líquido | R$ 40,00", "Cobranças | bruto R$ 60,00 · descontos R$ 0,00", "Saldo na data de corte | R$ 20,00", "Operação | entradas / entregas / ocupação", "Detalhamento | componentes e recortes separados"],
+      "apoio": ["Valores sintéticos, não medição real.", "Semana: segunda a domingo.", "Lançamentos pelo horário de cada evento.", "Início inclusivo; fim exclusivo.", "Dívida após entrega continua no saldo.", "Sem módulo de fechamento/fiscal."],
+      "estado": ["Líquido do período pode ser negativo.", "Histórico descartado não aparece como zero observado."],
+      "acoes": ["Consultar período"]
+    },
+    {
+      "id": "10-excecoes",
+      "titulo": "Exceções e justificativas",
+      "perfil": "Administrador",
+      "rota": "/cashier/:attendanceId · exceções",
+      "requisitos": "RF-07/09/10/11 · PRD F3-R04/F4-R03",
+      "principal": ["Pedido | ATD-DEMO-001 · titular presente", "Documental | Divergente · sem autorização vigente", "Financeira | Saldo positivo · sem autorização vigente", "Tipo | ( ) Documental  ( ) Financeira", "Justificativa * | registro protegido obrigatório", "Vínculo | conferência ou revisão financeira atual", "Histórico | concessões / revogações / consumo", "Justificativa salva | Ler explicitamente · auditado"],
+      "apoio": ["Tipos são independentes.", "Não altera conferência, saldo ou pagamento.", "Revogável antes do consumo.", "Mudança financeira pode tornar obsoleta.", "Entrega consome cada autorização uma vez.", "Não conceder após entrega."],
+      "estado": ["Não autoriza terceiro ou titular ausente.", "Autorização obsoleta/revogada bloqueia a entrega."],
+      "acoes": ["Conceder autorização", "Revogar vigente"]
+    },
+    {
+      "id": "11-recuperacao",
+      "titulo": "Resultado incerto e indisponibilidade",
+      "perfil": "Funcionário autenticado",
+      "rota": "Estado transversal das ações",
+      "requisitos": "RNF-01/03/06/07 · PRD §5.3",
+      "principal": ["Ação enviada | resposta não confirmada", "Não faça um novo envio com outra chave.", "Conteúdo e chave | preservados só em memória", "Ação explícita | consultar estado / repetir tentativa", "Sessão expirada | reautenticar como mesmo ator", "Navegação/logout | bloqueados durante pendência", "Recarregar/sair do navegador | pode perder tentativa"],
+      "apoio": ["Sem reenvio automático de negócio.", "403 não comprova rollback anterior.", "401 permite reautenticação coordenada.", "Sem API/SQL: bloquear mutações.", "Só R2 indisponível: continuar com texto.", "Cota de fotos: aviso 70%, recusa 80%."],
+      "estado": ["Sua operação pode ter sido confirmada.", "Recupere a mesma tentativa antes de criar outra."],
+      "acoes": ["Consultar estado", "Repetir mesma ação"]
+    }
+  ],
+  "fluxos": [
+    {
+      "id": "12-fluxo-atendimento",
+      "titulo": "Fluxo principal do atendimento",
+      "requisitos": "RF-01–13 · PRD §6",
+      "etapas": [
+        ["Preparar operação", "Admin: vagas, tarifa e equipe."],
+        ["Entrada atômica", "Caixa/admin: dados, texto e vaga."],
+        ["Fotos da entrada", "Opcionais, após salvar e antes do pedido."],
+        ["Pedir retirada", "Titular presente; conferir e fixar cobrança."],
+        ["Fila / busca", "Busca é opcional; não entrega sozinha."],
+        ["Caixa", "Quitação integral ou exceções vigentes."],
+        ["Vistoria de saída", "Texto obrigatório; fotos opcionais."],
+        ["Entregar", "Caixa/admin: validar e consumir exceções."],
+        ["Encerrar e liberar", "Uma transação; saldo excepcional permanece."]
+      ],
+      "nota": "Sem pedido não há entrega. A passagem aguardando → entregue é permitida. Fotos nunca substituem o texto."
+    },
+    {
+      "id": "13-fluxo-excecoes",
+      "titulo": "Fluxo de bloqueios e exceções",
+      "requisitos": "RF-04/08/09/10/11 · PRD §5.4–5.5",
+      "etapas": [
+        ["Titular presente?", "Não: bloquear, inclusive para admin."],
+        ["Pedido existente?", "Não: registrar pedido antes da entrega."],
+        ["Conferência aprovada?", "Não: exigir exceção documental vigente."],
+        ["Saldo zero?", "Não: pagar integral OU exceção financeira."],
+        ["Vistoria textual salva?", "Não: registrar condições de saída."],
+        ["Exceções atuais?", "Revogada/substituída/obsoleta: bloquear."],
+        ["Confirmar entrega", "Caixa/admin, com ação explícita."],
+        ["Consumir uma vez", "Validar, encerrar e liberar atomicamente."],
+        ["Saldo posterior", "Acerto integral sem reabrir vaga/pedido."]
+      ],
+      "nota": "Cada bloqueio interrompe a entrega. Sanado o requisito, reavaliar os demais. Exceção não quita nem corrige documento."
+    },
+    {
+      "id": "14-fluxo-fotos-replay",
+      "titulo": "Fotos privadas e repetição segura",
+      "requisitos": "RF-13 · RNF-01/02/03/06 · TDD §4.4",
+      "etapas": [
+        ["Vistoria já salva?", "Entrada antes do pedido; saída antes da entrega."],
+        ["Validar acesso e limite", "Até 5 fotos, 5 MiB, JPEG/PNG/WebP estáticos."],
+        ["Tratar imagem na API", "Orientação, WebP e remoção EXIF/GPS."],
+        ["Reservar tentativa SQL", "Ator, chave, hash e cota, sem guardar original."],
+        ["Enviar ao R2 privado", "Servidor usa S3; sem segredo no navegador."],
+        ["Revalidar e confirmar", "Janela, perfil, metadados e auditoria."],
+        ["Resposta perdida", "Consultar/repetir mesma chave e conteúdo."],
+        ["Falha após envio", "Reconciliar; órfão só após 24 h e sem lease."],
+        ["Contingência textual", "Falha de fotos não impede P0 com API/SQL ativos."]
+      ],
+      "nota": "Não abrir transação SQL durante I/O no R2. Limite/erro nunca autoriza apagar evidência confirmada antecipadamente."
+    }
+  ]
+}

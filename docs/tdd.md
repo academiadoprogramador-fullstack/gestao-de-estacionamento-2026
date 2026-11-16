@@ -248,7 +248,7 @@ sequenceDiagram
   UI->>API: GET fila (polling)
   Caixa->>UI: registra pagamento integral e entrega
   UI->>API: comandos com novas chaves e JWT bearer
-  API->>SQL: validar saldo/conferência ou autorização; gravar vistoria/entrega/liberação/auditoria
+  API->>SQL: validar saldo/conferência ou autorização, gravar vistoria/entrega/liberação/auditoria
   SQL-->>API: commit único ou rollback
   API-->>UI: estado final ou conflito com recarga
 ```

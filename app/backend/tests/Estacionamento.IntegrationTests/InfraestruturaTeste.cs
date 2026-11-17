@@ -41,12 +41,33 @@ internal static class SqlTeste
         }
     }
 
+    public static string GerarNomeBanco() => $"EstacionamentoTeste_{Guid.NewGuid():N}";
+
     public static string CriarBanco()
     {
         GarantirDisponivel();
-        var nome = $"EstacionamentoTeste_{Guid.NewGuid():N}";
-        ExecutarEmMaster($"CREATE DATABASE [{nome}];");
+        var nome = GerarNomeBanco();
+        CriarBanco(nome);
         return nome;
+    }
+
+    public static void CriarBanco(string nome)
+    {
+        GarantirDisponivel();
+        ExecutarEmMaster($"CREATE DATABASE [{nome}];");
+    }
+
+    public static bool BancoExiste(string nome)
+    {
+        using var conexao = new SqlConnection(new SqlConnectionStringBuilder(ConexaoMaster!)
+        {
+            InitialCatalog = "master"
+        }.ConnectionString);
+        conexao.Open();
+        using var cmd = conexao.CreateCommand();
+        cmd.CommandText = "SELECT DB_ID(@nome)";
+        cmd.Parameters.AddWithValue("@nome", nome);
+        return cmd.ExecuteScalar() is not null and not DBNull;
     }
 
     public static string Conexao(string nomeBanco)
@@ -194,14 +215,20 @@ internal sealed class FabricaApiTeste : WebApplicationFactory<Program>
         bool aplicarMigrationsAntesDoStartup = true,
         Dictionary<string, string?>? configuracaoExtra = null,
         string? nomeBancoExistente = null,
-        bool removerBancoAoDispor = true)
+        bool removerBancoAoDispor = true,
+        bool? criarBanco = null)
     {
         _removerBancoAoDispor = removerBancoAoDispor;
         SqlTeste.GarantirDisponivel();
         _ambiente = ambiente;
         _aplicarMigrationsAntesDoStartup = aplicarMigrationsAntesDoStartup;
         _configuracaoExtra = configuracaoExtra ?? [];
-        _nomeBanco = nomeBancoExistente ?? SqlTeste.CriarBanco();
+        _nomeBanco = nomeBancoExistente ?? SqlTeste.GerarNomeBanco();
+
+        if (criarBanco ?? nomeBancoExistente is null)
+        {
+            SqlTeste.CriarBanco(_nomeBanco);
+        }
 
         _variavelUserSecretsAnterior = Environment.GetEnvironmentVariable(
             Estacionamento.Api.Configuracao.PrecedenciaConfiguracao.VariavelDesabilitarUserSecrets);

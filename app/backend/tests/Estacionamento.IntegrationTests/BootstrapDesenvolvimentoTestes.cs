@@ -46,6 +46,45 @@ public sealed class BootstrapDesenvolvimentoTestes
         Assert.AreEqual(HttpStatusCode.OK, saude.StatusCode);
     }
 
+
+    [TestMethod]
+    public async Task CatalogoAusenteEhCriadoPelaMigrationAntesDoProvisionamento()
+    {
+        var nomeBanco = SqlTeste.GerarNomeBanco();
+        Assert.IsFalse(SqlTeste.BancoExiste(nomeBanco));
+
+        using var fabrica = new FabricaApiTeste(
+            "Development",
+            aplicarMigrationsAntesDoStartup: false,
+            nomeBancoExistente: nomeBanco,
+            criarBanco: false);
+        using var cliente = fabrica.CriarCliente();
+
+        Assert.IsTrue(SqlTeste.BancoExiste(nomeBanco));
+        CollectionAssert.AreEqual(
+            new[] { "validacao", "conexao", "migracoes", "provisionamento" },
+            fabrica.EtapasBootstrap.ToArray());
+        Assert.IsTrue(SqlTeste.TabelaExiste(nomeBanco, "SessoesAutenticacao"));
+        Assert.AreEqual(3, await ContarUsuariosAsync(fabrica));
+        Assert.AreEqual(HttpStatusCode.OK, (await cliente.GetAsync("/health")).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task TestingNaoCriaCatalogoAusente()
+    {
+        var nomeBanco = SqlTeste.GerarNomeBanco();
+
+        using var fabrica = new FabricaApiTeste(
+            "Testing",
+            aplicarMigrationsAntesDoStartup: false,
+            nomeBancoExistente: nomeBanco,
+            criarBanco: false);
+        using var cliente = fabrica.CriarCliente();
+
+        Assert.IsFalse(SqlTeste.BancoExiste(nomeBanco));
+        Assert.AreEqual(HttpStatusCode.OK, (await cliente.GetAsync("/health")).StatusCode);
+    }
+
     [TestMethod]
     public async Task ReinicioPreservaContasExistentesSemReativarNemAlterar()
     {

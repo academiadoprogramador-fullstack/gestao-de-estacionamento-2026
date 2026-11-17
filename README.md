@@ -193,6 +193,113 @@ URL da API, origens permitidas, moeda/fuso, limites de upload, emissor/audiênci
 
 Na publicação, forneça segredos por **variáveis de ambiente/App Settings do App Service**, sem dependência obrigatória de Key Vault. O acesso ao Azure SQL utiliza identidade gerenciada, sem senha do banco no cliente.
 
+### Comandos de desenvolvimento
+
+Os comandos abaixo foram verificados com .NET SDK **10.0.114**, Node **26.13.1**, npm **12.2.2**, Docker **29.9.3**, Docker Compose **5.7.1** e host **x86-64**. As versões exatas de pacotes estão fixadas em `global.json`, `app/backend/Directory.Packages.props`, `app/frontend/package.json` e `app/frontend/package-lock.json`; a imagem do SQL está fixada em `mcr.microsoft.com/mssql/server:2022-CU28-ubuntu-22.04`.
+
+**1. Preparar a infraestrutura SQL**
+
+Forneça as senhas ao processo, nunca a arquivos versionados. O exemplo usa uma variável de ambiente de curta duração no terminal:
+
+```bash
+export MSSQL_SA_PASSWORD='<SENHA_ADMINISTRATIVA_SQL_FORTE_E_EXCLUSIVA>'
+docker compose up -d
+docker compose ps                       # aguarde o estado healthy
+export SQL_SENHA_API='<SENHA_EXCLUSIVA_DO_USUARIO_DA_API>'
+./scripts/preparar-sql.sh               # idempotente: cria catálogo e usuário dedicado
+```
+
+O script cria somente o catálogo `Estacionamento` e o usuário `estacionamento_api` com permissões de esquema; o esquema de domínio continua pertencendo às migrations. A API **não** usa a conta `sa`.
+
+Para uma segunda instância isolada de testes, use projeto Compose, porta e volume próprios:
+
+```bash
+COMPOSE_PROJECT_NAME=gestao-estacionamento-test SQL_PORT=14330 \
+  MSSQL_SA_PASSWORD='<SENHA_DA_INSTANCIA_DE_TESTE>' docker compose up -d
+```
+
+**2. Preencher os User Secrets do backend**
+
+Crie `~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.json` com permissão `600` e a estrutura abaixo. Este arquivo fica fora do repositório; User Secrets **não é cofre cifrado**. Gere cada chave com `openssl rand -base64 32` (32 bytes aleatórios antes do Base64) e não reutilize material entre JWT, AES ou backups.
+
+```json
+{
+  "ConnectionStrings": {
+    "Estacionamento": "Server=127.0.0.1,1433;Database=Estacionamento;User Id=estacionamento_api;Password=<SENHA_DO_USUARIO_DA_API>;Encrypt=True;TrustServerCertificate=True"
+  },
+  "ContasSinteticas": {
+    "Administrador": { "Email": "<EMAIL_SINTETICO_ADMIN>", "Senha": "<SENHA_EXCLUSIVA_ADMIN>" },
+    "Caixa": { "Email": "<EMAIL_SINTETICO_CAIXA>", "Senha": "<SENHA_EXCLUSIVA_CAIXA>" },
+    "Manobrista": { "Email": "<EMAIL_SINTETICO_MANOBRISTA>", "Senha": "<SENHA_EXCLUSIVA_MANOBRISTA>" }
+  },
+  "Autenticacao": { "Jwt": { "Chaves": { "v1": "<CHAVE_JWT_ALEATORIA_DE_32_BYTES_EM_BASE64>" } } },
+  "ProtecaoDados": { "Chaves": { "v1": "<CHAVE_AES_ALEATORIA_DE_32_BYTES_EM_BASE64>" } }
+}
+```
+
+`chmod 600 ~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.json`. Não use `appsettings*.json` para esses valores e não copie o arquivo para build/deploy.
+
+**3. Iniciar a API e a SPA no host, em origens HTTPS distintas**
+
+```bash
+# terminal 1 — API em https://localhost:4300
+dotnet run --project app/backend/src/Estacionamento.Api --launch-profile https
+
+# terminal 2 — SPA em https://localhost:4200
+cd app/frontend
+npm ci
+npm start -- --ssl
+```
+
+A API expõe `GET /health` sem autenticação. Em `Development`, após validar configuração, conexão e as três contas sintéticas, a API aplica as migrations pendentes, provisiona imediatamente as contas ausentes e só então aceita requisições. Falha em qualquer etapa interrompe a inicialização. `Testing` e `Production` nunca migram nem provisionam no startup.
+
+Se o navegador não confiar no certificado local, execute `dotnet dev-certs https --trust` uma vez. O Playwright ignora o certificado local por configuração explícita; isso não altera a validação TLS entre SPA e API.
+
+**4. Parar e diagnosticar sem perder dados**
+
+```bash
+docker compose stop          # para o container; volume e dados permanecem
+docker compose up -d         # retoma com os dados existentes
+docker compose ps            # verifica saúde
+docker inspect --format '{{.State.Health.Status}}' gestao-estacionamento-sqlserver-1
+```
+
+`docker compose down` também preserva o volume nomeado. **Nunca use `docker compose down -v` para contornar erro de senha ou migration**; a remoção do volume é uma ação destrutiva explícita. Erros de senha em volume já inicializado não são corrigidos alterando `MSSQL_SA_PASSWORD`; trate a rotação separadamente.
+
+**5. Testes**
+
+```bash
+# Unitários .NET
+dotnet test app/backend/tests/Estacionamento.UnitTests
+
+# Integração com SQL Server real em instância isolada
+export ESTACIONAMENTO_TESTE_CONEXAO='Server=127.0.0.1,14330;Database=master;User Id=estacionamento_teste;Password=<SENHA_DE_TESTE>;Encrypt=True;TrustServerCertificate=True'
+dotnet test app/backend/tests/Estacionamento.IntegrationTests
+
+# SPA
+cd app/frontend
+npm test -- --run
+
+# E2E entre https://localhost:4200 e https://localhost:4300
+# Defina E2E_CONEXAO, E2E_JWT_CHAVE, E2E_AES_CHAVE e E2E_*_EMAIL/SENHA
+# apontando para catálogo e contas sintéticas isolados.
+npx playwright test
+```
+
+Os testes de integração criam catálogos `EstacionamentoTeste_*` e os removem ao final; eles validam o host local e não carregam User Secrets pessoais (`ESTACIONAMENTO_DESABILITAR_USER_SECRETS=1`). O E2E inicia a API em `Development` com credenciais explícitas e catálogo isolado, sem tocar no banco de desenvolvimento.
+
+**6. Erros comuns**
+
+| Sintoma | Verificação |
+| --- | --- |
+| API encerra antes de escutar | O log informa a etapa (`validacao`, `conexao`, `migracoes`, `provisionamento`) e o tipo da falha. Confira User Secrets, conexão, chaves Base64 de 32 bytes e as três contas. |
+| SQL não fica saudável | `docker compose ps`, `docker compose logs sqlserver`; confirme `MSSQL_SA_PASSWORD` e recursos do host x86-64. |
+| CORS bloqueado no navegador | A origem exata da SPA deve estar em `Cors:OrigensPermitidas` (`https://localhost:4200`). Não use proxy de desenvolvimento nem `AllowAnyOrigin`. |
+| Login retorna 429 | Limite de 5 requisições por minuto por IP. Aguarde a janela; não contorne o limite. |
+| Recarga da SPA pede login novamente | Comportamento esperado: a sessão existe apenas em memória. |
+
+
+
 ### Fluxo de execução
 
 1. Prepare as dependências, parâmetros não sensíveis, User Secrets e credenciais locais.
@@ -209,6 +316,7 @@ Pare a infraestrutura preservando seus volumes. Não remova dados para resolver 
 
 - [Requisitos do produto — PRD](docs/prd.md): escopo, jornadas, regras de negócio e critérios de aceite.
 - [Desenho técnico — TDD](docs/tdd.md): arquitetura, configuração, segurança e infraestrutura local.
+- [Sessão, autenticação e CORS](docs/sessao-autenticacao.md): contratos HTTP, claims, erros, rotação de chaves e bootstrap.
 - [Entrevista de levantamento](docs/entrevista.md): contexto inicial **fictício** que motivou o projeto.
 
 ## Tecnologias

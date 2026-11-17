@@ -1,0 +1,8 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Estacionamento.Domain</RootNamespace>
+    <AssemblyName>Estacionamento.Domain</AssemblyName>
+  </PropertyGroup>
+
+</Project>

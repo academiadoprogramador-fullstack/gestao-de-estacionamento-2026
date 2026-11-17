@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Estacionamento.UnitTests</RootNamespace>
+    <AssemblyName>Estacionamento.UnitTests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSTest" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Estacionamento.Api\Estacionamento.Api.csproj" />
+    <ProjectReference Include="..\..\src\Estacionamento.Application\Estacionamento.Application.csproj" />
+    <ProjectReference Include="..\..\src\Estacionamento.Domain\Estacionamento.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Estacionamento.Infrastructure\Estacionamento.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -118,17 +118,17 @@ Somente em `Development`, a API SHALL aplicar todas as migrations versionadas pe
 
 ### Requirement: Catálogo local criado pela migration
 
-A preparação local SHALL criar somente o login dedicado e as permissões necessárias para `Development`; o catálogo e o esquema SHALL ser criados por `Database.MigrateAsync()`, nunca por SQL paralelo de criação de banco e nunca com a conta `sa` na conexão da API.
+Em `Development`, a conexão da API SHALL usar a conta administrativa local `sa` fornecida por User Secrets exclusivamente para que `Database.MigrateAsync()` crie o catálogo e aplique todo o esquema; não SHALL existir preparação manual de banco. `Testing` e `Production` SHALL NOT reutilizar essa credencial administrativa de Development.
 
 #### Scenario: Volume novo sem catálogo
 
-- **WHEN** o volume local é novo e o login dedicado existe com permissão de criação
-- **THEN** a primeira inicialização em `Development` cria o catálogo pela migration e não exige preparação manual do banco
+- **WHEN** o volume local é novo e a conexão administrativa de `Development` está configurada
+- **THEN** a primeira inicialização cria o catálogo pela migration, aplica o esquema e provisiona as contas, sem preparação manual do banco
 
 #### Scenario: Login sem permissão de criação
 
-- **WHEN** o login da API não pode criar o catálogo
-- **THEN** a inicialização falha de forma controlada antes do tráfego, sem usar a conta `sa` como fallback e sem criar esquema parcial por SQL paralelo
+- **WHEN** a credencial administrativa de `Development` está ausente, incorreta ou sem permissão para criar o catálogo
+- **THEN** a inicialização falha de forma controlada antes do tráfego e não cria esquema parcial por SQL paralelo
 
 ### Requirement: Sem migration ou seed automático fora de Development
 

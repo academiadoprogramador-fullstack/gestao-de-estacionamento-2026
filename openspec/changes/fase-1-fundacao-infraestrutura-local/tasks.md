@@ -10,7 +10,7 @@
 ## 2. Compose de infraestrutura e preparação do SQL
 
 - [x] 2.1 Criar `compose.yml` na raiz com SQL Server Developer em imagem fixada, healthcheck, volume nomeado, rede local e porta publicada somente em `127.0.0.1`; verificar com `docker compose config --quiet` e `docker compose up -d`, aguardando o healthcheck ficar saudável.
-- [x] 2.2 Implementar preparação idempotente do login dedicado da API e das permissões necessárias para a migration criar o catálogo, recebendo `MSSQL_SA_PASSWORD` de fonte externa ao arquivo Compose; verificar catálogo ausente, início, reinício e conexão da API sem usar a conta `sa`, confirmando que nenhum esquema de domínio foi criado por SQL paralelo.
+- [x] 2.2 Configurar a conexão administrativa local de `Development` em User Secrets e permitir que a migration crie o catálogo e o esquema em volume novo, sem preparação manual de banco; verificar catálogo ausente, início, reinício e conexão sem segredo versionado, sem SQL paralelo de criação de esquema e sem reutilizar a credencial administrativa fora de `Development`.
 - [x] 2.3 Validar preservação e isolamento da infraestrutura: parar e reiniciar sem remover o volume, confirmar persistência, subir uma segunda instância de teste com portas/volumes próprios e verificar ausência de senha literal em YAML, `.env` versionado, argumentos e logs.
 - [x] 2.4 Documentar os comandos de iniciar, consultar saúde e parar a infraestrutura preservando volumes; verificar seguindo a documentação e confirmando que a parada normal não remove dados.
 

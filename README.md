@@ -67,7 +67,7 @@ Use **User Secrets do .NET em Development** para os segredos do backend e **`app
 | Segredo ou material protegido | Onde é necessário | Para que serve |
 | --- | --- | --- |
 | **Senha administrativa do SQL local** (`MSSQL_SA_PASSWORD`) | Preparação da infraestrutura | Inicializar a imagem SQL Server. Fornecer externamente ao Compose, nunca como valor literal no YAML. Não usar a conta administrativa como usuário normal da API. |
-| **Conexão e credencial do banco local da API** | Backend em Development | Acessar somente o catálogo de desenvolvimento e aplicar suas migrations pendentes. Manter a conexão sensível em User Secrets. |
+| **Conexão e credencial do banco local da API** | Backend em Development | Acessar somente o catálogo de desenvolvimento e aplicar suas migrations pendentes. Em Development, usar a conta administrativa local `sa` em User Secrets para que a migration crie o catálogo; nunca reutilizar essa credencial em Testing/Production. |
 | **E-mails e senhas das contas sintéticas** | Inicialização local em Development | Configurar todas as contas dos três perfis em User Secrets. Não use credenciais padrão publicadas ou compartilhadas; não coloque `ContasSinteticas` em `appsettings.Development.json`. |
 | **Chaves simétricas JWT HS256** | Autenticação | Assinar e validar tokens com chave aleatória de 32 bytes por versão. Manter uma ativa para emissão e anteriores apenas durante a validade dos tokens correspondentes, sem RSA ou certificado. Nunca entregar essas chaves ao frontend. |
 | **Chaves AES-256 versionadas** | Cifragem de campos no backend e recuperação | Cifrar documento, textos de vistoria e justificativas com AES-GCM. Manter uma chave ativa para escrita e as anteriores para leitura enquanto dados ou backups dependerem delas, sem certificado PFX ou key ring de Data Protection. |
@@ -185,7 +185,7 @@ Configure `ProtecaoDados:VersaoAtiva` com o identificador da chave de escrita, p
 
 A repetição segura dos comandos usa **SHA-256 do conteúdo canônico versionado**, sem segredo HMAC de idempotência e sem guardar o corpo da requisição. Isso não remove o HMAC-SHA-256 usado internamente pelo JWT HS256, cuja chave é independente. Autorização, transações e regras de replay continuam obrigatórias. Hash não anonimiza conteúdo previsível nem o protege contra descoberta por tentativa; esse risco é aceito apenas no escopo sintético.
 
-Forneça `MSSQL_SA_PASSWORD` separadamente ao processo Compose, sem reutilizá-la na conexão normal da API. Credenciais de Testing pertencem ao processo de testes; a chave/senha dos backups fica protegida separadamente do backend.
+Forneça `MSSQL_SA_PASSWORD` ao processo Compose e, em `Development`, use a mesma senha na conexão administrativa da API mantida em User Secrets; não reutilize essa credencial em `Testing` ou `Production`. Credenciais de Testing pertencem ao processo de testes; a chave/senha dos backups fica protegida separadamente do backend.
 
 URL da API, origens permitidas, moeda/fuso, limites de upload, emissor/audiência JWT e identificação do bucket/endpoint R2 são configurações, não senhas. Nunca incluir chaves AES/JWT ou credenciais SQL/R2 no frontend.
 
@@ -205,11 +205,9 @@ Forneça as senhas ao processo, nunca a arquivos versionados. O exemplo usa uma 
 export MSSQL_SA_PASSWORD='<SENHA_ADMINISTRATIVA_SQL_FORTE_E_EXCLUSIVA>'
 docker compose up -d
 docker compose ps                       # aguarde o estado healthy
-export SQL_SENHA_API='<SENHA_EXCLUSIVA_DO_USUARIO_DA_API>'
-./scripts/preparar-sql.sh               # idempotente: cria o login e concede dbcreator
 ```
 
-O script cria somente o login `estacionamento_api` e concede `dbcreator` no SQL local. **O catálogo e o esquema são criados pela migration do EF** na primeira inicialização em `Development`; nenhum banco é criado por SQL paralelo. A API **não** usa a conta `sa`. A permissão `dbcreator` existe apenas na instância local isolada e permite que `Database.MigrateAsync()` crie o catálogo ausente.
+Em `Development`, a conexão da API usa a conta `sa` local, fornecida por User Secrets, para que `Database.MigrateAsync()` crie o catálogo e aplique todo o esquema na primeira inicialização. **Não há etapa manual de preparação do banco**: um volume novo é configurado pela própria API. A conta `sa` é uma exceção restrita ao SQL local de desenvolvimento; a API não a utiliza em `Testing` nem em `Production`, e a publicação mantém identidade de migração controlada. Nunca use `sa` como credencial de runtime em ambiente publicado.
 
 Para uma segunda instância isolada de testes, use projeto Compose, porta e volume próprios:
 
@@ -225,7 +223,7 @@ Crie `~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.jso
 ```json
 {
   "ConnectionStrings": {
-    "Estacionamento": "Server=127.0.0.1,1433;Database=Estacionamento;User Id=estacionamento_api;Password=<SENHA_DO_USUARIO_DA_API>;Encrypt=True;TrustServerCertificate=True"
+    "Estacionamento": "Server=127.0.0.1,1433;Database=Estacionamento;User Id=sa;Password=<MSSQL_SA_PASSWORD>;Encrypt=True;TrustServerCertificate=True"
   },
   "ContasSinteticas": {
     "Administrador": { "Email": "<EMAIL_SINTETICO_ADMIN>", "Senha": "<SENHA_EXCLUSIVA_ADMIN>" },
@@ -237,7 +235,7 @@ Crie `~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.jso
 }
 ```
 
-`chmod 600 ~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.json`. Não use `appsettings*.json` para esses valores e não copie o arquivo para build/deploy.
+`chmod 600 ~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.json`. A senha em `<MSSQL_SA_PASSWORD>` deve ser exatamente a mesma fornecida ao Compose; alterar a variável depois que o volume foi inicializado não altera a senha do SQL. Não use `appsettings*.json` para esses valores e não copie o arquivo para build/deploy. Essa conexão administrativa é exclusiva de `Development`; não a reutilize em `Testing` ou `Production`.
 
 **3. Iniciar a API e a SPA no host, em origens HTTPS distintas**
 
@@ -294,7 +292,8 @@ Os testes de integração criam catálogos `EstacionamentoTeste_*` e os removem 
 | --- | --- |
 | API encerra antes de escutar | O log informa a etapa (`validacao`, `conexao`, `migracoes`, `provisionamento`) e o tipo da falha. Confira User Secrets, conexão, chaves Base64 de 32 bytes e as três contas. |
 | SQL não fica saudável | `docker compose ps`, `docker compose logs sqlserver`; confirme `MSSQL_SA_PASSWORD` e recursos do host x86-64. |
-| `Login failed ... Could not find a login matching 'estacionamento_api'` | O volume atual do SQL ainda não tem o catálogo/usuário da API. Com o container saudável, execute `./scripts/preparar-sql.sh` com `MSSQL_SA_PASSWORD` e `SQL_SENHA_API`. Recriar o volume exige repetir essa preparação. |
+| `Login failed for user 'sa'` | A senha da conexão de `Development` não corresponde à senha usada para inicializar o volume. Atualize o User Secret com o mesmo `MSSQL_SA_PASSWORD`; não apague o volume para contornar. |
+| `CREATE DATABASE permission denied` | A conexão de `Development` não está usando a conta administrativa local. Confira `ConnectionStrings:Estacionamento` nos User Secrets. |
 | CORS bloqueado no navegador | A origem exata da SPA deve estar em `Cors:OrigensPermitidas` (`https://localhost:4200`). Não use proxy de desenvolvimento nem `AllowAnyOrigin`. |
 | Login retorna 429 | Limite de 5 requisições por minuto por IP. Aguarde a janela; não contorne o limite. |
 | Recarga da SPA pede login novamente | Comportamento esperado: a sessão existe apenas em memória. |

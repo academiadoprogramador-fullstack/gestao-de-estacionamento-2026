@@ -1,0 +1,85 @@
+<main class="mx-auto w-full max-w-4xl px-4 py-10 text-slate-100">
+  <header class="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <svg lucideLayoutDashboard class="h-8 w-8 text-sky-400" aria-hidden="true"></svg>
+      <div>
+        <p class="text-xs font-semibold tracking-widest text-sky-400 uppercase">Área de trabalho</p>
+        <h1 class="text-2xl font-semibold text-white">Olá, {{ estado()?.funcionario?.nome }}</h1>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      (click)="sair()"
+      [disabled]="saindo()"
+      class="flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      @if (saindo()) {
+        <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+        Encerrando…
+      } @else {
+        <svg lucideLogOut class="h-4 w-4" aria-hidden="true"></svg>
+        Sair
+      }
+    </button>
+  </header>
+
+  <section class="grid gap-4 sm:grid-cols-2">
+    <article class="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
+      <h2 class="flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-300 uppercase">
+        <svg lucideUserRound class="h-4 w-4 text-sky-400" aria-hidden="true"></svg>
+        Funcionário
+      </h2>
+      <p class="mt-3 text-lg font-medium text-white">{{ estado()?.funcionario?.nome }}</p>
+      <p class="text-sm text-slate-400">{{ estado()?.funcionario?.email }}</p>
+      <ul class="mt-3 flex flex-wrap gap-2" aria-label="Perfis do funcionário">
+        @for (perfil of estado()?.funcionario?.perfis ?? []; track perfil) {
+          <li class="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300">
+            {{ perfil }}
+          </li>
+        }
+      </ul>
+    </article>
+
+    <article class="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
+      <h2 class="flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-300 uppercase">
+        <svg lucideShieldCheck class="h-4 w-4 text-emerald-400" aria-hidden="true"></svg>
+        Sessão verificada no servidor
+      </h2>
+      @if (carregando()) {
+        <p class="mt-3 flex items-center gap-2 text-sm text-slate-400">
+          <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+          Consultando a área de trabalho…
+        </p>
+      } @else if (erro(); as mensagem) {
+        <p class="mt-3 flex items-start gap-2 text-sm text-rose-300" role="alert">
+          <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
+          {{ mensagem }}
+        </p>
+      } @else {
+        <dl class="mt-3 space-y-1 text-sm text-slate-300">
+          <div class="flex justify-between gap-4">
+            <dt>Versão de acesso</dt>
+            <dd class="font-mono">{{ area()?.versaoAcesso }}</dd>
+          </div>
+          <div class="flex justify-between gap-4">
+            <dt>Expira em (UTC)</dt>
+            <dd class="font-mono text-xs">{{ area()?.expiraEmUtc }}</dd>
+          </div>
+        </dl>
+      }
+    </article>
+  </section>
+
+  @if (ehAdministrador()) {
+    <nav class="mt-6" aria-label="Atalhos administrativos">
+      <a
+        routerLink="/administracao"
+        class="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      >
+        <svg lucideParkingSquare class="h-4 w-4" aria-hidden="true"></svg>
+        Verificação administrativa
+      </a>
+    </nav>
+  }
+</main>

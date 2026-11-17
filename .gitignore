@@ -1,0 +1,27 @@
+# Dependências e artefatos de build
+**/bin/
+**/obj/
+**/node_modules/
+**/.angular/
+**/dist/
+**/coverage/
+**/playwright-report/
+**/test-results/
+*.tsbuildinfo
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+secrets.json
+**/secrets.json
+
+# Ferramentas e editores
+.vscode/
+.idea/
+.DS_Store
+
+# Bancos e dumps locais
+*.bak
+*.mdf
+*.ldf

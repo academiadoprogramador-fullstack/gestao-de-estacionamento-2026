@@ -84,12 +84,17 @@ O sistema SHALL reconhecer exatamente os perfis Administrador, Caixa e Manobrist
 
 ### Requirement: Bootstrap de Development com migrations antes do provisionamento
 
-Somente em `Development`, a API SHALL aplicar todas as migrations versionadas pendentes e, imediatamente após o sucesso, provisionar as contas sintéticas ausentes, iniciando o atendimento HTTP apenas após o provisionamento bem-sucedido.
+Somente em `Development`, a API SHALL aplicar todas as migrations versionadas pendentes — criando o catálogo quando ele ainda não existir — e, imediatamente após o sucesso, provisionar as contas sintéticas ausentes, iniciando o atendimento HTTP apenas após o provisionamento bem-sucedido.
 
 #### Scenario: Catálogo vazio recebe esquema e contas
 
 - **WHEN** a API inicia em `Development` apontando para um catálogo vazio com configuração válida
 - **THEN** as migrations são aplicadas, as três contas são criadas com os perfis fixos e a API só então aceita requisições
+
+#### Scenario: Catálogo ausente é criado pela migration
+
+- **WHEN** a API inicia em `Development` com o login local válido e o catálogo configurado ainda não existe
+- **THEN** a `Database.MigrateAsync()` cria o catálogo, aplica o esquema, provisiona as contas e só então a API aceita requisições
 
 #### Scenario: Esquema atualizado e reinício idempotente
 
@@ -110,6 +115,20 @@ Somente em `Development`, a API SHALL aplicar todas as migrations versionadas pe
 
 - **WHEN** a criação de uma conta sintética falha após as migrations
 - **THEN** a API não aceita requisições e registra a falha sem expor senhas ou e-mails completos
+
+### Requirement: Catálogo local criado pela migration
+
+A preparação local SHALL criar somente o login dedicado e as permissões necessárias para `Development`; o catálogo e o esquema SHALL ser criados por `Database.MigrateAsync()`, nunca por SQL paralelo de criação de banco e nunca com a conta `sa` na conexão da API.
+
+#### Scenario: Volume novo sem catálogo
+
+- **WHEN** o volume local é novo e o login dedicado existe com permissão de criação
+- **THEN** a primeira inicialização em `Development` cria o catálogo pela migration e não exige preparação manual do banco
+
+#### Scenario: Login sem permissão de criação
+
+- **WHEN** o login da API não pode criar o catálogo
+- **THEN** a inicialização falha de forma controlada antes do tráfego, sem usar a conta `sa` como fallback e sem criar esquema parcial por SQL paralelo
 
 ### Requirement: Sem migration ou seed automático fora de Development
 

@@ -10,7 +10,7 @@
 ## 2. Compose de infraestrutura e preparação do SQL
 
 - [x] 2.1 Criar `compose.yml` na raiz com SQL Server Developer em imagem fixada, healthcheck, volume nomeado, rede local e porta publicada somente em `127.0.0.1`; verificar com `docker compose config --quiet` e `docker compose up -d`, aguardando o healthcheck ficar saudável.
-- [x] 2.2 Implementar preparação idempotente do catálogo e do usuário dedicado da API, recebendo `MSSQL_SA_PASSWORD` de fonte externa ao arquivo Compose; verificar início, reinício e conexão da API sem usar a conta `sa`, confirmando que nenhum esquema de domínio foi criado por SQL paralelo.
+- [x] 2.2 Implementar preparação idempotente do login dedicado da API e das permissões necessárias para a migration criar o catálogo, recebendo `MSSQL_SA_PASSWORD` de fonte externa ao arquivo Compose; verificar catálogo ausente, início, reinício e conexão da API sem usar a conta `sa`, confirmando que nenhum esquema de domínio foi criado por SQL paralelo.
 - [x] 2.3 Validar preservação e isolamento da infraestrutura: parar e reiniciar sem remover o volume, confirmar persistência, subir uma segunda instância de teste com portas/volumes próprios e verificar ausência de senha literal em YAML, `.env` versionado, argumentos e logs.
 - [x] 2.4 Documentar os comandos de iniciar, consultar saúde e parar a infraestrutura preservando volumes; verificar seguindo a documentação e confirmando que a parada normal não remove dados.
 
@@ -34,7 +34,7 @@
 
 - [x] 5.1 Validar previamente as três contas sintéticas (presença de e-mail e senha, formato aceito e unicidade após normalização), antes de qualquer acesso ao banco; verificar com testes de conta ausente, e-mail inválido, e-mail duplicado e configuração completa sem log de valores.
 - [x] 5.2 Implementar provisionamento idempotente por e-mail normalizado que cria apenas contas ausentes, garante os perfis fixos e nunca altera e-mail, senha, perfis ou estado de conta existente; verificar com teste de primeira execução, reinício e conta previamente desabilitada.
-- [x] 5.3 Orquestrar o startup de `Development` na ordem validação → conexão → `Database.MigrateAsync()` → provisionamento imediato → início do tráfego, sem etapa intermediária; verificar com testes de catálogo vazio, esquema atualizado, migration nova pendente e ordem registrada dos eventos.
+- [x] 5.3 Orquestrar o startup de `Development` na ordem validação → conexão → `Database.MigrateAsync()` → provisionamento imediato → início do tráfego, sem etapa intermediária; verificar com testes de catálogo ausente criado pela migration, catálogo vazio, esquema atualizado, migration nova pendente e ordem registrada dos eventos.
 - [x] 5.4 Garantir falha fechada: erro de configuração, conexão, migration ou provisionamento impede a API de aceitar requisições e não expõe segredos; verificar com testes de falha em cada etapa e ausência de tráfego HTTP.
 - [x] 5.5 Proibir migrations e seed automáticos em `Testing` e `Production`, inclusive com flags de configuração; verificar iniciando a API nesses ambientes e comprovando que nenhuma tabela ou conta é criada pelo bootstrap.
 - [x] 5.6 Documentar o fluxo de inicialização, a ordem obrigatória, os comandos de diagnóstico e a recuperação de falhas sem apagar volumes; verificar seguindo o procedimento em um catálogo vazio e em um reinício.
@@ -64,7 +64,7 @@
 
 ## 9. Verificação integrada e evidências da fase
 
-- [x] 9.1 Executar a matriz integrada de bootstrap com catálogo vazio, esquema atualizado, migration nova, falha de migration, falha de seed e SQL indisponível; registrar comandos, resultados e limitações.
+- [x] 9.1 Executar a matriz integrada de bootstrap com catálogo ausente, catálogo vazio, esquema atualizado, migration nova, falha de migration, falha de seed e SQL indisponível; registrar comandos, resultados e limitações.
 - [x] 9.2 Executar a matriz de segurança e acesso com JWT válido/inválido, revogação, refresh/reuso, bloqueio de login, rate limit, CORS entre origens e autorização por perfil; registrar resultados sem dados sensíveis.
 - [x] 9.3 Executar `dotnet test`, `npm test -- --run` e `npx playwright test` completos e registrar versões, ambiente, duração e falhas conhecidas.
 - [x] 9.4 Atualizar o checklist F1-01–F1-05 do TDD §8 somente para itens efetivamente concluídos, com evidências reais e limitações; verificar que nenhum item sem teste executado foi marcado.

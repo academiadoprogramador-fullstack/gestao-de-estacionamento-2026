@@ -106,9 +106,9 @@ O `correlationId` é gerado pelo servidor, não aceito do cliente e devolvido no
 Somente em `Development`, antes de aceitar tráfego:
 
 1. validar configuração, mapas de chaves e as três contas sintéticas (presença, formato, senha mínima e unicidade após normalização), sem tocar no banco;
-2. verificar conexão e catálogo de aplicação;
-3. executar `Database.MigrateAsync()` para todas as migrations pendentes;
+2. verificar a conexão com o servidor e o nome do catálogo configurado, sem exigir que o catálogo já exista;
+3. executar `Database.MigrateAsync()`, que **cria o catálogo quando ausente** e aplica todas as migrations pendentes;
 4. imediatamente após o sucesso, provisionar apenas contas ausentes e garantir os perfis fixos;
 5. iniciar o pipeline HTTP.
 
-Contas existentes não têm e-mail, senha, perfis ou estado alterados — inclusive conta desabilitada permanece desabilitada. Falha em qualquer etapa impede a API de aceitar requisições. `Testing` prepara o banco por fixture; `Production` usa procedimento controlado, sem migration ou seed automáticos no startup.
+A preparação local cria somente o login dedicado e concede `dbcreator` no SQL de desenvolvimento; o catálogo e o esquema pertencem à migration. Contas existentes não têm e-mail, senha, perfis ou estado alterados — inclusive conta desabilitada permanece desabilitada. Falha em qualquer etapa impede a API de aceitar requisições. `Testing` prepara o banco por fixture; `Production` usa procedimento controlado, sem migration ou seed automáticos no startup.

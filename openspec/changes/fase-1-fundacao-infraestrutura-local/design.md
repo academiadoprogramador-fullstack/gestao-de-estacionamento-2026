@@ -70,7 +70,7 @@ A URL da API vem de configuração pública de ambiente, nunca de segredo. O est
 - `MSSQL_SA_PASSWORD` fornecida ao processo Compose por variável de ambiente, sem `.env` versionado e sem reutilizá-la na conexão da API.
 - Nenhum serviço de API, SPA, proxy, Redis, Key Vault ou emulador S3.
 
-O script de preparação local cria somente o login dedicado e concede `dbcreator` na instância local de desenvolvimento, de forma idempotente. O catálogo, o esquema e as tabelas pertencem à migration: `Database.MigrateAsync()` cria o banco quando ausente. A conta `sa` não é usada pela conexão da API; `dbcreator` é uma permissão ampla aceita apenas no SQL local isolado.
+Em `Development`, a conexão da API usa a conta administrativa local `sa`, fornecida por User Secrets, para que `Database.MigrateAsync()` crie o catálogo e aplique todo o esquema quando o volume estiver vazio. Não há etapa manual de preparação do banco. A credencial administrativa é aceita apenas na instância local isolada; `Testing` e `Production` não a reutilizam e a publicação mantém identidade de migração controlada com runtime sem DDL.
 
 **Alternativas:** Compose de toda a aplicação foi descartado por dificultar debug, hot reload, HTTPS e User Secrets no host.
 
@@ -93,7 +93,7 @@ Em `Program.cs`, quando o ambiente for exatamente `Development`, executar antes 
 
 1. Construir a aplicação e obter um escopo DI.
 2. Validar opções, connection string, mapas de chaves e as três contas sintéticas (presença, formato de e-mail, senhas e unicidade após normalização), sem registrar valores.
-3. Verificar a conexão com o servidor por `master` e validar que o catálogo configurado não é um banco de sistema, sem exigir que ele já exista.
+3. Verificar a conexão administrativa com o servidor por `master` e validar que o catálogo configurado não é um banco de sistema, sem exigir que ele já exista.
 4. Executar `Database.MigrateAsync()` com o contexto EF; a migration cria o catálogo ausente e aplica o esquema.
 5. Imediatamente após o sucesso, executar o provisionador idempotente de contas e perfis.
 6. Somente então iniciar o pipeline HTTP.
@@ -183,7 +183,7 @@ Não há implantação em ambiente publicado. A entrega é local e versionada na
 - **Versões .NET 10/Angular 22/imagem SQL ainda não verificadas** → primeira tarefa fixa versões, restaura, compila e executa; se indisponíveis, interromper e revisar antes de codificar o restante.
 - **Host incompatível com SQL Server Linux x86-64** → verificar arquitetura e recursos no início; não substituir por SQLite nem emulação sem revisão.
 - **Bootstrap como ponto único de falha local** → ordem explícita, logs controlados sem segredos, testes de catálogo vazio, catálogo ausente criado pela migration, migration pendente e falhas.
-- **Login de Development com `dbcreator`** → permissão ampla necessária para a migration criar o catálogo sem usar `sa`; restrita à instância local isolada. Produção mantém identidade de migração controlada e não executa bootstrap automático.
+- **Conta administrativa `sa` na conexão de Development** → permite que a migration crie o catálogo em volume novo sem preparação manual. É uma exceção restrita ao SQL local isolado, mantida em User Secrets; `Testing`/`Production` não a reutilizam e a publicação mantém identidade de migração controlada.
 - **User Secrets não cifrado** → tratar como credencial de desenvolvimento, proteger o perfil do desenvolvedor e nunca copiar para build/deploy.
 - **Revogação consultando SQL em cada requisição** → aceitar o custo no perfil acadêmico; sem cache permissivo e com falha fechada.
 - **Rate limit por IP atrás de proxy** → confiar apenas em cadeia de proxy configurada; não aceitar cabeçalho de IP arbitrário do cliente.
@@ -195,7 +195,7 @@ Não há implantação em ambiente publicado. A entrega é local e versionada na
 ## Migration Plan
 
 1. Verificar e fixar versões; criar solução, SPA e projetos de teste.
-2. Criar `compose.yml`, script de preparação local e configuração não sensível; validar SQL saudável e persistente.
+2. Criar `compose.yml` e a configuração administrativa local de `Development`; validar SQL saudável e persistente.
 3. Implementar opções, validação e mapas de chaves; comprovar falha fechada.
 4. Implementar Identity, JWT, sessão, refresh, logout, rate limit, CORS e auditoria com migration inicial.
 5. Implementar bootstrap `Development` na ordem exigida e provisionamento idempotente.

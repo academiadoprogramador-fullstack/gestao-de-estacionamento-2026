@@ -111,4 +111,4 @@ Somente em `Development`, antes de aceitar tráfego:
 4. imediatamente após o sucesso, provisionar apenas contas ausentes e garantir os perfis fixos;
 5. iniciar o pipeline HTTP.
 
-A preparação local cria somente o login dedicado e concede `dbcreator` no SQL de desenvolvimento; o catálogo e o esquema pertencem à migration. Contas existentes não têm e-mail, senha, perfis ou estado alterados — inclusive conta desabilitada permanece desabilitada. Falha em qualquer etapa impede a API de aceitar requisições. `Testing` prepara o banco por fixture; `Production` usa procedimento controlado, sem migration ou seed automáticos no startup.
+Em `Development`, a conexão da API usa a conta administrativa local `sa`, fornecida por User Secrets, exclusivamente para que a migration crie o catálogo e aplique o esquema. `Testing` e `Production` não reutilizam essa credencial. Contas existentes não têm e-mail, senha, perfis ou estado alterados — inclusive conta desabilitada permanece desabilitada. Falha em qualquer etapa impede a API de aceitar requisições. `Testing` prepara o banco por fixture; `Production` usa procedimento controlado, sem migration ou seed automáticos no startup.

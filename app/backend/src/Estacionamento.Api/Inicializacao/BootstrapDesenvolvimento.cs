@@ -77,8 +77,9 @@ public sealed class BootstrapDesenvolvimento
 
         _registro.Registrar("migracoes");
         // O EF cria o catálogo quando ele ainda não existe e, em seguida,
-        // aplica as migrations pendentes. O login de Development precisa ter
-        // permissão para criar o banco (dbcreator); a API nunca usa `sa`.
+        // aplica as migrations pendentes. Em Development, a conexão usa a
+        // credencial administrativa local fornecida por User Secrets; fora
+        // de Development este bootstrap não é executado.
         await db.Database.MigrateAsync(cancellationToken);
 
         _registro.Registrar("provisionamento");

@@ -294,6 +294,7 @@ Os testes de integração criam catálogos `EstacionamentoTeste_*` e os removem 
 | --- | --- |
 | API encerra antes de escutar | O log informa a etapa (`validacao`, `conexao`, `migracoes`, `provisionamento`) e o tipo da falha. Confira User Secrets, conexão, chaves Base64 de 32 bytes e as três contas. |
 | SQL não fica saudável | `docker compose ps`, `docker compose logs sqlserver`; confirme `MSSQL_SA_PASSWORD` e recursos do host x86-64. |
+| `Login failed ... Could not find a login matching 'estacionamento_api'` | O volume atual do SQL ainda não tem o catálogo/usuário da API. Com o container saudável, execute `./scripts/preparar-sql.sh` com `MSSQL_SA_PASSWORD` e `SQL_SENHA_API`. Recriar o volume exige repetir essa preparação. |
 | CORS bloqueado no navegador | A origem exata da SPA deve estar em `Cors:OrigensPermitidas` (`https://localhost:4200`). Não use proxy de desenvolvimento nem `AllowAnyOrigin`. |
 | Login retorna 429 | Limite de 5 requisições por minuto por IP. Aguarde a janela; não contorne o limite. |
 | Recarga da SPA pede login novamente | Comportamento esperado: a sessão existe apenas em memória. |

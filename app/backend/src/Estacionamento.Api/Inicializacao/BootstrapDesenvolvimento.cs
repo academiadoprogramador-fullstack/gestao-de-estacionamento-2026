@@ -1,6 +1,7 @@
 using Estacionamento.Application.Configuracao;
 using Estacionamento.Application.Provisionamento;
 using Estacionamento.Infrastructure.Persistencia;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -72,14 +73,12 @@ public sealed class BootstrapDesenvolvimento
         using var escopo = _fabricasEscopo.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<EstacionamentoDbContext>();
 
-        if (!await db.Database.CanConnectAsync(cancellationToken))
-        {
-            throw new InvalidOperationException("Não foi possível conectar ao SQL Server configurado.");
-        }
-
-        await VerificarDestinoAsync(db, cancellationToken);
+        await VerificarServidorEDestinoAsync(db, cancellationToken);
 
         _registro.Registrar("migracoes");
+        // O EF cria o catálogo quando ele ainda não existe e, em seguida,
+        // aplica as migrations pendentes. O login de Development precisa ter
+        // permissão para criar o banco (dbcreator); a API nunca usa `sa`.
         await db.Database.MigrateAsync(cancellationToken);
 
         _registro.Registrar("provisionamento");
@@ -117,29 +116,39 @@ public sealed class BootstrapDesenvolvimento
         }
     }
 
-    private static async Task VerificarDestinoAsync(EstacionamentoDbContext db, CancellationToken cancellationToken)
+    private async Task VerificarServidorEDestinoAsync(
+        EstacionamentoDbContext db,
+        CancellationToken cancellationToken)
     {
-        var conexao = db.Database.GetDbConnection();
+        var construtor = new SqlConnectionStringBuilder(
+            db.Database.GetDbConnection().ConnectionString);
+
+        var destino = construtor.InitialCatalog;
+        if (string.IsNullOrWhiteSpace(destino) ||
+            destino.Equals("master", StringComparison.OrdinalIgnoreCase) ||
+            destino.Equals("model", StringComparison.OrdinalIgnoreCase) ||
+            destino.Equals("msdb", StringComparison.OrdinalIgnoreCase) ||
+            destino.Equals("tempdb", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("O catálogo configurado não é um catálogo de aplicação válido.");
+        }
+
+        // Verifica o servidor por `master` sem exigir que o catálogo da
+        // aplicação já exista: a migration é responsável por criá-lo.
+        construtor.InitialCatalog = "master";
+        await using var conexao = new SqlConnection(construtor.ConnectionString);
         await conexao.OpenAsync(cancellationToken);
 
-        try
-        {
-            await using var comando = conexao.CreateCommand();
-            comando.CommandText = "SELECT DB_NAME()";
-            var destino = Convert.ToString(await comando.ExecuteScalarAsync(cancellationToken));
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = "SELECT DB_ID(@nome)";
+        comando.Parameters.AddWithValue("@nome", destino);
+        var idBanco = await comando.ExecuteScalarAsync(cancellationToken);
 
-            if (string.IsNullOrWhiteSpace(destino) ||
-                destino.Equals("master", StringComparison.OrdinalIgnoreCase) ||
-                destino.Equals("model", StringComparison.OrdinalIgnoreCase) ||
-                destino.Equals("msdb", StringComparison.OrdinalIgnoreCase) ||
-                destino.Equals("tempdb", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException("O catálogo configurado não é um catálogo de aplicação válido.");
-            }
-        }
-        finally
+        if (idBanco is null or DBNull)
         {
-            await conexao.CloseAsync();
+            _logger.LogInformation(
+                "O catálogo {Catalogo} ainda não existe e será criado pela migration.",
+                destino);
         }
     }
 }

@@ -206,10 +206,10 @@ export MSSQL_SA_PASSWORD='<SENHA_ADMINISTRATIVA_SQL_FORTE_E_EXCLUSIVA>'
 docker compose up -d
 docker compose ps                       # aguarde o estado healthy
 export SQL_SENHA_API='<SENHA_EXCLUSIVA_DO_USUARIO_DA_API>'
-./scripts/preparar-sql.sh               # idempotente: cria catálogo e usuário dedicado
+./scripts/preparar-sql.sh               # idempotente: cria o login e concede dbcreator
 ```
 
-O script cria somente o catálogo `Estacionamento` e o usuário `estacionamento_api` com permissões de esquema; o esquema de domínio continua pertencendo às migrations. A API **não** usa a conta `sa`.
+O script cria somente o login `estacionamento_api` e concede `dbcreator` no SQL local. **O catálogo e o esquema são criados pela migration do EF** na primeira inicialização em `Development`; nenhum banco é criado por SQL paralelo. A API **não** usa a conta `sa`. A permissão `dbcreator` existe apenas na instância local isolada e permite que `Database.MigrateAsync()` crie o catálogo ausente.
 
 Para uma segunda instância isolada de testes, use projeto Compose, porta e volume próprios:
 
@@ -251,7 +251,7 @@ npm ci
 npm start -- --ssl
 ```
 
-A API expõe `GET /health` sem autenticação. Em `Development`, após validar configuração, conexão e as três contas sintéticas, a API aplica as migrations pendentes, provisiona imediatamente as contas ausentes e só então aceita requisições. Falha em qualquer etapa interrompe a inicialização. `Testing` e `Production` nunca migram nem provisionam no startup.
+A API expõe `GET /health` sem autenticação. Em `Development`, após validar configuração, conexão e as três contas sintéticas, a API executa `Database.MigrateAsync()` — criando o catálogo quando ele ainda não existe —, provisiona imediatamente as contas ausentes e só então aceita requisições. Falha em qualquer etapa interrompe a inicialização. `Testing` e `Production` nunca migram nem provisionam no startup.
 
 Se o navegador não confiar no certificado local, execute `dotnet dev-certs https --trust` uma vez. O Playwright ignora o certificado local por configuração explícita; isso não altera a validação TLS entre SPA e API.
 

@@ -329,8 +329,11 @@ Pare a infraestrutura preservando seus volumes. Não remova dados para resolver 
 - [Requisitos do produto — PRD](docs/prd.md): escopo, jornadas, regras de negócio e critérios de aceite.
 - [Desenho técnico — TDD](docs/tdd.md): arquitetura, configuração, segurança e infraestrutura local.
 - [Sessão, autenticação e CORS](docs/sessao-autenticacao.md): contratos HTTP, claims, erros, rotação de chaves e bootstrap.
+- [Fase 1 — fundação e infraestrutura local](docs/fases/fase-1.md): implementação, bootstrap, autenticação, sessão, evidências e limitações.
 - [Fase 2 — preparação e entrada](docs/fases/fase-2.md): escopo, endpoints, verificações, acessibilidade e limitações.
 - [Entrevista de levantamento](docs/entrevista.md): contexto inicial **fictício** que motivou o projeto.
+
+Os protótipos de interface são artefatos das mudanças OpenSpec, em `openspec/changes/<mudanca>/prototypes` ou no diretório de arquivo. A pasta `docs/proto` foi removida por estar obsoleta.
 
 ## Tecnologias
 

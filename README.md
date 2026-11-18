@@ -286,18 +286,6 @@ npx playwright test
 
 Os testes de integração criam catálogos `EstacionamentoTeste_*` e os removem ao final; eles validam o host local e não carregam User Secrets pessoais (`ESTACIONAMENTO_DESABILITAR_USER_SECRETS=1`). O E2E inicia a API em `Development` com credenciais explícitas e catálogo isolado, sem tocar no banco de desenvolvimento.
 
-### Fase 2 — preparação e entrada
-
-A Fase 2 entrega a administração de funcionários e acessos, o cadastro e a consulta de vagas com polling, a tarifa versionada, o check-in transacional com snapshot e vistoria cifrada, a busca/detalhe/histórico por perfil e as leituras explícitas e auditadas de documento e vistoria. As telas ficam em `/employees`, `/spaces`, `/daily-rates`, `/check-in` e `/attendances`; os contratos usam `/api/v1/employees`, `/api/v1/spaces`, `/api/v1/daily-rates` e `/api/v1/attendances`.
-
-- A entrada exige `Idempotency-Key` UUID; a repetição da mesma chave e conteúdo devolve o resultado original, e conteúdo diferente retorna `409`.
-- Documento e vistoria são cifrados com AES-256-GCM e lidos somente por ação explícita, com auditoria confirmada antes da resposta.
-- O Manobrista não recebe documento nem dados financeiros no JSON, independentemente da interface.
-- O cadastro de vagas, a publicação de tarifas e a administração de acessos são exclusivos do Administrador.
-- Retirada, cobrança, pagamento, entrega, fotos e relatórios permanecem nas fases seguintes.
-
-Detalhes de escopo, contratos, decisões e evidências desta fase estão em [`docs/fases/fase-2.md`](docs/fases/fase-2.md).
-
 **6. Erros comuns**
 
 | Sintoma | Verificação |
@@ -332,8 +320,6 @@ Pare a infraestrutura preservando seus volumes. Não remova dados para resolver 
 - [Fase 1 — fundação e infraestrutura local](docs/fases/fase-1.md): implementação, bootstrap, autenticação, sessão, evidências e limitações.
 - [Fase 2 — preparação e entrada](docs/fases/fase-2.md): escopo, endpoints, verificações, acessibilidade e limitações.
 - [Entrevista de levantamento](docs/entrevista.md): contexto inicial **fictício** que motivou o projeto.
-
-Os protótipos de interface são artefatos das mudanças OpenSpec, em `openspec/changes/<mudanca>/prototypes` ou no diretório de arquivo. A pasta `docs/proto` foi removida por estar obsoleta.
 
 ## Tecnologias
 

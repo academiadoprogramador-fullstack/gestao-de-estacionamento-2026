@@ -11,9 +11,9 @@ proposal → specs → prototype → design → tasks → apply
 
 The PRD and the design doc define behavior, but interface decisions stay
 abstract until they become navigable screens. This schema requires changes with
-visible impact to arrive at propose with self-contained HTML prototypes and
-fictional data, so review happens before implementation, the design builds on
-the prototype, and apply verifies parity with it.
+visible impact to arrive at propose with self-contained HTML prototypes derived
+from the proposal and specs, so review happens before implementation, the design
+builds on the prototype, and apply verifies parity with it.
 
 Changes with no interface impact (backend, infrastructure, tooling, or
 documentation) do not create HTML prototypes. They record an explicit
@@ -48,10 +48,21 @@ prototypes.
   itself; it opens over `file://`, with no build, CDN, network, backend, or
   storage.
 - **Fictional data:** no real plate, person, document, photo, or amount.
-- **Navigable:** in-memory JavaScript represents navigation, validation, and the
-  empty/loading/error/success/no-permission states.
-- **Traceable:** the top of the HTML references the covered
-  requirements/scenarios.
+- **Language:** visible text follows the language of the change request or the
+  language the user explicitly asks for; `<html lang>` matches it. Code,
+  comments, and identifiers stay in English.
+- **Grounded:** every screen, control, field, and state traces to a requirement
+  or scenario in the delta specs. Reused chrome is presentational only, and a
+  missing decision becomes a question or an `[unspecified]` placeholder, never
+  an invented feature.
+- **Styling:** an explicit library and version from the request wins; otherwise
+  the project's existing styling is followed, falling back to plain inline CSS.
+  Only styling layers are supported, and the library is vendored into the file
+  with no CDN, so `file://` keeps working.
+- **Navigable:** in-memory JavaScript represents the interactions the specs
+  define, plus only the states a scenario requires or the app already uses.
+- **Traceable:** the header maps each covered scenario to the screens,
+  controls, and states it drives, and lists reused chrome and open questions.
 
 The starting template is in [`templates/prototype.html`](templates/prototype.html).
 
@@ -70,10 +81,30 @@ irm https://raw.githubusercontent.com/tiagosantini/openspec-schemas/main/scripts
 ```
 
 The installer copies the schema into `openspec/schemas/prototype-first`,
-validates it when the `openspec` CLI is available, and selects it in
-`openspec/config.yaml`. Pass `--no-select` / `-NoSelect` to leave the config
-unchanged, or `--dir <path>` / `-Dir <path>` to target a project from outside
-its root.
+validates it when the `openspec` CLI is available, selects it in
+`openspec/config.yaml`, and records the version in
+`openspec/schemas/prototype-first/.install.json`. It installs the latest
+release by default; `--ref <tag>` / `-Ref <tag>` pins a specific one.
+
+To check for updates and apply them:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tiagosantini/openspec-schemas/main/scripts/install.sh | sh -s -- --check
+curl -fsSL https://raw.githubusercontent.com/tiagosantini/openspec-schemas/main/scripts/install.sh | sh -s -- --upgrade
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/tiagosantini/openspec-schemas/main/scripts/install.ps1))) -Check
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/tiagosantini/openspec-schemas/main/scripts/install.ps1))) -Upgrade
+```
+
+`--check` exits `0` when current, `1` when an update is available, and `2` when
+the latest version cannot be determined. The upgrade refuses to overwrite files
+changed locally; `--force` / `-Force` overwrites them after keeping a copy under
+`openspec/.schema-backups/`.
+
+Pass `--no-select` / `-NoSelect` to leave the config unchanged, or
+`--dir <path>` / `-Dir <path>` to target a project from outside its root.
 
 To install manually, copy `schemas/prototype-first/` into your project's
 `openspec/schemas/` directory and select it in `openspec/config.yaml`. To

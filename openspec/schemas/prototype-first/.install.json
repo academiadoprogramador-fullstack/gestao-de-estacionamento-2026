@@ -1,0 +1,16 @@
+{
+  "schema": "prototype-first",
+  "version": "1.3.0",
+  "ref": "v1.3.0",
+  "source": "https://raw.githubusercontent.com/tiagosantini/openspec-schemas/v1.3.0/schemas/prototype-first",
+  "installedAt": "2026-11-18T22:07:51Z",
+  "files": {
+    "README.md": "a3d5453ab21b208fdf9872d08846fbd75a850cfc74739903fbf7250cda806a96",
+    "schema.yaml": "4c28d47e477a9a96469a7952e316154bb919b9c6c9e9c0ffbdd30e65e4e5ee5f",
+    "templates/design.md": "f122c45b6d14c3e3393a21c7963a1d3909cca5f37e9877d9121aab369e6ccdb3",
+    "templates/proposal.md": "0dd70e35db5c696ba8ac3cc3a53e2d6561865c1e4e7d49db5a1eaa3e4a6ad86e",
+    "templates/prototype.html": "1ee5e4b42d6b728b530a71b72b297041d68bcbe1d6f2bff4dcf39039a3414081",
+    "templates/spec.md": "1cccfb573f031c6352bed2a879b7035ff710bc909112fc23d10bdcfcdd8d4318",
+    "templates/tasks.md": "fa67d99fb4a93b12d702f89ea83e1838219d1cad1c90a4192c402278001cd30e"
+  }
+}

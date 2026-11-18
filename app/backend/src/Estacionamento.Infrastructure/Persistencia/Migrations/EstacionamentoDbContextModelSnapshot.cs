@@ -22,6 +22,373 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence("SequenciaIdentificadorAtendimento");
+
+            modelBuilder.Entity("Estacionamento.Domain.Atendimentos.Atendimento", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("DocumentoTitularCifrado")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<DateTimeOffset>("EntradaUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("IdentificadorPublico")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Modelo")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("OperadorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Placa")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("TarifaValorSnapshot")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("TarifaVersaoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Titular")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntradaUtc");
+
+                    b.HasIndex("IdentificadorPublico")
+                        .IsUnique()
+                        .HasFilter("[IdentificadorPublico] IS NOT NULL");
+
+                    b.HasIndex("OperadorId");
+
+                    b.HasIndex("TarifaVersaoId");
+
+                    b.HasIndex("Placa", "EntradaUtc");
+
+                    b.ToTable("Atendimentos", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Atendimentos.EventoAtendimento", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AtorOpaco")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Correlacao")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("DetalheOpaco")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTimeOffset>("OcorridoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId", "OcorridoEmUtc");
+
+                    b.ToTable("EventosAtendimento", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Atendimentos.Ocupacao", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("FimUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("InicioUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ResponsavelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("VagaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId")
+                        .IsUnique()
+                        .HasFilter("[FimUtc] IS NULL");
+
+                    b.HasIndex("ResponsavelId");
+
+                    b.HasIndex("VagaId")
+                        .IsUnique()
+                        .HasFilter("[FimUtc] IS NULL");
+
+                    b.ToTable("Ocupacoes", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Atendimentos.VistoriaEntrada", b =>
+                {
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CriadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("TextoCifrado")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.HasKey("AtendimentoId");
+
+                    b.HasIndex("AtorId");
+
+                    b.ToTable("VistoriasEntrada", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Auditoria.EventoAuditoriaNegocio", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("AlvoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AlvoTipo")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<Guid>("AtorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Correlacao")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Detalhe")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTimeOffset>("OcorridoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlvoTipo", "AlvoId", "OcorridoEmUtc");
+
+                    b.ToTable("EventosAuditoriaNegocio", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Idempotencia.ResultadoIdempotente", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("Chave")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CriadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("EntradaUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Estado")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<byte[]>("HashSha256")
+                        .IsRequired()
+                        .HasColumnType("binary(32)");
+
+                    b.Property<string>("IdentificadorPublico")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Operacao")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("VagaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VersaoCanonicalizacao")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId");
+
+                    b.HasIndex("VagaId");
+
+                    b.HasIndex("AtorId", "Operacao", "Chave")
+                        .IsUnique();
+
+                    b.ToTable("ResultadosIdempotentes", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Tarifas.ConfiguracaoTarifa", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid?>("VersaoCorrenteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VersaoCorrenteId");
+
+                    b.ToTable("ConfiguracaoTarifa", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            RowVersion = new byte[0]
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Tarifas.TarifaDiaria", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("PublicadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("PublicadoPorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Valor")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Versao")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicadoPorId");
+
+                    b.HasIndex("Versao")
+                        .IsUnique();
+
+                    b.ToTable("TarifasDiarias", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TarifasDiarias_ValorPositivo", "[Valor] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Vagas.Vaga", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("CodigoNormalizado")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset>("CriadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("CriadoPorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodigoNormalizado")
+                        .IsUnique();
+
+                    b.HasIndex("CriadoPorId");
+
+                    b.ToTable("Vagas", (string)null);
+                });
+
             modelBuilder.Entity("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", b =>
                 {
                     b.Property<Guid>("Id")
@@ -72,6 +439,12 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
@@ -354,6 +727,105 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Atendimentos.Atendimento", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("OperadorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Tarifas.TarifaDiaria", null)
+                        .WithMany()
+                        .HasForeignKey("TarifaVersaoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Atendimentos.EventoAtendimento", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Atendimentos.Ocupacao", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("ResponsavelId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Vagas.Vaga", null)
+                        .WithMany()
+                        .HasForeignKey("VagaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Atendimentos.VistoriaEntrada", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithOne()
+                        .HasForeignKey("Estacionamento.Domain.Atendimentos.VistoriaEntrada", "AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("AtorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Idempotencia.ResultadoIdempotente", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Estacionamento.Domain.Vagas.Vaga", null)
+                        .WithMany()
+                        .HasForeignKey("VagaId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Tarifas.ConfiguracaoTarifa", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Tarifas.TarifaDiaria", null)
+                        .WithMany()
+                        .HasForeignKey("VersaoCorrenteId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Tarifas.TarifaDiaria", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("PublicadoPorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Vagas.Vaga", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("CriadoPorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Estacionamento.Infrastructure.Persistencia.Entidades.RefreshToken", b =>

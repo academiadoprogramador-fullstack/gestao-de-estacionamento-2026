@@ -17,8 +17,15 @@ PrecedenciaConfiguracao.AplicarRestricaoDeUserSecrets(
     builder.Environment.EnvironmentName,
     typeof(Program).Assembly.GetName().Name);
 
-builder.Services.AdicionarInfraestrutura(builder.Configuration);
-builder.Services.AddControllers();
+builder.Services.AdicionarInfraestrutura(builder.Configuration, builder.Environment.EnvironmentName);
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Propriedades desconhecidas (tarifa, horário, operador, identificador)
+        // são rejeitadas em vez de silenciosamente ignoradas.
+        options.JsonSerializerOptions.UnmappedMemberHandling =
+            System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow;
+    });
 builder.Services.AdicionarAutenticacaoJwt(builder.Configuration);
 builder.Services.AdicionarAutorizacaoPorPerfil();
 builder.Services.AddSingleton<IRegistroBootstrap, RegistroBootstrap>();

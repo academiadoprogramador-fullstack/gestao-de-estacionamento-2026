@@ -21,4 +21,10 @@ public sealed class UsuarioAplicacao : IdentityUser<Guid>
     /// ou estado incrementam este valor e invalidam sessões emitidas antes.
     /// </summary>
     public long VersaoAcesso { get; set; } = 1;
+
+    /// <summary>
+    /// Versão de concorrência da conta, independente do security stamp. É
+    /// devolvida como token opaco na administração de acessos.
+    /// </summary>
+    public byte[] RowVersion { get; set; } = [];
 }

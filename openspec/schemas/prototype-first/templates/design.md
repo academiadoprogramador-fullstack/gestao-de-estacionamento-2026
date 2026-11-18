@@ -18,8 +18,10 @@
 
 ## Prototype
 
-<!-- Prototype files under prototypes/ that this design follows, and any
-     intentional divergence between them and the implementation approach.
+<!-- Prototype files under prototypes/ that this design follows, the styling
+     library and version it records (if any), any intentional divergence
+     between the prototype and the implementation, and how each
+     [unspecified] placeholder or Open question was resolved.
      If prototypes/EXEMPT.md exists, the change has no interface impact:
      delete this section. -->
 

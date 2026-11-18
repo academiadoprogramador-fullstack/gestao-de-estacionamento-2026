@@ -1,17 +1,32 @@
 <!doctype html>
 <!--
   High-fidelity prototype — <flow or screen name>
-  Covered requirements/scenarios: <specs/capability, REQ-XX, scenario>
+  Source: proposal.md (<section>), specs/<capability>/spec.md
+  Style: <library + version (inlined) | project design tokens | plain CSS>
+  Covered:
+    - REQ-XX / Scenario: <name> -> <screens, controls, states it drives>
+  Not specified (presentational only):
+    - <chrome reused from the app, or [unspecified: ...]>
+  Open questions: <none | gaps the specs leave open>
   100% fictional data. No network, backend, or storage access.
   This file is self-contained: open it directly in the browser (file://).
+  Derive every element from the proposal and the specs; do not add features,
+  states, or validation the specs do not describe. When a styling library is
+  used, inline its CSS or runtime here with its license header; never link a
+  CDN.
+  Set lang and translate all visible text (including the banner, the skip
+  link, and sample data) to the language of the change request.
 -->
 <html lang="en">
+  <!-- TODO: update lang to the prototype language, e.g. pt-BR. -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Prototype — [flow or screen name]</title>
     <meta name="robots" content="noindex" />
     <style>
+      /* TODO: when a styling library is used, inline its CSS here with its
+         license header and keep every asset as a data URI; never link a CDN. */
       :root {
         color-scheme: dark;
         --background: #020617;

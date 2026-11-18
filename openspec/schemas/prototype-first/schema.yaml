@@ -106,6 +106,7 @@ artifacts:
       - **CRITICAL**: Scenarios MUST use exactly 4 hashtags (`####`). Using 3 hashtags or bullets will fail silently.
       - Every requirement MUST have at least one scenario.
       - Every scenario MUST have a WHEN/GIVEN step (its trigger) and a THEN step (its outcome). A scenario with only AND lines or plain prose still counts as a scenario, but `openspec validate` flags it as a warning: normal validation still passes, but `openspec validate --strict` fails on it.
+      - When a requirement changes user-visible behavior, its scenarios SHALL state the observable UI behavior: the screen or flow, the trigger, the visible result, and any state the user can observe (validation, empty, loading, error, success, permission). Keep it at behavior level - copy and layout details belong to the prototype, not the spec.
       - Keep each requirement's description (the text between `### Requirement:` and its first scenario) to 500 characters or fewer. `openspec validate` flags longer descriptions in ADDED requirements and in the main spec. This is a warning: normal validation still passes, but `openspec validate --strict` fails on it. When writing a new requirement, state one behavior per requirement: move examples and edge cases into scenarios, and split a requirement that covers several behaviors into separate `### Requirement:` blocks, each with its own scenarios. Under MODIFIED, keep the existing requirement block whole; never split, trim or rewrite existing text just to meet the length. Split an existing long requirement only when the user asks for it, in a change made for that purpose: under MODIFIED, keep its header and every scenario and cut its description down to one behavior without changing its meaning, then add each behavior you removed as its own ADDED requirement with its own scenarios.
 
       New capabilities only: the delta spec's first section is `## Purpose` -
@@ -163,7 +164,7 @@ artifacts:
 
   - id: prototype
     generates: "prototypes/{**/*.html,EXEMPT.md}"
-    description: High-fidelity, self-contained HTML prototypes with synthetic data
+    description: High-fidelity, self-contained HTML prototypes grounded in the proposal and specs
     template: prototype.html
     instruction: |
       Create high-fidelity HTML prototypes that make the change's user-visible
@@ -195,12 +196,70 @@ artifacts:
       `prototypes/index.html` may link the files for review, but every
       prototype must stand on its own.
 
+      Source of truth:
+      Read the proposal and every delta spec in full before creating a screen.
+      They are the only source of product behavior; the existing frontend is
+      the source of visual language and chrome, not of new features.
+
+      - Every screen, flow, control, field, state, message, and navigation step
+        must trace to a requirement or scenario in the delta specs, or to
+        chrome reused from the existing frontend.
+      - Do not add features the specs do not describe: settings, search,
+        filters, notifications, onboarding, bulk actions, extra tabs, new
+        pages, or new navigation entries.
+      - Do not invent validation rules, permissions, limits, confirmation
+        steps, empty states, or success/error behavior. Represent only the
+        states and transitions the specs define.
+      - A control named by a scenario may be rendered even when the spec does
+        not describe its placement; anything beyond that scenario's WHEN/THEN
+        is out of scope.
+      - Reused chrome (header, navigation, page shell) stays inert and
+        presentational and must not introduce new items or features.
+      - Synthetic data exists to render specified UI; it must not imply
+        behavior.
+
+      Gap protocol:
+      - Structural gap - a missing screen, flow, transition, action, field, or
+        permission - stop and ask the user, or update the delta specs first.
+        Never fill it in.
+      - Local gap - copy, ordering, empty-state wording, or a presentation
+        detail - render a clearly marked `[unspecified: <what is missing>]`
+        placeholder styled to stand out, and list it under Open questions in
+        the HTML header and in design.md.
+      - If the prototype reveals a missing requirement, update the specs and
+        regenerate; do not extend the prototype instead.
+
+      Styling:
+      Styling follows the request first, then the project.
+
+      1. If the user names a styling library, framework, or design system -
+         and optionally a version - use it.
+      2. Otherwise follow the project's existing styling: config files, design
+         tokens, and components under the existing frontend.
+      3. Otherwise use plain inline CSS.
+
+      Only styling layers are supported: CSS frameworks and design systems
+      such as Tailwind CSS, Bootstrap, Bulma, Pico, or the project's own
+      tokens. A component framework that requires a build or a runtime (React,
+      Vue, MUI, Vuetify, Angular Material) cannot run inside a single HTML
+      document; say so and use the closest inline styling that reproduces the
+      project's look. Do not silently substitute a different library.
+
+      Always vendor the library into the file: download the exact version over
+      HTTPS from its official source, inline the CSS or runtime script, keep
+      its license header, and convert font or icon references to data URIs.
+      Record the name and version in the prototype header and in design.md.
+      Pin the version; when the request gives none, use the current stable
+      release and record what was used. Never link a CDN, even when the user
+      asks for one: explain that the prototype must keep working from
+      `file://` and inline the library instead.
+
       Hard requirements:
       - **Self-contained**: all CSS, JavaScript, icons, fonts, and images
-        inline in the same `.html` file (data URIs are allowed). No CDN, no
-        external stylesheet, script, font, or image, no build step, and no
-        network, backend, or storage access. Opening the file directly from
-        disk (`file://`) must render and work.
+        inline in the same `.html` file (data URIs are allowed), including any
+        vendored styling library. No CDN, no external stylesheet, script, font,
+        or image, no build step, and no network, backend, or storage access.
+        Opening the file directly from disk (`file://`) must render and work.
       - **High fidelity**: real layout, typography, spacing, color,
         components, and responsive behavior - not gray wireframes or labeled
         boxes. Inspect the existing frontend and reuse its visual language and
@@ -208,15 +267,34 @@ artifacts:
       - **Synthetic data only**: invent every plate, name, document, e-mail,
         phone number, photo, amount, and timestamp. Use clearly fictional
         values (for example `@example.invalid` addresses). Never use real
-        personal data, credentials, tokens, or production content. The
-        interface text is in English.
+        personal data, credentials, tokens, or production content.
+      - **Language**: write every user-visible string in the language of the
+        change request - the conversation that asked for this change. If the
+        user names a language explicitly in the prompt, that request wins.
+        Cover screen titles, labels, buttons, navigation, placeholders,
+        validation and state messages, sample data, the document `<title>`,
+        and the reviewer banner. Set `<html lang>` to the matching BCP 47 tag
+        (for example `pt-BR`, `es`, `en`). If the request leaves the language
+        unclear, ask before creating the prototype. Keep code, identifiers,
+        comments, and attribute names in English, and quote requirement and
+        scenario names exactly as written in the specs.
       - **Behavior, not a static mockup**: inline JavaScript must drive the
-        represented interactions (navigation, tabs, modals, validation, and
-        empty, loading, error, success, and permission states) with in-memory
-        state. Reloading may reset the synthetic data.
-      - **Traceable**: cover the relevant scenarios from the delta specs.
-        Start the file with an HTML comment listing the covered requirements
-        or scenarios and stating that all data is synthetic.
+        interactions the specs define, with in-memory state. Include empty,
+        loading, error, success, or permission states only when a scenario
+        requires them or the existing app already uses that pattern for the
+        same operation. Reloading may reset the synthetic data.
+      - **Traceable**: start with an HTML comment that maps the prototype to
+        its sources:
+        ```
+        Source: proposal.md (<section>), specs/<capability>/spec.md
+        Covered:
+          - REQ-XX / Scenario: <name> -> <screens, controls, states it drives>
+        Not specified (presentational only):
+          - <reused chrome, [unspecified: ...] items>
+        Open questions: <none or the gaps>
+        ```
+        Every screen, control, field, and state must appear in that map;
+        anything untraceable is removed or moved to Not specified.
       - **Accessible by construction**: semantic landmarks, labeled controls,
         visible focus, keyboard-operable interactions, text alternatives, and
         no meaning conveyed by color alone.
@@ -246,6 +324,14 @@ artifacts:
       already shows. If `prototypes/EXEMPT.md` exists, the change has no
       interface impact: do not cite a prototype and omit the Prototype section.
 
+      Treat the prototype as derived from the proposal and specs, not as a
+      source of new behavior. If it contains `[unspecified: ...]` placeholders
+      or Open questions, resolve the presentation ones here and send any gap
+      that changes behavior back to `specs` before continuing. If the prototype
+      shows something the specs do not support, remove it instead of designing
+      around it. Record the styling choice and version from the prototype, plus
+      the expected divergence between its vendored CSS and the real build.
+
       When to include design.md (create only if any apply):
       - Cross-cutting change (multiple services/modules) or new architectural pattern
       - New external dependency or significant data model changes
@@ -256,7 +342,7 @@ artifacts:
       - **Context**: Only the current state and constraints needed to explain the approach. Reference the proposal for motivation instead of restating it (e.g., "See proposal.md - Why").
       - **Goals / Non-Goals**: What this design achieves and explicitly excludes. Don't restate the proposal's scope - add only design-level boundaries.
       - **Decisions**: Key technical choices with rationale (why X over Y?). Include alternatives considered for each decision.
-      - **Prototype**: Which prototype files the design follows and any intentional divergence between them and the implementation approach. Omit if the change has no interface impact.
+      - **Prototype**: Which prototype files the design follows, the styling choice and version it records, any intentional divergence between them and the implementation approach, and how each `[unspecified]` placeholder or Open question was resolved. Omit if the change has no interface impact.
       - **Risks / Trade-offs**: Known limitations, things that could go wrong. Format: [Risk] → Mitigation
       - **Migration Plan**: Steps to deploy, rollback strategy (if applicable)
       - **Open Questions**: Unknowns that can safely be answered later without
@@ -289,9 +375,13 @@ artifacts:
 
       When the change includes prototypes under `prototypes/`, reference the
       relevant file in the tasks that build or verify the interface, and
-      include a parity check against the prototype. If `prototypes/EXEMPT.md`
-      exists, the change has no interface to verify: do not add prototype
-      parity tasks.
+      include parity checks in both directions: every covered scenario is
+      represented, and no element, control, or feature appears in the prototype
+      that the specs do not describe. Treat an extra as a defect, not a bonus.
+      When the implementation uses the styling library natively, record that
+      divergence from the prototype's vendored CSS instead of replicating it.
+      If `prototypes/EXEMPT.md` exists, the change has no interface to verify:
+      do not add prototype parity tasks.
 
       **IMPORTANT: Follow the template below for tracked tasks.** The apply phase parses
       checkbox format to track progress. A box holding only `x` counts as done,
@@ -359,6 +449,10 @@ apply:
     Read context files, work through pending tasks, mark complete as you go.
     Pause if you hit blockers or need clarification. When the change includes
     prototypes under `prototypes/`, verify the implemented interface against
-    them and record any intentional divergence. If `prototypes/EXEMPT.md`
-    exists, the change is declared to have no interface impact: skip prototype
-    parity checks.
+    them and record any intentional divergence. Check both directions: no
+    covered scenario is missing from the implementation, and no control,
+    element, or feature exists that the specs do not describe. Confirm the
+    styling library and version match the prototype, or record why the real
+    build diverges from its vendored CSS. If `prototypes/EXEMPT.md` exists, the
+    change is declared to have no interface impact: skip prototype parity
+    checks.

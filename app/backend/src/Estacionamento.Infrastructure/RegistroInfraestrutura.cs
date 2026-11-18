@@ -1,10 +1,16 @@
 using Estacionamento.Application.Auditoria;
+using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Autenticacao;
 using Estacionamento.Application.Configuracao;
+using Estacionamento.Application.Funcionarios;
 using Estacionamento.Application.Provisionamento;
+using Estacionamento.Application.Seguranca;
+using Estacionamento.Application.Tarifas;
 using Estacionamento.Application.Tempo;
+using Estacionamento.Application.Vagas;
 using Estacionamento.Infrastructure.Identidade;
 using Estacionamento.Infrastructure.Persistencia;
+using Estacionamento.Infrastructure.Seguranca;
 using Estacionamento.Infrastructure.Servicos;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -15,14 +21,16 @@ using Microsoft.Extensions.Options;
 namespace Estacionamento.Infrastructure;
 
 /// <summary>
-/// Composição de persistência, Identity e serviços de autenticação. Não lê
-/// User Secrets: a configuração recebida já reflete a precedência do ambiente.
+/// Composição de persistência, Identity, proteção de campos e casos de uso da
+/// Fase 2. Não lê User Secrets: a configuração recebida já reflete a precedência
+/// do ambiente.
 /// </summary>
 public static class RegistroInfraestrutura
 {
     public static IServiceCollection AdicionarInfraestrutura(
         this IServiceCollection services,
-        IConfiguration configuracao)
+        IConfiguration configuracao,
+        string nomeAmbiente)
     {
         services.AddDbContext<EstacionamentoDbContext>((provedor, options) =>
         {
@@ -66,11 +74,19 @@ public static class RegistroInfraestrutura
             .AddEntityFrameworkStores<EstacionamentoDbContext>();
 
         services.AddSingleton<IRelogio, RelogioSistema>();
+        services.AddSingleton<IContextoAplicacao>(new ContextoAplicacao(nomeAmbiente));
         services.AddScoped<IGeradorRefresh, GeradorRefresh>();
         services.AddScoped<IGeradorTokenJwt, GeradorTokenJwt>();
         services.AddScoped<IServicoAuditoria, ServicoAuditoria>();
         services.AddScoped<IServicoSessao, ServicoSessao>();
         services.AddScoped<IProvisionadorContasSinteticas, ProvisionadorContasSinteticas>();
+        services.AddScoped<ICriptografiaCampos, CriptografiaCamposAesGcm>();
+        services.AddScoped<IAuditoriaNegocio, ServicoAuditoriaNegocio>();
+        services.AddScoped<IServicoFuncionarios, ServicoFuncionarios>();
+        services.AddScoped<IServicoVagas, ServicoVagas>();
+        services.AddScoped<IServicoTarifas, ServicoTarifas>();
+        services.AddScoped<IServicoAtendimentos, ServicoAtendimentos>();
+        services.AddScoped<IServicoConsultaAtendimentos, ServicoConsultaAtendimentos>();
 
         services.AddSingleton<IValidateOptions<AutenticacaoJwtOptions>, AutenticacaoJwtOptionsValidator>();
         services.AddSingleton<IValidateOptions<ProtecaoDadosOptions>, ProtecaoDadosOptionsValidator>();

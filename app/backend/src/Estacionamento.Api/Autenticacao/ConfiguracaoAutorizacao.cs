@@ -10,6 +10,7 @@ public static class PoliticasAutorizacao
 {
     public const string Funcionario = "Funcionario";
     public const string Administrador = "Administrador";
+    public const string Operador = "Operador";
 }
 
 public static class PoliticasRateLimit
@@ -32,6 +33,9 @@ public static class ConfiguracaoAutorizacao
 
             options.AddPolicy(PoliticasAutorizacao.Administrador, politica =>
                 politica.RequireRole(Perfis.Administrador));
+
+            options.AddPolicy(PoliticasAutorizacao.Operador, politica =>
+                politica.RequireRole(Perfis.Administrador, Perfis.Caixa));
         });
 
         return services;

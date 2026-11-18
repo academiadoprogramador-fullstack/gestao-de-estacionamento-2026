@@ -6,7 +6,7 @@
 
 **Branch:** `feat/fase-2-preparacao-entrada`
 
-**Rastreabilidade:** PRD §5.1–5.3, RF-01–03, parte de RF-07/10/11 e RNF-01–05/07; TDD §4.1, §5.1–5.2, §6.2–6.4, §7.1 e F2-01–F2-06. Especificações em `openspec/changes/fase-2-preparacao-entrada/specs`; protótipos em `openspec/changes/fase-2-preparacao-entrada/prototypes`.
+**Rastreabilidade:** PRD §5.1–5.3, RF-01–03, parte de RF-07/10/11 e RNF-01–05/07; TDD §4.1, §5.1–5.2, §6.2–6.4, §7.1 e F2-01–F2-06. Especificações em `openspec/changes/archive/2026-11-18-fase-2-preparacao-entrada/specs`; protótipos em `openspec/changes/archive/2026-11-18-fase-2-preparacao-entrada/prototypes`.
 
 ## 1. Escopo entregue
 

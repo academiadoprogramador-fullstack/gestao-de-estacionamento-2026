@@ -1,0 +1,1023 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Cadastro e disponibilidade de vagas
+  Requisitos/cenários cobertos (specs/vagas):
+  - Cadastro válido / código duplicado ou inválido / acesso de outro perfil
+  - Consulta pelos três perfis / situação derivada da ocupação / disponibilidade não reserva
+  - Atualização ao recuperar foco / aba oculta pausa o polling / falha preserva contexto / paginação recuperável
+  Também cobre specs/shell-acesso-frontend: sessão em memória, navegação por perfil e feedback acessível.
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento. Recarregar restaura os dados.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Vagas</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --surface: #0f172a;
+        --surface-2: #111c33;
+        --raised: #1e293b;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.12);
+        --ok: #34d399;
+        --ok-soft: rgba(52, 211, 153, 0.12);
+        --warn: #fbbf24;
+        --warn-soft: rgba(251, 191, 36, 0.12);
+        --danger: #fb7185;
+        --danger-soft: rgba(251, 113, 133, 0.12);
+        --radius: 14px;
+        --space: 1rem;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      h1,
+      h2,
+      h3,
+      p,
+      dl,
+      dd,
+      dt {
+        margin: 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      .skip-link {
+        position: absolute;
+        left: -999px;
+        top: 0;
+        z-index: 30;
+        padding: 0.5rem 1rem;
+        background: var(--accent);
+        color: var(--bg);
+        font-weight: 600;
+      }
+      .skip-link:focus {
+        left: 0;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      .prototype-banner {
+        padding: 0.5rem var(--space);
+        background: color-mix(in srgb, var(--warn) 16%, var(--bg));
+        border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+        color: var(--warn);
+        font-size: 0.8125rem;
+      }
+      .shell-header {
+        border-bottom: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.85);
+        backdrop-filter: blur(6px);
+      }
+      .shell-inner,
+      main {
+        width: min(78rem, 100% - 2 * var(--space));
+        margin-inline: auto;
+      }
+      .shell-inner {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 0.75rem var(--space);
+        padding-block: 0.9rem;
+      }
+      .shell-inner > .brand {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .shell-inner > .session {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+      }
+      .shell-inner > nav {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+      .shell-inner .nav {
+        justify-content: center;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-weight: 600;
+      }
+      .brand svg {
+        color: var(--accent);
+      }
+      .brand small {
+        display: block;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .nav a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.65rem;
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 0.875rem;
+        text-decoration: none;
+      }
+      .nav a:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .nav a[aria-current="page"] {
+        color: var(--accent);
+        background: var(--accent-soft);
+        font-weight: 600;
+      }
+      .session {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .session strong {
+        color: var(--text);
+        font-weight: 600;
+        display: block;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+      }
+      select,
+      input,
+      textarea {
+        font: inherit;
+        color: var(--text);
+        background: #0b1220;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        padding: 0.55rem 0.7rem;
+        width: 100%;
+      }
+      select:focus,
+      input:focus,
+      textarea:focus {
+        border-color: var(--accent);
+      }
+      main {
+        padding-block: 1.75rem 4rem;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1 {
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+        line-height: 1.15;
+        margin-top: 0.2rem;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 0.35rem;
+        max-width: 54rem;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      .stats {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+        margin-bottom: 1rem;
+      }
+      .stat {
+        padding: 0.9rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .stat dt {
+        color: var(--muted);
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      .stat dd {
+        margin-top: 0.25rem;
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+      .stat dd small {
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: end;
+        justify-content: space-between;
+        padding: var(--space);
+        border-bottom: 1px solid var(--border);
+      }
+      .field {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .field label,
+      .field .label {
+        font-weight: 600;
+        color: var(--text);
+      }
+      .field .hint {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .search {
+        width: min(18rem, 100%);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        border-radius: 9px;
+        border: 1px solid var(--border-strong);
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        padding: 0.55rem 0.9rem;
+        cursor: pointer;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #04121f;
+      }
+      .btn-primary:hover {
+        background: #7dd3fc;
+        color: #04121f;
+      }
+      .btn-ghost {
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      caption {
+        text-align: left;
+        padding: 0.75rem var(--space);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.8rem var(--space);
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+      }
+      thead th {
+        color: var(--muted);
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 600;
+        background: var(--surface-2);
+      }
+      tbody tr:hover {
+        background: rgba(30, 41, 59, 0.45);
+      }
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+      .status::before {
+        content: "";
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 999px;
+        background: currentColor;
+      }
+      .status.free {
+        color: var(--ok);
+      }
+      .status.occupied {
+        color: var(--warn);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+      }
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem var(--space);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      .pages {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .pages button {
+        min-width: 2.25rem;
+        padding-inline: 0.5rem;
+      }
+      .alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        border: 1px solid transparent;
+      }
+      .alert svg {
+        flex: none;
+        margin-top: 0.1rem;
+      }
+      .alert.error {
+        background: var(--danger-soft);
+        border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+        color: #fecdd3;
+      }
+      .alert.warn {
+        background: var(--warn-soft);
+        border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+        color: #fde68a;
+      }
+      .alert.ok {
+        background: var(--ok-soft);
+        border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+        color: #a7f3d0;
+      }
+      .alert.info {
+        background: var(--accent-soft);
+        border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        color: #bae6fd;
+      }
+      .alert ul {
+        margin: 0.35rem 0 0;
+        padding-left: 1.1rem;
+      }
+      .pollbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding: 0.65rem var(--space);
+        border-bottom: 1px solid var(--border);
+        background: var(--surface-2);
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .pollbar strong {
+        color: var(--text);
+      }
+      .live-dot {
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 999px;
+        background: var(--ok);
+        margin-right: 0.35rem;
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+      }
+      .live-dot.paused {
+        background: var(--muted);
+        box-shadow: none;
+      }
+      .toast {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 40;
+        width: min(24rem, calc(100vw - 2rem));
+      }
+      .toast:empty {
+        display: none;
+      }
+      .empty {
+        padding: 3rem var(--space);
+        text-align: center;
+        color: var(--muted);
+      }
+      .empty strong {
+        display: block;
+        color: var(--text);
+        margin-bottom: 0.35rem;
+      }
+      dialog {
+        width: min(30rem, calc(100vw - 1.5rem));
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text);
+        padding: 0;
+      }
+      dialog::backdrop {
+        background: rgba(2, 6, 23, 0.72);
+        backdrop-filter: blur(2px);
+      }
+      .dialog-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.15rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .dialog-head h2 {
+        font-size: 1.1rem;
+      }
+      .dialog-head p {
+        color: var(--muted);
+        font-size: 0.8125rem;
+        margin-top: 0.2rem;
+      }
+      .dialog-body {
+        display: grid;
+        gap: 1rem;
+        padding: 1.15rem;
+      }
+      .dialog-foot {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: end;
+        gap: 0.6rem;
+        padding: 0.9rem 1.15rem;
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+      }
+      .icon-btn {
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 0.3rem;
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .skeleton {
+        display: grid;
+        gap: 0.6rem;
+        padding: var(--space);
+      }
+      .skeleton span {
+        height: 2.2rem;
+        border-radius: 8px;
+        background: linear-gradient(90deg, #111c33, #1e293b, #111c33);
+        background-size: 200% 100%;
+        animation: shimmer 1.4s infinite;
+      }
+      @keyframes shimmer {
+        to {
+          background-position: -200% 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .skeleton span {
+          animation: none;
+        }
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (max-width: 48rem) {
+        .shell-inner {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .shell-inner > .brand {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .shell-inner > .session {
+          grid-column: 1;
+          grid-row: 2;
+          justify-self: start;
+        }
+        .shell-inner > nav {
+          grid-column: 1;
+          grid-row: 3;
+        }
+        .shell-inner .nav {
+          justify-content: flex-start;
+          width: 100%;
+        }
+        .search {
+          width: 100%;
+        }
+        th:nth-child(4),
+        td:nth-child(4) {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">
+      Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.
+    </p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+          </svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#employees">Funcionários</a></li>
+            <li><a href="#spaces" aria-current="page">Vagas</a></li>
+            <li><a href="#rates">Tarifa diária</a></li>
+            <li><a href="#attendances">Atendimentos</a></li>
+            <li><a href="#check-in">Check-in</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div>
+            <strong id="session-name">Marina Duarte</strong>
+            <span id="session-role">Administrador · sessão verificada</span>
+          </div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width: auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Operação</p>
+          <h1>Vagas</h1>
+          <p class="subtitle">
+            Disponibilidade em tempo real das 23 vagas cadastradas. A lista é informativa: ver ou
+            selecionar uma vaga livre nunca a reserva — a transação do check-in decide a atribuição.
+          </p>
+        </div>
+        <button class="btn btn-primary" id="open-create" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          Nova vaga
+        </button>
+      </div>
+
+      <dl class="stats">
+        <div class="stat"><dt>Cadastradas</dt><dd id="stat-total">23 <small>vagas</small></dd></div>
+        <div class="stat"><dt>Livres</dt><dd id="stat-free" style="color: var(--ok)">—</dd></div>
+        <div class="stat"><dt>Ocupadas</dt><dd id="stat-occupied" style="color: var(--warn)">—</dd></div>
+        <div class="stat"><dt>Última atualização</dt><dd id="stat-updated" style="font-size: 0.95rem">—</dd></div>
+      </dl>
+
+      <section class="card" aria-labelledby="spaces-title">
+        <div class="pollbar">
+          <p>
+            <span class="live-dot" id="live-dot"></span>
+            <span id="poll-label" aria-live="polite">Atualização automática em <strong>30 s</strong></span>
+          </p>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap">
+            <label class="check-inline" style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem">
+              <input type="checkbox" id="simulate-failure" style="width: 1rem; height: 1rem" />
+              Simular falha de rede
+            </label>
+            <button class="btn btn-ghost" id="refresh-now" type="button">Atualizar agora</button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="field search">
+            <label for="code-filter">Filtrar por código</label>
+            <input id="code-filter" type="search" placeholder="ex.: A-01" autocomplete="off" />
+          </div>
+          <div class="field" style="min-width: 10rem">
+            <label for="status-filter">Disponibilidade</label>
+            <select id="status-filter">
+              <option value="">Todas</option>
+              <option value="free">Livres</option>
+              <option value="occupied">Ocupadas</option>
+            </select>
+          </div>
+          <div class="field" style="min-width: 8rem">
+            <label for="page-size">Itens por página</label>
+            <select id="page-size">
+              <option>5</option>
+              <option selected>10</option>
+              <option>20</option>
+            </select>
+          </div>
+          <p id="count-label" class="field hint" aria-live="polite"></p>
+        </div>
+
+        <h2 id="spaces-title" class="visually-hidden">Lista de vagas</h2>
+        <div id="loading" class="skeleton" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div id="error-box" hidden></div>
+        <div id="table-region" hidden>
+          <div class="table-wrap">
+            <table>
+              <caption id="table-caption"></caption>
+              <thead>
+                <tr>
+                  <th scope="col">Código</th>
+                  <th scope="col">Disponibilidade</th>
+                  <th scope="col">Atendimento atual</th>
+                  <th scope="col">Ocupada desde</th>
+                  <th scope="col">Versão</th>
+                </tr>
+              </thead>
+              <tbody id="spaces-body"></tbody>
+            </table>
+          </div>
+          <div id="empty" class="empty" hidden>
+            <strong>Nenhuma vaga corresponde a este filtro</strong>
+            <p>Ajuste o filtro de código ou de disponibilidade.</p>
+          </div>
+          <div class="pagination">
+            <span id="page-summary"></span>
+            <div class="pages" role="group" aria-label="Paginação">
+              <button class="btn btn-ghost" id="prev-page" type="button">Anterior</button>
+              <span id="page-indicator" class="hint"></span>
+              <button class="btn btn-ghost" id="next-page" type="button">Próxima</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="alert info" style="margin-top: 1rem">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+        <p>
+          O seletor do check-in reutiliza esta consulta com paginação própria e atualização explícita,
+          preservando o formulário. Um conflito na confirmação retorna <code>409</code> e o operador
+          escolhe outra vaga livre.
+        </p>
+      </div>
+    </main>
+
+    <dialog id="create-dialog" aria-labelledby="create-title">
+      <form method="dialog" id="create-form" novalidate>
+        <div class="dialog-head">
+          <div>
+            <h2 id="create-title">Nova vaga</h2>
+            <p>Os códigos são aparados e convertidos para maiúsculas; duplicidades são rejeitadas.</p>
+          </div>
+          <button class="icon-btn" type="button" id="close-create" aria-label="Fechar diálogo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div id="create-errors" tabindex="-1" role="alert" hidden></div>
+          <div class="field">
+            <label for="new-code">Código da vaga</label>
+            <input id="new-code" maxlength="40" autocomplete="off" placeholder="B-12" />
+            <span class="hint">De 1 a 32 caracteres após aparar espaços.</span>
+          </div>
+        </div>
+        <div class="dialog-foot">
+          <button class="btn" type="button" id="cancel-create">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Criar vaga</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const spaces = [];
+      for (let index = 1; index <= 23; index += 1) {
+        const code = `A-${String(index).padStart(2, "0")}`;
+        const occupied = [2, 3, 5, 6, 9, 12, 14, 18, 20, 23].includes(index);
+        spaces.push({
+          id: index,
+          code,
+          version: occupied ? 2 : 1,
+          occupiedBy: occupied ? `AT-2026-${String(1040 + index)}` : null,
+          since: occupied ? `2026-11-18T${String(11 + (index % 6)).padStart(2, "0")}:${String((index * 7) % 60).padStart(2, "0")}:00Z` : null,
+        });
+      }
+
+      const state = { page: 1, filter: "", status: "", pageSize: 10, loading: true, role: "Administrador", seconds: 30, paused: false };
+      let timer = null;
+
+      const $ = (id) => document.getElementById(id);
+      document.querySelectorAll("input, select, button").forEach((el) => el.classList.add("js-ready"));
+
+      function normalize(text) {
+        return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+      }
+
+      function filtered() {
+        return spaces.filter((space) => {
+          const matchesCode = !state.filter || space.code.includes(normalize(state.filter));
+          const matchesStatus =
+            !state.status || (state.status === "free" ? !space.occupiedBy : Boolean(space.occupiedBy));
+          return matchesCode && matchesStatus;
+        });
+      }
+
+      function fmt(iso) {
+        if (!iso) return "—";
+        return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+      }
+
+      function render() {
+        $("loading").hidden = true;
+        $("table-region").hidden = false;
+        const list = filtered();
+        const totalPages = Math.max(1, Math.ceil(list.length / state.pageSize));
+        state.page = Math.min(state.page, totalPages);
+        const start = (state.page - 1) * state.pageSize;
+        const slice = list.slice(start, start + state.pageSize);
+
+        $("spaces-body").innerHTML = slice
+          .map(
+            (space) => `
+            <tr>
+              <td><span class="code">${space.code}</span></td>
+              <td><span class="status ${space.occupiedBy ? "occupied" : "free"}">${space.occupiedBy ? "Ocupada" : "Livre"}</span></td>
+              <td>${space.occupiedBy ? `<span class="mono">${space.occupiedBy}</span>` : '<span class="muted">—</span>'}</td>
+              <td>${space.since ? `<span class="muted">${fmt(space.since)}</span>` : '<span class="muted">—</span>'}</td>
+              <td><span class="mono muted">v${space.version}</span></td>
+            </tr>`,
+          )
+          .join("");
+
+        $("empty").hidden = list.length !== 0;
+        $("count-label").textContent = `${list.length} vaga${list.length === 1 ? "" : "s"} encontrada${list.length === 1 ? "" : "s"}`;
+        $("table-caption").textContent = list.length
+          ? `Exibindo ${start + 1}–${start + slice.length} de ${list.length} vagas`
+          : "Nenhum resultado para os filtros atuais.";
+        $("page-summary").textContent = `Página ${state.page} de ${totalPages}`;
+        $("page-indicator").textContent = `${state.page} / ${totalPages}`;
+        $("prev-page").disabled = state.page === 1;
+        $("next-page").disabled = state.page === totalPages;
+
+        const free = spaces.filter((s) => !s.occupiedBy).length;
+        $("stat-free").textContent = String(free);
+        $("stat-occupied").textContent = String(spaces.length - free);
+        $("stat-total").innerHTML = `${spaces.length} <small>vagas</small>`;
+      }
+
+      function setUpdatedNow() {
+        $("stat-updated").textContent = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+
+      function showError(message) {
+        const box = $("error-box");
+        box.hidden = false;
+        box.style.padding = "0.85rem 1rem";
+        box.style.borderBottom = "1px solid var(--border)";
+        box.innerHTML = `<div class="alert error"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><strong>Não foi possível atualizar a disponibilidade.</strong> Filtros e página foram preservados. <button class="btn btn-ghost" id="retry" type="button" style="padding:0.2rem 0.5rem">Tentar novamente</button></div></div>`;
+        $("retry").addEventListener("click", () => refresh(false));
+      }
+
+      function clearError() {
+        const box = $("error-box");
+        box.hidden = true;
+        box.innerHTML = "";
+      }
+
+      function refresh(isAuto) {
+        clearError();
+        if ($("simulate-failure").checked) {
+          showError();
+          if (isAuto) schedule();
+          else {
+            $("poll-label").innerHTML = "Falha na atualização manual";
+            $("live-dot").classList.add("paused");
+          }
+          return;
+        }
+        render();
+        setUpdatedNow();
+        if (isAuto || !state.paused) {
+          $("poll-label").innerHTML = "Atualização automática em <strong>30 s</strong>";
+          $("live-dot").classList.remove("paused");
+        }
+        state.seconds = 30;
+        schedule();
+      }
+
+      function tick() {
+        if (state.paused) return;
+        state.seconds -= 1;
+        if (state.seconds <= 0) {
+          refresh(true);
+          return;
+        }
+        $("poll-label").innerHTML = `Atualização automática em <strong>${state.seconds} s</strong>`;
+        timer = window.setTimeout(tick, 1000);
+      }
+
+      function schedule() {
+        window.clearTimeout(timer);
+        state.seconds = 30;
+        if (!state.paused) timer = window.setTimeout(tick, 1000);
+      }
+
+      function setRole(role) {
+        state.role = role;
+        $("open-create").hidden = role !== "Administrador";
+        $("avatar").textContent = role === "Administrador" ? "MD" : role === "Caixa" ? "RL" : "BS";
+        $("session-name").textContent = role === "Administrador" ? "Marina Duarte" : role === "Caixa" ? "Rafael Lima" : "Bruno Salles";
+        $("session-role").textContent = `${role === "Administrador" ? "Administrador" : role === "Caixa" ? "Caixa" : "Manobrista"} · sessão verificada`;
+      }
+
+      $("code-filter").addEventListener("input", (event) => {
+        state.filter = event.target.value;
+        state.page = 1;
+        render();
+      });
+      $("status-filter").addEventListener("change", (event) => {
+        state.status = event.target.value;
+        state.page = 1;
+        render();
+      });
+      $("page-size").addEventListener("change", (event) => {
+        state.pageSize = Number(event.target.value);
+        state.page = 1;
+        render();
+      });
+      $("prev-page").addEventListener("click", () => {
+        state.page -= 1;
+        render();
+      });
+      $("next-page").addEventListener("click", () => {
+        state.page += 1;
+        render();
+      });
+      $("profile-switch").addEventListener("change", (event) => setRole(event.target.value));
+      $("refresh-now").addEventListener("click", () => refresh(false));
+
+      document.addEventListener("visibilitychange", () => {
+        state.paused = document.hidden;
+        if (document.hidden) {
+          window.clearTimeout(timer);
+          $("live-dot").classList.add("paused");
+          $("poll-label").textContent = "Atualização automática pausada enquanto a aba está oculta";
+        } else {
+          $("live-dot").classList.remove("paused");
+          $("poll-label").innerHTML = "Atualizando ao recuperar o foco…";
+          refresh(false);
+        }
+      });
+
+      $("open-create").addEventListener("click", () => {
+        $("create-form").reset();
+        $("create-errors").hidden = true;
+        $("create-dialog").showModal();
+        window.setTimeout(() => $("new-code").focus(), 30);
+      });
+      $("close-create").addEventListener("click", () => $("create-dialog").close());
+      $("cancel-create").addEventListener("click", () => $("create-dialog").close());
+
+      $("create-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const code = $("new-code").value.trim().toUpperCase();
+        const messages = [];
+        if (!code) messages.push("Informe o código da vaga.");
+        if (code.length > 32) messages.push("O código da vaga deve ter no máximo 32 caracteres.");
+        if (spaces.some((space) => space.code === code)) messages.push(`A vaga ${code} já existe.`);
+        if (messages.length) {
+          const box = $("create-errors");
+          box.className = "alert error";
+          box.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><strong>Corrija o campo.</strong><ul>${messages.map((m) => `<li>${m}</li>`).join("")}</ul></div>`;
+          box.hidden = false;
+          box.focus();
+          return;
+        }
+        spaces.push({ id: spaces.length + 1, code, version: 1, occupiedBy: null, since: null });
+        $("create-dialog").close();
+        state.page = 1;
+        render();
+        $("toast").innerHTML = `<div class="alert ok">Vaga <strong>${code}</strong> criada como livre.</div>`;
+        window.setTimeout(() => ($("toast").innerHTML = ""), 4200);
+      });
+
+      window.setTimeout(() => {
+        if (state.loading) {
+          state.loading = false;
+          render();
+          setUpdatedNow();
+          schedule();
+        }
+      }, 450);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,873 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Tarifa diária versionada
+  Requisitos/cenários cobertos (specs/tarifas):
+  - Publicação válida / valor inválido / acesso de outro perfil
+  - Unidade ainda sem tarifa / concorrência de publicação / nova consulta após publicação
+  - Histórico consultável / falha de carga recuperável / versões passadas preservadas
+  Também cobre specs/shell-acesso-frontend: navegação por perfil, formulários acessíveis e feedback.
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento. Recarregar restaura os dados.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Tarifa diária</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --surface: #0f172a;
+        --surface-2: #111c33;
+        --raised: #1e293b;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.12);
+        --ok: #34d399;
+        --ok-soft: rgba(52, 211, 153, 0.12);
+        --warn: #fbbf24;
+        --warn-soft: rgba(251, 191, 36, 0.12);
+        --danger: #fb7185;
+        --danger-soft: rgba(251, 113, 133, 0.12);
+        --radius: 14px;
+        --space: 1rem;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      h1,
+      h2,
+      h3,
+      p,
+      dl,
+      dd,
+      dt {
+        margin: 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      .skip-link {
+        position: absolute;
+        left: -999px;
+        top: 0;
+        z-index: 30;
+        padding: 0.5rem 1rem;
+        background: var(--accent);
+        color: var(--bg);
+        font-weight: 600;
+      }
+      .skip-link:focus {
+        left: 0;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      .prototype-banner {
+        padding: 0.5rem var(--space);
+        background: color-mix(in srgb, var(--warn) 16%, var(--bg));
+        border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+        color: var(--warn);
+        font-size: 0.8125rem;
+      }
+      .shell-header {
+        border-bottom: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.85);
+        backdrop-filter: blur(6px);
+      }
+      .shell-inner,
+      main {
+        width: min(72rem, 100% - 2 * var(--space));
+        margin-inline: auto;
+      }
+      .shell-inner {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 0.75rem var(--space);
+        padding-block: 0.9rem;
+      }
+      .shell-inner > .brand {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .shell-inner > .session {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+      }
+      .shell-inner > nav {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+      .shell-inner .nav {
+        justify-content: center;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-weight: 600;
+      }
+      .brand svg {
+        color: var(--accent);
+      }
+      .brand small {
+        display: block;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .nav a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.65rem;
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 0.875rem;
+        text-decoration: none;
+      }
+      .nav a:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .nav a[aria-current="page"] {
+        color: var(--accent);
+        background: var(--accent-soft);
+        font-weight: 600;
+      }
+      .session {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .session strong {
+        color: var(--text);
+        font-weight: 600;
+        display: block;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+      }
+      select,
+      input,
+      textarea {
+        font: inherit;
+        color: var(--text);
+        background: #0b1220;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        padding: 0.55rem 0.7rem;
+        width: 100%;
+      }
+      select:focus,
+      input:focus,
+      textarea:focus {
+        border-color: var(--accent);
+      }
+      main {
+        padding-block: 1.75rem 4rem;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1 {
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+        line-height: 1.15;
+        margin-top: 0.2rem;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 0.35rem;
+        max-width: 52rem;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      .current {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        padding: 1.4rem;
+      }
+      .amount {
+        font-size: clamp(2.1rem, 6vw, 3rem);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1;
+      }
+      .amount small {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.25rem;
+        margin-top: 0.9rem;
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      .meta strong {
+        color: var(--text);
+        display: block;
+        font-size: 0.9rem;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: end;
+        justify-content: space-between;
+        padding: var(--space);
+        border-bottom: 1px solid var(--border);
+      }
+      .field {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .field label,
+      .field .label {
+        font-weight: 600;
+        color: var(--text);
+      }
+      .field .hint {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        border-radius: 9px;
+        border: 1px solid var(--border-strong);
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        padding: 0.55rem 0.9rem;
+        cursor: pointer;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #04121f;
+      }
+      .btn-primary:hover {
+        background: #7dd3fc;
+        color: #04121f;
+      }
+      .btn-ghost {
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      caption {
+        text-align: left;
+        padding: 0.75rem var(--space);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.8rem var(--space);
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+      }
+      thead th {
+        color: var(--muted);
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 600;
+        background: var(--surface-2);
+      }
+      tbody tr:hover {
+        background: rgba(30, 41, 59, 0.45);
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+      .chip.neutral {
+        background: var(--raised);
+        color: var(--muted);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+      }
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem var(--space);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      .pages {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .pages button {
+        min-width: 2.25rem;
+        padding-inline: 0.5rem;
+      }
+      .alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        border: 1px solid transparent;
+      }
+      .alert svg {
+        flex: none;
+        margin-top: 0.1rem;
+      }
+      .alert.error {
+        background: var(--danger-soft);
+        border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+        color: #fecdd3;
+      }
+      .alert.warn {
+        background: var(--warn-soft);
+        border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+        color: #fde68a;
+      }
+      .alert.ok {
+        background: var(--ok-soft);
+        border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+        color: #a7f3d0;
+      }
+      .alert.info {
+        background: var(--accent-soft);
+        border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        color: #bae6fd;
+      }
+      .empty {
+        padding: 2.5rem var(--space);
+        text-align: center;
+        color: var(--muted);
+      }
+      .empty strong {
+        display: block;
+        color: var(--text);
+        margin-bottom: 0.35rem;
+      }
+      .denied {
+        display: grid;
+        justify-items: start;
+        gap: 0.75rem;
+        padding: 2.5rem;
+      }
+      .denied svg {
+        color: var(--danger);
+      }
+      .toast {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 40;
+        width: min(24rem, calc(100vw - 2rem));
+      }
+      .toast:empty {
+        display: none;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (max-width: 44rem) {
+        .current {
+          grid-template-columns: 1fr;
+        }
+        .shell-inner {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .shell-inner > .brand {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .shell-inner > .session {
+          grid-column: 1;
+          grid-row: 2;
+          justify-self: start;
+        }
+        .shell-inner > nav {
+          grid-column: 1;
+          grid-row: 3;
+        }
+        .shell-inner .nav {
+          justify-content: flex-start;
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">
+      Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.
+    </p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+          </svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#employees">Funcionários</a></li>
+            <li><a href="#spaces">Vagas</a></li>
+            <li><a href="#rates" aria-current="page">Tarifa diária</a></li>
+            <li><a href="#attendances">Atendimentos</a></li>
+            <li><a href="#check-in">Check-in</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div>
+            <strong id="session-name">Marina Duarte</strong>
+            <span id="session-role">Administrador · sessão verificada</span>
+          </div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width: auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div id="allowed">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Administração</p>
+            <h1>Tarifa diária</h1>
+            <p class="subtitle">
+              Versões publicadas são imutáveis. O check-in captura a versão e o valor vigentes
+              naquele momento; publicações posteriores nunca alteram um atendimento existente.
+            </p>
+          </div>
+          <button class="btn btn-primary" id="open-publish" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            Publicar nova versão
+          </button>
+        </div>
+
+        <section class="card" aria-labelledby="current-title" style="margin-bottom: 1rem">
+          <div class="current">
+            <div>
+              <p class="eyebrow" id="current-title">Configuração atual</p>
+              <p class="amount" id="current-amount">—</p>
+              <p id="current-msg" class="subtitle" style="margin-top: 0.5rem"></p>
+              <dl class="meta">
+                <div><dt>Versão atual</dt><dd><strong id="current-version">—</strong></dd></div>
+                <div><dt>Base de concorrência</dt><dd><strong id="base-version">—</strong></dd></div>
+                <div><dt>Publicada por</dt><dd><strong id="current-author">—</strong></dd></div>
+                <div><dt>Publicada em</dt><dd><strong id="current-date">—</strong></dd></div>
+              </dl>
+            </div>
+            <div id="entry-state" class="alert warn" style="max-width: 22rem">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+              <p id="entry-state-text">Sem tarifa publicada: o check-in fica bloqueado até um administrador publicar um valor positivo.</p>
+            </div>
+          </div>
+        </section>
+
+        <div id="history-alert" hidden style="margin-bottom: 1rem"></div>
+
+        <section class="card" aria-labelledby="history-title">
+          <div class="toolbar">
+            <div>
+              <h2 id="history-title" style="font-size: 1.05rem">Histórico de versões</h2>
+              <p class="field hint">Registro imutável de cada publicação.</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center">
+              <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted)">
+                <input type="checkbox" id="simulate-no-rate" style="width: 1rem; height: 1rem" />
+                Simular unidade sem tarifa
+              </label>
+              <label style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted)">
+                <input type="checkbox" id="simulate-history-failure" style="width: 1rem; height: 1rem" />
+                Simular falha de carga
+              </label>
+              <button class="btn btn-ghost" id="reload-history" type="button">Recarregar histórico</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <caption id="history-caption"></caption>
+              <thead>
+                <tr>
+                  <th scope="col">Versão</th>
+                  <th scope="col">Valor da diária</th>
+                  <th scope="col">Publicada por</th>
+                  <th scope="col">Publicada em (São Paulo)</th>
+                  <th scope="col">Situação</th>
+                </tr>
+              </thead>
+              <tbody id="history-body"></tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span id="history-summary"></span>
+            <div class="pages" role="group" aria-label="Paginação do histórico">
+              <button class="btn btn-ghost" id="history-prev" type="button">Anterior</button>
+              <span id="history-indicator" class="field hint"></span>
+              <button class="btn btn-ghost" id="history-next" type="button">Próxima</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="alert info" style="margin-top: 1rem">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+          <p>
+            Duração, períodos iniciados e pagamento pertencem à Fase 3. Esta tela apenas publica o
+            valor da diária e seu histórico imutável.
+          </p>
+        </div>
+      </div>
+
+      <section id="denied" class="card denied" hidden aria-labelledby="denied-title">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <rect x="4" y="10" width="16" height="11" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </svg>
+        <h1 id="denied-title" style="font-size: 1.5rem">Acesso negado</h1>
+        <p class="subtitle">
+          A configuração e o histórico de tarifas são restritos ao perfil Administrador. Caixa e
+          Manobrista nunca recebem dados de configuração financeira.
+        </p>
+        <button class="btn" type="button" id="back-to-admin">Voltar à visualização de Administrador</button>
+      </section>
+    </main>
+
+    <dialog id="publish-dialog" aria-labelledby="publish-title">
+      <form method="dialog" id="publish-form" novalidate>
+        <div class="dialog-head">
+          <div>
+            <h2 id="publish-title">Publicar tarifa diária</h2>
+            <p>Valor positivo com no máximo duas casas decimais. Nenhum padrão comercial é aplicado.</p>
+          </div>
+          <button class="icon-btn" type="button" id="close-publish" aria-label="Fechar diálogo" style="border:0;background:transparent;color:var(--muted);cursor:pointer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div class="dialog-body" style="display:grid;gap:1rem;padding:1.15rem">
+          <div id="publish-errors" tabindex="-1" role="alert" hidden></div>
+          <div class="field">
+            <label for="rate-value">Valor da diária (BRL)</label>
+            <input id="rate-value" inputmode="decimal" autocomplete="off" placeholder="0,00" />
+            <span class="hint">Exemplo de teste: 20,00. Precisão além de duas casas é rejeitada.</span>
+          </div>
+          <div class="alert info">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+            <p>Versão-base esperada: <strong id="publish-base">—</strong>. Base desatualizada retorna <code>409</code> sem sobrescrever.</p>
+          </div>
+          <label style="display:flex;align-items:start;gap:.6rem;padding:.6rem .7rem;border:1px dashed var(--border-strong);border-radius:9px">
+            <input type="checkbox" id="simulate-publish-conflict" style="width:1rem;height:1rem;margin-top:.2rem" />
+            <span><strong style="display:block;font-size:.875rem">Simular publicação concorrente</strong><span class="field hint">Reproduz o conflito de base desatualizada para revisão.</span></span>
+          </label>
+        </div>
+        <div class="dialog-foot">
+          <button class="btn" type="button" id="cancel-publish">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Publicar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const rates = [
+        { version: 1, value: 18.5, author: "Marina Duarte", at: "2026-10-02T14:10:00Z" },
+        { version: 2, value: 20, author: "Marina Duarte", at: "2026-10-20T17:35:00Z" },
+        { version: 3, value: 22.9, author: "Marina Duarte", at: "2026-11-05T12:02:00Z" },
+        { version: 4, value: 25, author: "Helena Prado", at: "2026-11-12T19:44:00Z" },
+        { version: 5, value: 27.5, author: "Marina Duarte", at: "2026-11-16T10:18:00Z" },
+        { version: 6, value: 30, author: "Marina Duarte", at: "2026-11-17T15:03:00Z" },
+      ];
+      let current = null;
+      const state = { page: 1, pageSize: 4, role: "Administrador", noRate: false };
+
+      const $ = (id) => document.getElementById(id);
+
+      function money(value) {
+        return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      }
+
+      function fmt(iso) {
+        return new Date(iso).toLocaleString("pt-BR", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+      }
+
+      function renderCurrent() {
+        if (state.noRate || !current) {
+          $("current-amount").innerHTML = 'Nenhuma tarifa <small>publicada</small>';
+          $("current-msg").textContent = "O check-in permanece bloqueado até a publicação de uma versão positiva.";
+          $("current-version").textContent = "—";
+          $("base-version").textContent = "0";
+          $("current-author").textContent = "—";
+          $("current-date").textContent = "—";
+          $("entry-state").className = "alert warn";
+          $("entry-state-text").textContent = "Sem tarifa publicada: o check-in fica bloqueado até um administrador publicar um valor positivo.";
+          return;
+        }
+        $("current-amount").innerHTML = `${money(current.value)} <small>por período de 24 h iniciado</small>`;
+        $("current-msg").textContent = "Usada como snapshot de todo novo check-in a partir de agora.";
+        $("current-version").textContent = `v${current.version}`;
+        $("base-version").textContent = `v${current.version}`;
+        $("current-author").textContent = current.author;
+        $("current-date").textContent = fmt(current.at);
+        $("entry-state").className = "alert ok";
+        $("entry-state-text").textContent = "Tarifa publicada: o check-in pode capturar sua versão e valor.";
+      }
+
+      function renderHistory() {
+        const alert = $("history-alert");
+        if ($("simulate-history-failure").checked) {
+          alert.hidden = false;
+          alert.innerHTML = `<div class="alert error"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><strong>Não foi possível carregar o histórico de tarifas.</strong> O formulário de publicação foi preservado. <button class="btn btn-ghost" id="retry-history" type="button" style="padding:.2rem .5rem">Tentar novamente</button></div></div>`;
+          $("retry-history").addEventListener("click", () => {
+            $("simulate-history-failure").checked = false;
+            renderHistory();
+          });
+        } else {
+          alert.hidden = true;
+          alert.innerHTML = "";
+        }
+
+        if (state.noRate) {
+          $("history-body").innerHTML = `<tr><td colspan="5" style="padding:2rem;text-align:center;color:var(--muted)">Nenhuma versão publicada ainda.</td></tr>`;
+          $("history-caption").textContent = "Nenhuma versão publicada.";
+          $("history-summary").textContent = "Página 1 de 1";
+          $("history-indicator").textContent = "1 / 1";
+          $("history-prev").disabled = true;
+          $("history-next").disabled = true;
+          return;
+        }
+
+        const ordered = [...rates].sort((a, b) => b.version - a.version);
+        const totalPages = Math.max(1, Math.ceil(ordered.length / state.pageSize));
+        state.page = Math.min(state.page, totalPages);
+        const start = (state.page - 1) * state.pageSize;
+        const slice = ordered.slice(start, start + state.pageSize);
+        $("history-body").innerHTML = slice
+          .map(
+            (rate) => `
+            <tr>
+              <td><span class="mono">v${rate.version}</span></td>
+              <td><strong>${money(rate.value)}</strong></td>
+              <td>${rate.author}</td>
+              <td><span class="field hint">${fmt(rate.at)}</span></td>
+              <td>${current && rate.version === current.version ? '<span class="chip">Atual</span>' : '<span class="chip neutral">Histórica</span>'}</td>
+            </tr>`,
+          )
+          .join("");
+        $("history-caption").textContent = `Exibindo ${start + 1}–${start + slice.length} de ${ordered.length} versões`;
+        $("history-summary").textContent = `Página ${state.page} de ${totalPages}`;
+        $("history-indicator").textContent = `${state.page} / ${totalPages}`;
+        $("history-prev").disabled = state.page === 1;
+        $("history-next").disabled = state.page === totalPages;
+      }
+
+      function setRole(role) {
+        state.role = role;
+        const allowed = role === "Administrador";
+        $("allowed").hidden = !allowed;
+        $("denied").hidden = allowed;
+        $("avatar").textContent = role === "Administrador" ? "MD" : role === "Caixa" ? "RL" : "BS";
+        $("session-name").textContent = role === "Administrador" ? "Marina Duarte" : role === "Caixa" ? "Rafael Lima" : "Bruno Salles";
+        $("session-role").textContent = `${role === "Administrador" ? "Administrador" : role === "Caixa" ? "Caixa" : "Manobrista"} · sessão verificada`;
+      }
+
+      function showPublishErrors(messages) {
+        const box = $("publish-errors");
+        box.className = "alert error";
+        box.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><strong>Corrija o valor.</strong><ul>${messages.map((m) => `<li>${m}</li>`).join("")}</ul></div>`;
+        box.hidden = false;
+        box.focus();
+      }
+
+      function toast(message) {
+        $("toast").innerHTML = `<div class="alert ok">${message}</div>`;
+        window.clearTimeout(toast.timer);
+        toast.timer = window.setTimeout(() => ($("toast").innerHTML = ""), 4600);
+      }
+
+      $("profile-switch").addEventListener("change", (event) => setRole(event.target.value));
+      $("back-to-admin").addEventListener("click", () => {
+        $("profile-switch").value = "Administrador";
+        setRole("Administrador");
+      });
+      $("history-prev").addEventListener("click", () => {
+        state.page -= 1;
+        renderHistory();
+      });
+      $("history-next").addEventListener("click", () => {
+        state.page += 1;
+        renderHistory();
+      });
+      $("simulate-history-failure").addEventListener("change", renderHistory);
+      $("simulate-no-rate").addEventListener("change", (event) => {
+        state.noRate = event.target.checked;
+        current = rates[rates.length - 1];
+        renderCurrent();
+        renderHistory();
+      });
+      $("reload-history").addEventListener("click", renderHistory);
+
+      $("open-publish").addEventListener("click", () => {
+        $("publish-form").reset();
+        $("publish-errors").hidden = true;
+        $("publish-base").textContent = state.noRate || !current ? "nenhuma (primeira publicação)" : `v${current.version}`;
+        $("publish-dialog").showModal();
+        window.setTimeout(() => $("rate-value").focus(), 30);
+      });
+      $("close-publish").addEventListener("click", () => $("publish-dialog").close());
+      $("cancel-publish").addEventListener("click", () => $("publish-dialog").close());
+
+      $("publish-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const raw = $("rate-value").value.trim().replace(",", ".");
+        const messages = [];
+        if (!raw) messages.push("Informe o valor da diária.");
+        if (!/^\d+(\.\d{1,2})?$/.test(raw)) messages.push("Use um valor positivo com no máximo duas casas decimais.");
+        const value = Number(raw);
+        if (raw && (!Number.isFinite(value) || value <= 0)) messages.push("O valor da diária deve ser maior que zero.");
+        if (messages.length) {
+          showPublishErrors(messages);
+          return;
+        }
+        if ($("simulate-publish-conflict").checked) {
+          const box = $("publish-errors");
+          box.className = "alert warn";
+          box.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><strong>Versão-base desatualizada.</strong><p>Outro administrador publicou uma versão mais recente. Nada foi sobrescrito. Recarregue a configuração atual e tente novamente.</p></div>`;
+          box.hidden = false;
+          box.focus();
+          return;
+        }
+        const version = rates.length ? Math.max(...rates.map((r) => r.version)) + 1 : 1;
+        current = { version, value, author: "Marina Duarte", at: new Date().toISOString() };
+        state.noRate = false;
+        $("simulate-no-rate").checked = false;
+        rates.push(current);
+        $("publish-dialog").close();
+        state.page = 1;
+        renderCurrent();
+        renderHistory();
+        toast(`Versão <strong>v${version}</strong> publicada em ${money(value)}. Novos check-ins capturam este snapshot.`);
+      });
+
+      current = rates[rates.length - 1];
+      renderCurrent();
+      renderHistory();
+    </script>
+  </body>
+</html>

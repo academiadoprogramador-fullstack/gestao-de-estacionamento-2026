@@ -1,0 +1,1115 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Administração de funcionários e acessos
+  Requisitos/cenários cobertos (specs/administracao-acessos):
+  - Criação válida / criação inválida ou duplicada / autorregistro inexistente
+  - Alteração confirmada / concorrência detectada / revogação inclui repetição idempotente
+  - Remoção do último administrador / concorrência entre administradores / desativação preserva histórico
+  - Listagem paginada / paginação inválida / acesso de outro perfil
+  Também cobre specs/shell-acesso-frontend: interface apenas com sessão em memória, guard de perfil e feedback acessível.
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento. Recarregar restaura os dados.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Funcionários e acessos</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --surface: #0f172a;
+        --surface-2: #111c33;
+        --raised: #1e293b;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.12);
+        --ok: #34d399;
+        --ok-soft: rgba(52, 211, 153, 0.12);
+        --warn: #fbbf24;
+        --warn-soft: rgba(251, 191, 36, 0.12);
+        --danger: #fb7185;
+        --danger-soft: rgba(251, 113, 133, 0.12);
+        --radius: 14px;
+        --space: 1rem;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      h1,
+      h2,
+      h3,
+      p,
+      dl,
+      dd,
+      dt {
+        margin: 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      .skip-link {
+        position: absolute;
+        left: -999px;
+        top: 0;
+        z-index: 30;
+        padding: 0.5rem 1rem;
+        background: var(--accent);
+        color: var(--bg);
+        font-weight: 600;
+      }
+      .skip-link:focus {
+        left: 0;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      .prototype-banner {
+        padding: 0.5rem var(--space);
+        background: color-mix(in srgb, var(--warn) 16%, var(--bg));
+        border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+        color: var(--warn);
+        font-size: 0.8125rem;
+      }
+      .shell-header {
+        border-bottom: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.85);
+        backdrop-filter: blur(6px);
+      }
+      .shell-inner,
+      main {
+        width: min(78rem, 100% - 2 * var(--space));
+        margin-inline: auto;
+      }
+      .shell-inner {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 0.75rem var(--space);
+        padding-block: 0.9rem;
+      }
+      .shell-inner > .brand {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .shell-inner > .session {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+      }
+      .shell-inner > nav {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+      .shell-inner .nav {
+        justify-content: center;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-weight: 600;
+      }
+      .brand svg {
+        color: var(--accent);
+      }
+      .brand small {
+        display: block;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .nav a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.65rem;
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 0.875rem;
+        text-decoration: none;
+      }
+      .nav a:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .nav a[aria-current="page"] {
+        color: var(--accent);
+        background: var(--accent-soft);
+        font-weight: 600;
+      }
+      .session {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .session strong {
+        color: var(--text);
+        font-weight: 600;
+        display: block;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+      }
+      select,
+      input,
+      textarea {
+        font: inherit;
+        color: var(--text);
+        background: #0b1220;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        padding: 0.55rem 0.7rem;
+        width: 100%;
+      }
+      select:focus,
+      input:focus,
+      textarea:focus {
+        border-color: var(--accent);
+      }
+      main {
+        padding-block: 1.75rem 4rem;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1 {
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+        line-height: 1.15;
+        margin-top: 0.2rem;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 0.35rem;
+        max-width: 52rem;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: end;
+        justify-content: space-between;
+        padding: var(--space);
+        border-bottom: 1px solid var(--border);
+      }
+      .field {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .field label,
+      .field .label {
+        font-weight: 600;
+        color: var(--text);
+      }
+      .field .hint {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .search {
+        width: min(24rem, 100%);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        border-radius: 9px;
+        border: 1px solid var(--border-strong);
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        padding: 0.55rem 0.9rem;
+        cursor: pointer;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #04121f;
+      }
+      .btn-primary:hover {
+        background: #7dd3fc;
+        color: #04121f;
+      }
+      .btn-danger {
+        border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+        color: var(--danger);
+      }
+      .btn-danger:hover {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+      .btn-ghost {
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      caption {
+        text-align: left;
+        padding: 0.75rem var(--space);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.8rem var(--space);
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+      }
+      thead th {
+        color: var(--muted);
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 600;
+        background: var(--surface-2);
+      }
+      tbody tr:hover {
+        background: rgba(30, 41, 59, 0.45);
+      }
+      .cell-name {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .cell-name strong {
+        display: block;
+      }
+      .cell-name span {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .chip.neutral {
+        background: var(--raised);
+        color: var(--muted);
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+      .status::before {
+        content: "";
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 999px;
+        background: currentColor;
+      }
+      .status.active {
+        color: var(--ok);
+      }
+      .status.inactive {
+        color: var(--muted);
+      }
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem var(--space);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      .pagination .pages {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .pagination button {
+        min-width: 2.25rem;
+        padding-inline: 0.5rem;
+      }
+      .alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        border: 1px solid transparent;
+      }
+      .alert svg {
+        flex: none;
+        margin-top: 0.1rem;
+      }
+      .alert.error {
+        background: var(--danger-soft);
+        border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+        color: #fecdd3;
+      }
+      .alert.warn {
+        background: var(--warn-soft);
+        border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+        color: #fde68a;
+      }
+      .alert.ok {
+        background: var(--ok-soft);
+        border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+        color: #a7f3d0;
+      }
+      .alert.info {
+        background: var(--accent-soft);
+        border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        color: #bae6fd;
+      }
+      .alert ul {
+        margin: 0.35rem 0 0;
+        padding-left: 1.1rem;
+      }
+      .toast {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 40;
+        width: min(24rem, calc(100vw - 2rem));
+      }
+      .toast:empty {
+        display: none;
+      }
+      .empty {
+        padding: 3rem var(--space);
+        text-align: center;
+        color: var(--muted);
+      }
+      .empty strong {
+        display: block;
+        color: var(--text);
+        margin-bottom: 0.35rem;
+      }
+      dialog {
+        width: min(34rem, calc(100vw - 1.5rem));
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text);
+        padding: 0;
+      }
+      dialog::backdrop {
+        background: rgba(2, 6, 23, 0.72);
+        backdrop-filter: blur(2px);
+      }
+      .dialog-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.15rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .dialog-head h2 {
+        font-size: 1.1rem;
+      }
+      .dialog-head p {
+        color: var(--muted);
+        font-size: 0.8125rem;
+        margin-top: 0.2rem;
+      }
+      .dialog-body {
+        display: grid;
+        gap: 1rem;
+        padding: 1.15rem;
+        max-height: min(70vh, 40rem);
+        overflow-y: auto;
+      }
+      .dialog-foot {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: end;
+        gap: 0.6rem;
+        padding: 0.9rem 1.15rem;
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+      }
+      .icon-btn {
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 0.3rem;
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .check-grid {
+        display: grid;
+        gap: 0.5rem;
+      }
+      .check-row {
+        display: flex;
+        align-items: start;
+        gap: 0.6rem;
+        padding: 0.6rem 0.7rem;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface-2);
+      }
+      .check-row input {
+        width: 1.05rem;
+        height: 1.05rem;
+        margin-top: 0.15rem;
+        accent-color: var(--accent);
+      }
+      .check-row strong {
+        display: block;
+        font-size: 0.875rem;
+      }
+      .check-row span {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .switch-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.65rem 0.7rem;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface-2);
+      }
+      .switch-row input {
+        width: 1.15rem;
+        height: 1.15rem;
+        accent-color: var(--accent);
+      }
+      .denied {
+        display: grid;
+        justify-items: start;
+        gap: 0.75rem;
+        padding: 2.5rem;
+        text-align: left;
+      }
+      .denied svg {
+        color: var(--danger);
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .skeleton {
+        display: grid;
+        gap: 0.6rem;
+        padding: var(--space);
+      }
+      .skeleton span {
+        height: 2.2rem;
+        border-radius: 8px;
+        background: linear-gradient(90deg, #111c33, #1e293b, #111c33);
+        background-size: 200% 100%;
+        animation: shimmer 1.4s infinite;
+      }
+      @keyframes shimmer {
+        to {
+          background-position: -200% 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .skeleton span {
+          animation: none;
+        }
+      }
+      @media (max-width: 48rem) {
+        .shell-inner {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .shell-inner > .brand {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .shell-inner > .session {
+          grid-column: 1;
+          grid-row: 2;
+          justify-self: start;
+        }
+        .shell-inner > nav {
+          grid-column: 1;
+          grid-row: 3;
+        }
+        .shell-inner .nav {
+          justify-content: flex-start;
+          width: 100%;
+        }
+        .search {
+          width: 100%;
+        }
+        th:nth-child(4),
+        td:nth-child(4) {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">
+      Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.
+    </p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+          </svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#employees" aria-current="page">Funcionários</a></li>
+            <li><a href="#spaces">Vagas</a></li>
+            <li><a href="#rates">Tarifa diária</a></li>
+            <li><a href="#attendances">Atendimentos</a></li>
+            <li><a href="#check-in">Check-in</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div>
+            <strong id="session-name">Marina Duarte</strong>
+            <span id="session-role">Administrador · sessão verificada</span>
+          </div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width: auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div id="allowed">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Administração</p>
+            <h1>Funcionários e acessos</h1>
+            <p class="subtitle">
+              Crie credenciais iniciais, atribua os três perfis fixos e desative contas.
+              Cada alteração é auditada e revoga as sessões ativas do funcionário.
+            </p>
+          </div>
+          <button class="btn btn-primary" id="open-create">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            Novo funcionário
+          </button>
+        </div>
+
+        <div class="alert info" id="revocation-note" style="margin-bottom: 1rem">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>
+          <p>
+            Alterações de acesso revogam as sessões do funcionário de forma atômica. A próxima requisição protegida —
+            inclusive a repetição idempotente de um check-in — exige novo login.
+          </p>
+        </div>
+
+        <section class="card" aria-labelledby="employees-title">
+          <div class="toolbar">
+            <div class="field search">
+              <label for="filter">Buscar funcionários</label>
+              <input id="filter" type="search" placeholder="Nome ou e-mail" autocomplete="off" />
+              <span class="hint">Filtra apenas a página atual neste protótipo.</span>
+            </div>
+            <div class="field" style="min-width: 11rem">
+              <label for="status-filter">Situação</label>
+              <select id="status-filter">
+                <option value="">Todas</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+              </select>
+            </div>
+            <p id="count-label" class="hint" aria-live="polite"></p>
+          </div>
+
+          <h2 id="employees-title" class="visually-hidden">Lista de funcionários</h2>
+          <div id="loading" class="skeleton" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div id="table-region" hidden>
+            <div class="table-wrap">
+              <table>
+                <caption id="table-caption"></caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Funcionário</th>
+                    <th scope="col">Perfis</th>
+                    <th scope="col">Situação</th>
+                    <th scope="col">Última alteração</th>
+                    <th scope="col"><span class="visually-hidden">Ações</span></th>
+                  </tr>
+                </thead>
+                <tbody id="employees-body"></tbody>
+              </table>
+            </div>
+            <div id="empty" class="empty" hidden>
+              <strong>Nenhum funcionário corresponde a este filtro</strong>
+              <p>Limpe a busca ou altere o filtro de situação para ver toda a equipe.</p>
+            </div>
+            <div class="pagination">
+              <span id="page-summary"></span>
+              <div class="pages" role="group" aria-label="Paginação">
+                <button class="btn btn-ghost" id="prev-page" type="button">Anterior</button>
+                <span id="page-indicator" class="hint"></span>
+                <button class="btn btn-ghost" id="next-page" type="button">Próxima</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <p class="hint" style="margin-top: 0.75rem">
+          A conta conectada é a única administradora ativa. Ela não pode perder o perfil
+          Administrador nem ser desativada.
+        </p>
+      </div>
+
+      <section id="denied" class="card denied" hidden aria-labelledby="denied-title">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <rect x="4" y="10" width="16" height="11" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </svg>
+        <h1 id="denied-title">Acesso negado</h1>
+        <p class="subtitle">
+          A administração de funcionários é restrita ao perfil Administrador. A API também rejeitou
+          a requisição — alternar a interface de volta não concede permissão.
+        </p>
+        <button class="btn" type="button" id="back-to-admin">Voltar à visualização de Administrador</button>
+      </section>
+    </main>
+
+    <dialog id="create-dialog" aria-labelledby="create-title">
+      <form method="dialog" id="create-form" novalidate>
+        <div class="dialog-head">
+          <div>
+            <h2 id="create-title">Novo funcionário</h2>
+            <p>As credenciais iniciais não são exibidas novamente após a criação.</p>
+          </div>
+          <button class="icon-btn" type="button" id="close-create" aria-label="Fechar diálogo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div id="create-errors" tabindex="-1" role="alert" hidden></div>
+          <div class="field">
+            <label for="new-name">Nome completo</label>
+            <input id="new-name" name="name" autocomplete="off" maxlength="200" />
+          </div>
+          <div class="field">
+            <label for="new-email">E-mail</label>
+            <input id="new-email" name="email" type="email" autocomplete="off" placeholder="name@example.invalid" />
+          </div>
+          <div class="field">
+            <label for="new-password">Senha inicial</label>
+            <input id="new-password" name="password" type="password" autocomplete="new-password" />
+            <span class="hint">Mínimo de 8 caracteres. Nunca retornada em respostas ou logs.</span>
+          </div>
+          <fieldset style="border: 0; padding: 0; margin: 0">
+            <legend class="label" style="font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.45rem">
+              Perfis (ao menos um)
+            </legend>
+            <div class="check-grid">
+              <label class="check-row"><input type="checkbox" value="Administrador" /> <span><strong>Administrador</strong><span>Configuração, acessos, exceções e relatórios.</span></span></label>
+              <label class="check-row"><input type="checkbox" value="Caixa" /> <span><strong>Caixa</strong><span>Check-in, retirada, pagamento e entrega.</span></span></label>
+              <label class="check-row"><input type="checkbox" value="Manobrista" /> <span><strong>Manobrista</strong><span>Consulta de veículos e vagas, vistorias. Sem dados financeiros.</span></span></label>
+            </div>
+          </fieldset>
+        </div>
+        <div class="dialog-foot">
+          <button class="btn" type="button" id="cancel-create">Cancelar</button>
+          <button class="btn btn-primary" type="submit" id="submit-create">Criar funcionário</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="access-dialog" aria-labelledby="access-title">
+      <form method="dialog" id="access-form" novalidate>
+        <div class="dialog-head">
+          <div>
+            <h2 id="access-title">Alterar acesso</h2>
+            <p id="access-subtitle"></p>
+          </div>
+          <button class="icon-btn" type="button" id="close-access" aria-label="Fechar diálogo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div id="access-errors" tabindex="-1" role="alert" hidden></div>
+          <div class="alert info">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>
+            <p>Token de concorrência: <strong id="access-version"></strong>. Salvar com token desatualizado retorna <code>409</code>.</p>
+          </div>
+          <div class="switch-row">
+            <div><strong>Conta ativa</strong><span class="hint" style="display: block">Contas inativas preservam o histórico de autoria.</span></div>
+            <input id="access-active" type="checkbox" />
+          </div>
+          <fieldset style="border: 0; padding: 0; margin: 0">
+            <legend class="label" style="font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.45rem">Perfis</legend>
+            <div class="check-grid">
+              <label class="check-row"><input type="checkbox" value="Administrador" /> <span><strong>Administrador</strong><span>Ao menos um administrador ativo deve permanecer.</span></span></label>
+              <label class="check-row"><input type="checkbox" value="Caixa" /> <span><strong>Caixa</strong><span>Acesso operacional, financeiro e de entrega.</span></span></label>
+              <label class="check-row"><input type="checkbox" value="Manobrista" /> <span><strong>Manobrista</strong><span>Sem acesso financeiro ou de configuração.</span></span></label>
+            </div>
+          </fieldset>
+          <label class="check-row" style="background: transparent; border-style: dashed">
+            <input type="checkbox" id="simulate-conflict" />
+            <span><strong>Simular alteração concorrente</strong><span>Reproduz o estado de conflito para revisão.</span></span>
+          </label>
+        </div>
+        <div class="dialog-foot">
+          <button class="btn" type="button" id="cancel-access">Cancelar</button>
+          <button class="btn btn-primary" type="submit" id="submit-access">Salvar acesso</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const employees = [
+        { id: 1, name: "Marina Duarte", email: "marina.duarte@example.invalid", profiles: ["Administrador"], active: true, changed: "2026-11-17T18:12:00Z", accessVersion: 4 },
+        { id: 2, name: "Rafael Lima", email: "rafael.lima@example.invalid", profiles: ["Caixa"], active: true, changed: "2026-11-16T13:05:00Z", accessVersion: 2 },
+        { id: 3, name: "Bruno Salles", email: "bruno.salles@example.invalid", profiles: ["Manobrista"], active: true, changed: "2026-11-15T09:40:00Z", accessVersion: 1 },
+        { id: 4, name: "Camila Nunes", email: "camila.nunes@example.invalid", profiles: ["Caixa", "Manobrista"], active: true, changed: "2026-11-14T20:22:00Z", accessVersion: 3 },
+        { id: 5, name: "Diego Alves", email: "diego.alves@example.invalid", profiles: ["Manobrista"], active: false, changed: "2026-11-10T11:03:00Z", accessVersion: 2 },
+        { id: 6, name: "Helena Prado", email: "helena.prado@example.invalid", profiles: ["Administrador"], active: false, changed: "2026-11-08T16:47:00Z", accessVersion: 5 },
+      ];
+
+      const PAGE_SIZE = 4;
+      const state = { page: 1, filter: "", status: "", editingId: null, loading: true, role: "Administrador" };
+
+      const $ = (id) => document.getElementById(id);
+      const tableRegion = $("table-region");
+      const loading = $("loading");
+      const body = $("employees-body");
+      const empty = $("empty");
+
+      function activeAdministrators() {
+        return employees.filter((e) => e.active && e.profiles.includes("Administrador"));
+      }
+
+      function normalize(text) {
+        return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      }
+
+      function filtered() {
+        return employees.filter((e) => {
+          const matchesText =
+            !state.filter ||
+            normalize(e.name).includes(normalize(state.filter)) ||
+            normalize(e.email).includes(normalize(state.filter));
+          const matchesStatus = !state.status || (state.status === "active" ? e.active : !e.active);
+          return matchesText && matchesStatus;
+        });
+      }
+
+      function render() {
+        loading.hidden = true;
+        tableRegion.hidden = false;
+        const list = filtered();
+        const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+        state.page = Math.min(state.page, totalPages);
+        const start = (state.page - 1) * PAGE_SIZE;
+        const slice = list.slice(start, start + PAGE_SIZE);
+
+        body.innerHTML = "";
+        for (const employee of slice) {
+          const tr = document.createElement("tr");
+          const initials = employee.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
+          const profileChips = employee.profiles
+            .map((p) => `<span class="chip">${p}</span>`)
+            .join("");
+          tr.innerHTML = `
+            <td>
+              <span class="cell-name">
+                <span class="avatar" aria-hidden="true">${initials}</span>
+                <span><strong>${employee.name}</strong><span>${employee.email}</span></span>
+              </span>
+            </td>
+            <td><span class="chips">${profileChips}</span></td>
+            <td><span class="status ${employee.active ? "active" : "inactive"}">${employee.active ? "Ativo" : "Inativo"}</span></td>
+            <td><span class="hint">${new Date(employee.changed).toLocaleString("pt-BR", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Sao_Paulo" })}</span></td>
+            <td style="text-align: right">
+              <button class="btn btn-ghost" type="button" data-edit="${employee.id}">Alterar acesso</button>
+            </td>`;
+          body.appendChild(tr);
+        }
+
+        body.querySelectorAll("[data-edit]").forEach((button) => {
+          button.addEventListener("click", () => openAccess(Number(button.dataset.edit)));
+        });
+
+        empty.hidden = list.length !== 0;
+        $("count-label").textContent = `${list.length} funcionário${list.length === 1 ? "" : "s"}`;
+        $("table-caption").textContent = list.length
+          ? `Exibindo ${start + 1}–${start + slice.length} de ${list.length} funcionários`
+          : "Nenhum resultado para o filtro atual.";
+        $("page-summary").textContent = `Página ${state.page} de ${totalPages}`;
+        $("page-indicator").textContent = `${state.page} / ${totalPages}`;
+        $("prev-page").disabled = state.page === 1;
+        $("next-page").disabled = state.page === totalPages;
+      }
+
+      function showCreateErrors(messages) {
+        const box = $("create-errors");
+        box.className = "alert error";
+        box.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><strong>Corrija os campos destacados.</strong><ul>${messages.map((m) => `<li>${m}</li>`).join("")}</ul></div>`;
+        box.hidden = false;
+        box.focus();
+      }
+
+      function clearErrors(box) {
+        box.hidden = true;
+        box.innerHTML = "";
+      }
+
+      function showAccessErrors(messages, conflict) {
+        const box = $("access-errors");
+        box.className = conflict ? "alert warn" : "alert error";
+        box.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div>${messages.map((m) => `<p>${m}</p>`).join("")}${conflict ? `<p style="margin-top:.5rem">Estado mais recente: versão de acesso <strong>${employees.find((e) => e.id === state.editingId).accessVersion}</strong>. Reabra o diálogo para continuar.</p>` : ""}</div>`;
+        box.hidden = false;
+        box.focus();
+      }
+
+      function toast(message, tone = "ok") {
+        $("toast").innerHTML = `<div class="alert ${tone}">${message}</div>`;
+        window.clearTimeout(toast.timer);
+        toast.timer = window.setTimeout(() => ($("toast").innerHTML = ""), 5200);
+      }
+
+      function setRole(role) {
+        state.role = role;
+        const allowed = role === "Administrador";
+        $("allowed").hidden = !allowed;
+        $("denied").hidden = allowed;
+        $("avatar").textContent = role === "Administrador" ? "MD" : role === "Caixa" ? "RL" : "BS";
+        $("session-name").textContent = role === "Administrador" ? "Marina Duarte" : role === "Caixa" ? "Rafael Lima" : "Bruno Salles";
+        $("session-role").textContent = `${role === "Administrador" ? "Administrador" : role === "Caixa" ? "Caixa" : "Manobrista"} · sessão verificada`;
+      }
+
+      function openAccess(id) {
+        const employee = employees.find((e) => e.id === id);
+        state.editingId = id;
+        state.loading = false;
+        $("access-subtitle").textContent = `${employee.name} — ${employee.email}`;
+        $("access-version").textContent = `v${employee.accessVersion}`;
+        $("access-active").checked = employee.active;
+        document.querySelectorAll("#access-form input[type=checkbox][value]").forEach((box) => {
+          box.checked = employee.profiles.includes(box.value);
+        });
+        $("simulate-conflict").checked = false;
+        clearErrors($("access-errors"));
+        $("access-dialog").showModal();
+      }
+
+      $("filter").addEventListener("input", (event) => {
+        state.filter = event.target.value;
+        state.page = 1;
+        render();
+      });
+      $("status-filter").addEventListener("change", (event) => {
+        state.status = event.target.value;
+        state.page = 1;
+        render();
+      });
+      $("prev-page").addEventListener("click", () => {
+        state.page -= 1;
+        render();
+      });
+      $("next-page").addEventListener("click", () => {
+        state.page += 1;
+        render();
+      });
+      $("profile-switch").addEventListener("change", (event) => setRole(event.target.value));
+      $("back-to-admin").addEventListener("click", () => {
+        $("profile-switch").value = "Administrador";
+        setRole("Administrador");
+      });
+
+      $("open-create").addEventListener("click", () => {
+        $("create-form").reset();
+        clearErrors($("create-errors"));
+        $("create-dialog").showModal();
+        window.setTimeout(() => $("new-name").focus(), 30);
+      });
+      $("close-create").addEventListener("click", () => $("create-dialog").close());
+      $("cancel-create").addEventListener("click", () => $("create-dialog").close());
+      $("close-access").addEventListener("click", () => $("access-dialog").close());
+      $("cancel-access").addEventListener("click", () => $("access-dialog").close());
+
+      $("create-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const name = $("new-name").value.trim();
+        const email = $("new-email").value.trim().toLowerCase();
+        const password = $("new-password").value;
+        const profiles = [...document.querySelectorAll("#create-form input[type=checkbox][value]:checked")].map((b) => b.value);
+        const messages = [];
+        if (name.length < 3) messages.push("Informe o nome completo.");
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) messages.push("Informe um e-mail válido.");
+        if (employees.some((e) => e.email === email)) messages.push("Este e-mail já pertence a outro funcionário.");
+        if (password.length < 8) messages.push("A senha inicial deve ter ao menos 8 caracteres.");
+        if (profiles.length === 0) messages.push("Selecione ao menos um perfil.");
+        if (messages.length) {
+          showCreateErrors(messages);
+          return;
+        }
+        employees.push({
+          id: Math.max(...employees.map((e) => e.id)) + 1,
+          name,
+          email,
+          profiles,
+          active: true,
+          changed: new Date().toISOString(),
+          accessVersion: 1,
+        });
+        $("create-dialog").close();
+        state.page = 1;
+        render();
+        toast(`Funcionário <strong>${name}</strong> criado. A senha inicial nunca é retornada.`);
+      });
+
+      $("access-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const employee = employees.find((e) => e.id === state.editingId);
+        const profiles = [...document.querySelectorAll("#access-form input[type=checkbox][value]:checked")].map((b) => b.value);
+        const active = $("access-active").checked;
+        const messages = [];
+        if (profiles.length === 0) messages.push("Selecione ao menos um perfil.");
+        if (!active && employee.id === 1) messages.push("O administrador conectado não pode desativar a própria conta.");
+        if (!profiles.includes("Administrador") && employee.profiles.includes("Administrador") && activeAdministrators().length === 1) {
+          messages.push("O último administrador ativo não pode perder o perfil Administrador.");
+        }
+        if (messages.length) {
+          showAccessErrors(messages, false);
+          return;
+        }
+        if ($("simulate-conflict").checked) {
+          showAccessErrors(["Este acesso foi alterado por outro administrador. Seu token está desatualizado e nada foi sobrescrito."], true);
+          return;
+        }
+        employee.profiles = profiles;
+        employee.active = active;
+        employee.accessVersion += 1;
+        employee.changed = new Date().toISOString();
+        $("access-dialog").close();
+        render();
+        toast(`Acesso de <strong>${employee.name}</strong> salvo. Sessões e tokens de renovação foram revogados.`);
+      });
+
+      window.setTimeout(() => {
+        if (state.loading) {
+          state.loading = false;
+          render();
+        }
+      }, 450);
+    </script>
+  </body>
+</html>

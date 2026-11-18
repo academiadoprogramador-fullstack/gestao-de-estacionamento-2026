@@ -1,0 +1,198 @@
+<!doctype html>
+<!--
+  Índice de protótipos — Fase 2: preparação e check-in
+  Liga os protótipos autocontidos que cobrem as specs delta desta mudança.
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Fase 2: preparação e check-in</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --surface: #0f172a;
+        --surface-2: #111c33;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.12);
+        --ok: #34d399;
+        --warn: #fbbf24;
+        --radius: 14px;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      .banner {
+        padding: 0.5rem 1rem;
+        background: color-mix(in srgb, var(--warn) 16%, var(--bg));
+        border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+        color: var(--warn);
+        font-size: 0.8125rem;
+      }
+      main {
+        width: min(64rem, 100% - 2rem);
+        margin-inline: auto;
+        padding-block: 2.5rem 4rem;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1 {
+        font-size: clamp(1.8rem, 4vw, 2.4rem);
+        margin: 0.25rem 0 0.5rem;
+        line-height: 1.15;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 52rem;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 6px;
+      }
+      .grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+        margin-top: 2rem;
+      }
+      a.card {
+        display: grid;
+        gap: 0.5rem;
+        padding: 1.15rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text);
+        text-decoration: none;
+      }
+      a.card:hover {
+        border-color: var(--accent);
+        background: var(--surface-2);
+      }
+      a.card strong {
+        font-size: 1.05rem;
+      }
+      a.card span {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .tag {
+        justify-self: start;
+        display: inline-flex;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .note {
+        margin-top: 2rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+        font-size: 0.875rem;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85em;
+      }
+    </style>
+  </head>
+  <body>
+    <p class="banner" role="note">
+      Protótipos para revisão — dados 100% fictícios, sem backend. Cada arquivo abre sozinho via
+      <code>file://</code>.
+    </p>
+    <main>
+      <p class="eyebrow">OpenSpec · prototype-first · Fase 2</p>
+      <h1>Protótipos de preparação e check-in</h1>
+      <p>
+        Estas telas tornam concreto o comportamento da Fase 2 antes da implementação: administração de
+        acessos, vagas, tarifa diária versionada, o check-in atômico com tratamento de resultado
+        incerto e a busca de atendimentos com leituras sensíveis auditadas. Use o seletor de perfil
+        para revisar as projeções de permissão e os controles de “Cenários do protótipo” para
+        alcançar estados de erro, carregamento, conflito e resposta tardia.
+      </p>
+
+      <div class="grid">
+        <a class="card" href="administracao-funcionarios.html">
+          <span class="tag">Administração</span>
+          <strong>Funcionários e acessos</strong>
+          <span
+            >Crie credenciais iniciais, altere perfis e situação, com proteção do último administrador
+            e conflito de concorrência.</span
+          >
+        </a>
+        <a class="card" href="vagas.html">
+          <span class="tag">Operação</span>
+          <strong>Vagas</strong>
+          <span
+            >Cadastro, disponibilidade paginada, polling de 30 segundos, pausa em aba oculta e nenhuma
+            reserva pela tela.</span
+          >
+        </a>
+        <a class="card" href="tarifas.html">
+          <span class="tag">Administração</span>
+          <strong>Tarifa diária versionada</strong>
+          <span
+            >Publicações imutáveis, bloqueio sem tarifa, conflito de base desatualizada e histórico
+            paginado.</span
+          >
+        </a>
+        <a class="card" href="check-in.html">
+          <span class="tag">Operação</span>
+          <strong>Check-in</strong>
+          <span
+            >Entrada completa com validação acessível, seletor de vaga, comando pendente, resposta
+            perdida com repetição explícita e cópia do identificador.</span
+          >
+        </a>
+        <a class="card" href="atendimentos.html">
+          <span class="tag">Operação</span>
+          <strong>Atendimentos</strong>
+          <span
+            >Busca exata, visitas distintas, projeções por perfil, leituras auditadas de documento e
+            vistoria e descarte de respostas tardias.</span
+          >
+        </a>
+      </div>
+
+      <p class="note">
+        O texto da interface está em português brasileiro, alinhado com a implementação da Fase 1.
+        Os artefatos e a documentação do projeto permanecem em português brasileiro.
+      </p>
+    </main>
+  </body>
+</html>

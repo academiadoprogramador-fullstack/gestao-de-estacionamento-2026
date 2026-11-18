@@ -1,0 +1,1318 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Check-in (entrada) com tratamento de resultado incerto
+  Requisitos/cenários cobertos (specs/atendimentos):
+  - Entrada válida / entrada incompleta / placa normalizada sem unicidade
+  - Snapshot capturado / entrada sem tarifa / publicação posterior não altera snapshot
+  - Vaga livre atribuída / disputa pela mesma vaga / vaga inexistente
+  - Confirmação conjunta / falha no meio da operação / auditoria na mesma transação
+  - Campos do cliente como inválidos / perfil sem permissão / horário e autoria do servidor
+  - Comando pendente bloqueia saída / resultado incerto / rejeição definitiva / sucesso limpa dados / saída confirmada
+  Também cobre specs/idempotencia-comandos (mesma chave e conteúdo na repetição) e specs/vagas (paginação do seletor).
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento. Recarregar restaura os dados.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Check-in</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --surface: #0f172a;
+        --surface-2: #111c33;
+        --raised: #1e293b;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.12);
+        --ok: #34d399;
+        --ok-soft: rgba(52, 211, 153, 0.12);
+        --warn: #fbbf24;
+        --warn-soft: rgba(251, 191, 36, 0.12);
+        --danger: #fb7185;
+        --danger-soft: rgba(251, 113, 133, 0.12);
+        --radius: 14px;
+        --space: 1rem;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      h1,
+      h2,
+      h3,
+      p,
+      dl,
+      dd,
+      dt {
+        margin: 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      .skip-link {
+        position: absolute;
+        left: -999px;
+        top: 0;
+        z-index: 30;
+        padding: 0.5rem 1rem;
+        background: var(--accent);
+        color: var(--bg);
+        font-weight: 600;
+      }
+      .skip-link:focus {
+        left: 0;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      .prototype-banner {
+        padding: 0.5rem var(--space);
+        background: color-mix(in srgb, var(--warn) 16%, var(--bg));
+        border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+        color: var(--warn);
+        font-size: 0.8125rem;
+      }
+      .shell-header {
+        border-bottom: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.85);
+        backdrop-filter: blur(6px);
+      }
+      .shell-inner,
+      main {
+        width: min(78rem, 100% - 2 * var(--space));
+        margin-inline: auto;
+      }
+      .shell-inner {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 0.75rem var(--space);
+        padding-block: 0.9rem;
+      }
+      .shell-inner > .brand {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .shell-inner > .session {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+      }
+      .shell-inner > nav {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+      .shell-inner .nav {
+        justify-content: center;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-weight: 600;
+      }
+      .brand svg {
+        color: var(--accent);
+      }
+      .brand small {
+        display: block;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .nav a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.65rem;
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 0.875rem;
+        text-decoration: none;
+      }
+      .nav a:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .nav a[aria-current="page"] {
+        color: var(--accent);
+        background: var(--accent-soft);
+        font-weight: 600;
+      }
+      .session {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .session strong {
+        color: var(--text);
+        font-weight: 600;
+        display: block;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+      }
+      select,
+      input,
+      textarea {
+        font: inherit;
+        color: var(--text);
+        background: #0b1220;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        padding: 0.55rem 0.7rem;
+        width: 100%;
+      }
+      select:focus,
+      input:focus,
+      textarea:focus {
+        border-color: var(--accent);
+      }
+      input[aria-invalid="true"],
+      textarea[aria-invalid="true"] {
+        border-color: var(--danger);
+      }
+      main {
+        padding-block: 1.75rem 4rem;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1 {
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+        line-height: 1.15;
+        margin-top: 0.2rem;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 0.35rem;
+        max-width: 54rem;
+      }
+      .layout {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(0, 1.6fr) minmax(17rem, 1fr);
+        align-items: start;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      .card-pad {
+        padding: var(--space);
+      }
+      .card h2 {
+        font-size: 1.05rem;
+      }
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding: var(--space);
+        border-bottom: 1px solid var(--border);
+      }
+      .form-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: var(--space);
+      }
+      .full {
+        grid-column: 1 / -1;
+      }
+      .field {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .field label,
+      .field .label {
+        font-weight: 600;
+        color: var(--text);
+      }
+      .field .hint {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .field .error {
+        font-size: 0.75rem;
+        color: #fda4af;
+        font-weight: 500;
+      }
+      .required {
+        color: var(--danger);
+      }
+      textarea {
+        min-height: 7rem;
+        resize: vertical;
+      }
+      .counter {
+        text-align: right;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.72rem;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        border-radius: 9px;
+        border: 1px solid var(--border-strong);
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        padding: 0.55rem 0.9rem;
+        cursor: pointer;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #04121f;
+      }
+      .btn-primary:hover {
+        background: #7dd3fc;
+        color: #04121f;
+      }
+      .btn-ghost {
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        border: 1px solid transparent;
+      }
+      .alert svg {
+        flex: none;
+        margin-top: 0.1rem;
+      }
+      .alert.error {
+        background: var(--danger-soft);
+        border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+        color: #fecdd3;
+      }
+      .alert.warn {
+        background: var(--warn-soft);
+        border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+        color: #fde68a;
+      }
+      .alert.ok {
+        background: var(--ok-soft);
+        border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+        color: #a7f3d0;
+      }
+      .alert.info {
+        background: var(--accent-soft);
+        border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        color: #bae6fd;
+      }
+      .alert ul {
+        margin: 0.35rem 0 0;
+        padding-left: 1.1rem;
+      }
+      .summary {
+        margin: var(--space) var(--space) 0;
+      }
+      .summary:empty {
+        display: none;
+      }
+      .form-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: var(--space);
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+        border-radius: 0 0 var(--radius) var(--radius);
+      }
+      .keyline {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.72rem;
+        color: var(--muted);
+        word-break: break-all;
+      }
+      .aside {
+        display: grid;
+        gap: 1rem;
+      }
+      .rate-box {
+        display: grid;
+        gap: 0.35rem;
+        padding: var(--space);
+      }
+      .rate-box strong {
+        font-size: 1.6rem;
+      }
+      .rate-box small {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 0.8rem;
+      }
+      .controls {
+        display: grid;
+        gap: 0.75rem;
+        padding: var(--space);
+      }
+      .controls label {
+        font-size: 0.8rem;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .controls .field {
+        gap: 0.25rem;
+      }
+      .space-row {
+        display: flex;
+        gap: 0.6rem;
+        align-items: end;
+      }
+      .space-row .field {
+        flex: 1;
+      }
+      .space-row .btn {
+        flex: none;
+        white-space: nowrap;
+      }
+      .pending-panel {
+        position: fixed;
+        inset: 0;
+        z-index: 25;
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+        background: rgba(2, 6, 23, 0.78);
+        backdrop-filter: blur(3px);
+      }
+      .pending-panel[hidden] {
+        display: none;
+      }
+      .pending-card {
+        width: min(30rem, 100%);
+        padding: 1.5rem;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        display: grid;
+        gap: 0.9rem;
+      }
+      .spinner {
+        width: 1.4rem;
+        height: 1.4rem;
+        border-radius: 999px;
+        border: 2px solid var(--border-strong);
+        border-top-color: var(--accent);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation: none;
+          border-top-color: var(--accent);
+        }
+      }
+      .success-panel {
+        padding: var(--space);
+        display: grid;
+        gap: 1rem;
+      }
+      .receipt {
+        display: grid;
+        gap: 0.75rem;
+        padding: 1rem;
+        border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
+        border-radius: 12px;
+        background: var(--ok-soft);
+      }
+      .receipt dl {
+        display: grid;
+        gap: 0.55rem;
+        grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+      }
+      .receipt dt {
+        color: var(--muted);
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      .receipt dd {
+        font-weight: 600;
+        margin-top: 0.15rem;
+      }
+      .identifier {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .identifier code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        padding: 0.3rem 0.6rem;
+        user-select: all;
+      }
+      .denied {
+        display: grid;
+        justify-items: start;
+        gap: 0.75rem;
+        padding: 2.5rem;
+      }
+      .denied svg {
+        color: var(--danger);
+      }
+      .toast {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 40;
+        width: min(25rem, calc(100vw - 2rem));
+      }
+      .toast:empty {
+        display: none;
+      }
+      dialog {
+        width: min(38rem, calc(100vw - 1.5rem));
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text);
+        padding: 0;
+      }
+      dialog::backdrop {
+        background: rgba(2, 6, 23, 0.72);
+        backdrop-filter: blur(2px);
+      }
+      .dialog-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.15rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .dialog-head h2 {
+        font-size: 1.1rem;
+      }
+      .dialog-head p {
+        color: var(--muted);
+        font-size: 0.8125rem;
+        margin-top: 0.2rem;
+      }
+      .dialog-body {
+        padding: 1.15rem;
+        display: grid;
+        gap: 0.75rem;
+        max-height: min(68vh, 34rem);
+        overflow-y: auto;
+      }
+      .dialog-foot {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding: 0.9rem 1.15rem;
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+      }
+      .space-option {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface-2);
+      }
+      .space-option button {
+        width: auto;
+      }
+      .space-option code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 700;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.1rem 0.45rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: var(--ok-soft);
+        color: var(--ok);
+      }
+      .badge.blocked {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (max-width: 60rem) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 48rem) {
+        .shell-inner {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .shell-inner > .brand {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .shell-inner > .session {
+          grid-column: 1;
+          grid-row: 2;
+          justify-self: start;
+        }
+        .shell-inner > nav {
+          grid-column: 1;
+          grid-row: 3;
+        }
+        .shell-inner .nav {
+          justify-content: flex-start;
+          width: 100%;
+        }
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">
+      Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.
+    </p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+          </svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal" id="main-nav">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#employees">Funcionários</a></li>
+            <li><a href="#spaces">Vagas</a></li>
+            <li><a href="#rates">Tarifa diária</a></li>
+            <li><a href="#attendances">Atendimentos</a></li>
+            <li><a href="#check-in" aria-current="page">Check-in</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div>
+            <strong id="session-name">Marina Duarte</strong>
+            <span id="session-role">Administrador · sessão verificada</span>
+          </div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width: auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+          <button class="btn btn-ghost" id="logout" type="button">Sair</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div id="allowed">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Operação</p>
+            <h1>Entrada de veículo</h1>
+            <p class="subtitle">
+              Confirma atendimento, vistoria de entrada cifrada, ocupação exclusiva da vaga e o
+              snapshot da tarifa em uma única transação. Identificador, horário, operador e tarifa
+              são do servidor.
+            </p>
+          </div>
+        </div>
+
+        <div class="alert warn" id="global-warning" hidden style="margin-bottom: 1rem">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+          <p id="global-warning-text"></p>
+        </div>
+
+        <div class="layout">
+          <div>
+            <section class="card" aria-labelledby="form-title">
+              <div class="card-head">
+                <div>
+                  <h2 id="form-title">Dados da entrada</h2>
+                  <p style="font-size: 0.75rem; color: var(--muted); font-weight: 400">Campos com <span class="required">*</span> são obrigatórios.</p>
+                </div>
+                <span class="badge" id="key-badge">Tentativa apenas em memória</span>
+              </div>
+
+              <div id="form-summary" class="summary" tabindex="-1" role="alert" hidden></div>
+
+              <form id="check-in-form" novalidate>
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="plate">Placa <span class="required" aria-hidden="true">*</span></label>
+                    <input id="plate" name="plate" autocomplete="off" maxlength="24" placeholder="ABC1D23" aria-describedby="plate-hint" />
+                    <span class="hint" id="plate-hint">Espaços e hífens são removidos; nenhum padrão brasileiro é exigido.</span>
+                    <span class="error" id="error-plate" hidden></span>
+                  </div>
+                  <div class="field">
+                    <label for="model">Modelo <span class="required" aria-hidden="true">*</span></label>
+                    <input id="model" name="model" autocomplete="off" maxlength="120" placeholder="Hatch compacto" />
+                    <span class="error" id="error-model" hidden></span>
+                  </div>
+                  <div class="field">
+                    <label for="holder">Titular cadastrado <span class="required" aria-hidden="true">*</span></label>
+                    <input id="holder" name="holder" autocomplete="off" maxlength="200" placeholder="Ana Beatriz Ferreira" />
+                    <span class="error" id="error-holder" hidden></span>
+                  </div>
+                  <div class="field">
+                    <label for="document">Documento do titular <span class="required" aria-hidden="true">*</span></label>
+                    <input id="document" name="document" autocomplete="off" maxlength="80" placeholder="DOC 00.000.000-0" />
+                    <span class="hint">Cifrado com AES-256-GCM. Nunca exibido em listas ou logs.</span>
+                    <span class="error" id="error-document" hidden></span>
+                  </div>
+                  <div class="field full">
+                    <label for="space">Vaga <span class="required" aria-hidden="true">*</span></label>
+                    <div class="space-row">
+                      <input id="space" name="space" readonly placeholder="Nenhuma vaga selecionada" aria-describedby="space-hint" />
+                      <button class="btn" type="button" id="choose-space">Escolher vaga</button>
+                    </div>
+                    <span class="hint" id="space-hint">A disponibilidade é informativa. O servidor decide a atribuição e pode responder <code>409</code>.</span>
+                    <span class="error" id="error-space" hidden></span>
+                  </div>
+                  <div class="field full">
+                    <label for="inspection">Vistoria de entrada <span class="required" aria-hidden="true">*</span></label>
+                    <textarea id="inspection" maxlength="4000" aria-describedby="inspection-hint inspection-counter" placeholder="Descreva as condições visíveis: riscos, amassados, pneus, luzes, quilometragem, pertences."></textarea>
+                    <div style="display: flex; justify-content: space-between; gap: 1rem">
+                      <span class="hint" id="inspection-hint">Texto obrigatório, de 1 a 4.000 caracteres após aparar espaços.</span>
+                      <span class="counter" id="inspection-counter">0 / 4000</span>
+                    </div>
+                    <span class="error" id="error-inspection" hidden></span>
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <div>
+                    <p class="keyline" id="key-line">Idempotency-Key: —</p>
+                    <p class="field hint">Gerada em memória; nunca armazenada no navegador.</p>
+                  </div>
+                  <div style="display: flex; gap: 0.6rem; flex-wrap: wrap">
+                    <button class="btn" type="reset" id="clear-form">Limpar</button>
+                    <button class="btn btn-primary" type="submit" id="submit-check-in">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                      Confirmar check-in
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </section>
+
+            <section id="result-region" hidden style="margin-top: 1rem"></section>
+          </div>
+
+          <aside class="aside" aria-label="Contexto e cenários do protótipo">
+            <section class="card" aria-labelledby="rate-title">
+              <div class="card-head" style="padding: 0.85rem 1rem">
+                <h2 id="rate-title" style="font-size: 0.95rem">Tarifa capturada na entrada</h2>
+              </div>
+              <div class="rate-box" id="rate-box"></div>
+            </section>
+
+            <section class="card" aria-labelledby="controls-title">
+              <div class="card-head" style="padding: 0.85rem 1rem">
+                <h2 id="controls-title" style="font-size: 0.95rem">Cenários do protótipo</h2>
+              </div>
+              <div class="controls">
+                <div class="field">
+                  <label for="next-outcome">Próxima resposta do servidor</label>
+                  <select id="next-outcome">
+                    <option value="success">Sucesso — criado</option>
+                    <option value="lost">Rede perdida — resultado desconhecido</option>
+                    <option value="rejected-space">Rejeitado — vaga ocupada (409)</option>
+                    <option value="rejected-rate">Rejeitado — sem tarifa diária (422)</option>
+                  </select>
+                  <span class="hint">Controla a máquina de estados em memória deste protótipo.</span>
+                </div>
+                <div class="field">
+                  <label for="rate-simulation">Configuração</label>
+                  <select id="rate-simulation">
+                    <option value="published">Tarifa publicada (v6)</option>
+                    <option value="missing">Sem tarifa publicada</option>
+                  </select>
+                </div>
+                <label style="display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 500">
+                  <input type="checkbox" id="show-unsaved" style="width: 1rem; height: 1rem" />
+                  Forçar agora o aviso de saída do navegador
+                </label>
+              </div>
+            </section>
+
+            <div class="alert info">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+              <p>
+                Enquanto um comando está pendente ou incerto, a navegação interna e a saída ficam bloqueadas.
+                A repetição envia a mesma chave e o mesmo conteúdo, nunca uma nova tentativa.
+              </p>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <section id="denied" class="card denied" hidden aria-labelledby="denied-title">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <rect x="4" y="10" width="16" height="11" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </svg>
+        <h1 id="denied-title" style="font-size: 1.5rem">Acesso negado</h1>
+        <p class="subtitle">
+          A entrada é restrita a Caixa e Administrador. Manobristas podem consultar veículos e vagas,
+          mas não criar atendimento.
+        </p>
+        <button class="btn" type="button" id="back-to-admin">Voltar à visualização de Administrador</button>
+      </section>
+    </main>
+
+    <div class="pending-panel" id="pending-panel" hidden role="dialog" aria-modal="true" aria-labelledby="pending-title">
+      <div class="pending-card">
+        <div style="display: flex; align-items: center; gap: 0.75rem">
+          <span class="spinner" aria-hidden="true"></span>
+          <h2 id="pending-title" style="font-size: 1.05rem">Confirmando check-in…</h2>
+        </div>
+        <p class="field hint" id="pending-message">
+          Comando pendente. A navegação interna e a saída ficam bloqueadas até o resultado ser conhecido.
+        </p>
+        <div class="alert warn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+          <p>Não recarregue o navegador. Se ele for fechado, esta tentativa mantida em memória é perdida.</p>
+        </div>
+      </div>
+    </div>
+
+    <dialog id="space-dialog" aria-labelledby="space-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="space-title">Escolher uma vaga livre</h2>
+          <p>Página 1 de 2 · atualizada agora. Selecionar não reserva a vaga.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" id="close-space" aria-label="Fechar seletor de vagas">Fechar</button>
+      </div>
+      <div class="dialog-body" id="space-list"></div>
+      <div class="dialog-foot">
+        <button class="btn btn-ghost" type="button" id="refresh-spaces">Atualizar disponibilidade</button>
+        <button class="btn" type="button" id="cancel-space">Cancelar</button>
+      </div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const spaces = [
+        { code: "A-01", free: true }, { code: "A-02", free: false }, { code: "A-03", free: false },
+        { code: "A-04", free: true }, { code: "A-05", free: true }, { code: "A-06", free: false },
+        { code: "A-07", free: true }, { code: "A-08", free: true }, { code: "A-09", free: false },
+        { code: "B-01", free: true }, { code: "B-02", free: true }, { code: "B-03", free: false },
+      ];
+
+      const state = {
+        phase: "idle",
+        role: "Administrador",
+        key: crypto.randomUUID(),
+        space: null,
+        attempt: null,
+        replay: false,
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const fields = ["plate", "model", "holder", "document", "space", "inspection"];
+
+      function money(value) {
+        return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      }
+
+      function updateKeyLine() {
+        const masked = `${state.key.slice(0, 8)}…${state.key.slice(-4)}`;
+        $("key-line").textContent = `Idempotency-Key: ${masked} (UUID em memória)`;
+      }
+
+      function renderRate() {
+        const missing = $("rate-simulation").value === "missing";
+        $("rate-box").innerHTML = missing
+          ? `<div class="alert error" style="padding:.6rem .7rem"><p><strong>Sem tarifa publicada.</strong> O check-in fica bloqueado até um administrador publicar uma versão positiva.</p></div>`
+          : `<p><strong>R$ 30,00</strong> <small>· v6 · por período de 24 h iniciado</small></p>
+             <p class="field hint">Capturada como snapshot imutável. Uma publicação posterior não altera este atendimento.</p>`;
+        const blocked = missing;
+        $("global-warning").hidden = !blocked;
+        $("global-warning-text").textContent = blocked
+          ? "Check-in bloqueado: a unidade não possui tarifa diária publicada. A API rejeita a confirmação com erro de regra de negócio."
+          : "";
+      }
+
+      function clearFieldErrors() {
+        ["plate", "model", "holder", "document", "space", "inspection"].forEach((name) => {
+          $(`error-${name}`).hidden = true;
+          $(name).setAttribute("aria-invalid", "false");
+          $(name).removeAttribute("aria-describedby");
+        });
+      }
+
+      function showSummary(messages) {
+        const summary = $("form-summary");
+        summary.hidden = false;
+        summary.className = "summary alert error";
+        summary.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><strong>Corrija os campos destacados antes de enviar.</strong><ul>${messages.map((m) => `<li>${m}</li>`).join("")}</ul></div>`;
+        summary.focus();
+      }
+
+      function validate() {
+        clearFieldErrors();
+        const messages = [];
+        const plate = $("plate").value.trim();
+        const model = $("model").value.trim();
+        const holder = $("holder").value.trim();
+        const document = $("document").value.trim();
+        const inspection = $("inspection").value.trim();
+
+        if (!plate) add("plate", "Informe a placa.", messages);
+        else if (!/^[A-Za-z0-9]+$/.test(plate.replace(/[\s-]/g, ""))) add("plate", "Use apenas letras e dígitos.", messages);
+        if (!model) add("model", "Informe o modelo.", messages);
+        else if (model.length > 120) add("model", "O modelo deve ter no máximo 120 caracteres.", messages);
+        if (!holder) add("holder", "Informe o titular cadastrado.", messages);
+        else if (holder.length > 200) add("holder", "O titular deve ter no máximo 200 caracteres.", messages);
+        if (!document) add("document", "Informe o documento do titular.", messages);
+        else if (document.length > 80) add("document", "O documento deve ter no máximo 80 caracteres.", messages);
+        if (!state.space) add("space", "Selecione uma vaga livre.", messages);
+        if (!inspection) add("inspection", "Informe a vistoria de entrada.", messages);
+        else if (inspection.length > 4000) add("inspection", "A vistoria deve ter no máximo 4.000 caracteres.", messages);
+
+        if (messages.length) {
+          showSummary(messages);
+          return null;
+        }
+        $("form-summary").hidden = true;
+        return {
+          plate: plate.replace(/[\s-]/g, "").toUpperCase(),
+          model,
+          holder,
+          document,
+          space: state.space,
+          inspection,
+        };
+      }
+
+      function add(name, message, messages) {
+        messages.push(message);
+        const input = $(name);
+        input.setAttribute("aria-invalid", "true");
+        const error = $(`error-${name}`);
+        error.textContent = message;
+        error.hidden = false;
+        const described = input.getAttribute("aria-describedby");
+        input.setAttribute("aria-describedby", described ? `${described} error-${name}` : `error-${name}`);
+      }
+
+      function setPhase(phase) {
+        state.phase = phase;
+        const locked = phase === "pending" || phase === "uncertain";
+        fields.forEach((name) => {
+          const el = $(name);
+          if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") el.readOnly = locked || name === "space";
+        });
+        $("submit-check-in").disabled = locked;
+        $("clear-form").disabled = locked;
+        $("choose-space").disabled = locked;
+        $("main-nav").querySelectorAll("a").forEach((link) => {
+          link.setAttribute("aria-disabled", locked ? "true" : "false");
+        });
+        $("logout").disabled = locked;
+      }
+
+      function blockNavigation(event) {
+        if (state.phase !== "pending" && state.phase !== "uncertain") return;
+        event.preventDefault();
+        toast("Comando pendente ou incerto: navegação e saída bloqueadas.", "warn");
+      }
+
+      function toast(message, tone = "ok") {
+        $("toast").innerHTML = `<div class="alert ${tone}">${message}</div>`;
+        window.clearTimeout(toast.timer);
+        toast.timer = window.setTimeout(() => ($("toast").innerHTML = ""), 4800);
+      }
+
+      function submitAttempt(replay) {
+        state.replay = replay;
+        setPhase("pending");
+        $("result-region").hidden = true;
+        $("pending-panel").hidden = false;
+        $("pending-message").textContent = replay
+          ? "Repetindo a mesma Idempotency-Key e o mesmo conteúdo. O servidor devolve o resultado original se ele foi confirmado."
+          : "Comando pendente. A navegação interna e a saída ficam bloqueadas até o resultado ser conhecido.";
+        $("pending-title").textContent = replay ? "Repetindo check-in…" : "Confirmando check-in…";
+        window.setTimeout(finalizeAttempt, 1600);
+      }
+
+      function finalizeAttempt() {
+        $("pending-panel").hidden = true;
+        const outcome = state.replay ? "success" : $("next-outcome").value;
+
+        if (outcome === "success") {
+          const created = {
+            identifier: state.attempt.identifier,
+            space: state.attempt.space,
+            plate: state.attempt.plate,
+            time: new Date().toISOString(),
+            replay: state.replay,
+          };
+          setPhase("success");
+          renderSuccess(created);
+          // Limpa os campos sensíveis da tela após a confirmação.
+          $("document").value = "";
+          $("inspection").value = "";
+          $("inspection-counter").textContent = "0 / 4000";
+          state.space = null;
+          $("space").value = "";
+          state.key = crypto.randomUUID();
+          updateKeyLine();
+          state.replay = false;
+          return;
+        }
+
+        if (outcome === "lost") {
+          setPhase("uncertain");
+          renderUncertain();
+          return;
+        }
+
+        setPhase("rejected");
+        const reason = outcome === "rejected-rate"
+          ? { code: "business_rule_not_satisfied", text: "Nenhuma tarifa diária está publicada. Publique uma tarifa positiva antes do check-in." }
+          : { code: "space_conflict", text: "A vaga selecionada foi ocupada por outro check-in. Escolha uma vaga livre e tente novamente." };
+        state.key = crypto.randomUUID();
+        updateKeyLine();
+        renderRejected(reason);
+      }
+
+      function renderSuccess(created) {
+        const region = $("result-region");
+        region.hidden = false;
+        region.className = "card success-panel";
+        region.innerHTML = `
+          <div class="alert ok">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <p><strong>${created.replay ? "A repetição retornou o resultado original." : "Check-in confirmado."}</strong> Atendimento, vistoria, ocupação e auditoria foram confirmados juntos.</p>
+          </div>
+          <div class="receipt">
+            <div>
+              <p class="field hint">Identificador público</p>
+              <div class="identifier">
+                <code id="created-identifier">${created.identifier}</code>
+                <button class="btn" type="button" id="copy-identifier">Copiar</button>
+              </div>
+            </div>
+            <dl>
+              <div><dt>Vaga</dt><dd>${created.space}</dd></div>
+              <div><dt>Placa</dt><dd>${created.plate}</dd></div>
+              <div><dt>Situação</dt><dd>Ativo</dd></div>
+              <div><dt>Horário de entrada (servidor)</dt><dd>${new Date(created.time).toLocaleString("pt-BR", { dateStyle: "medium", timeStyle: "medium", timeZone: "America/Sao_Paulo" })}</dd></div>
+              <div><dt>Snapshot da tarifa</dt><dd>v6 · R$ 30,00</dd></div>
+              <div><dt>Operador (servidor)</dt><dd>Marina Duarte</dd></div>
+            </dl>
+            <p class="field hint">Campos sensíveis foram limpos desta tela. Nenhum armazenamento local mantém documento ou vistoria.</p>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:.6rem">
+            <button class="btn btn-primary" type="button" id="new-check-in">Novo check-in</button>
+            <a class="btn" href="#attendances">Abrir lista de atendimentos</a>
+          </div>
+        `;
+        $("copy-identifier").addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(created.identifier);
+            toast("Identificador copiado para a área de transferência.");
+          } catch {
+            toast("Área de transferência indisponível. O identificador permanece selecionável como texto.", "warn");
+          }
+        });
+        $("new-check-in").addEventListener("click", resetForm);
+        region.focus?.();
+      }
+
+      function renderUncertain() {
+        const region = $("result-region");
+        region.hidden = false;
+        region.className = "card success-panel";
+        region.innerHTML = `
+          <div class="alert warn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+            <div>
+              <strong>O resultado é desconhecido.</strong>
+              <p>A conexão caiu após o envio. Não inicie um novo check-in: repita a mesma chave e o mesmo conteúdo para saber se a entrada foi confirmada.</p>
+            </div>
+          </div>
+          <div class="keyline">Chave mantida em memória: ${state.key.slice(0, 8)}…${state.key.slice(-4)} · mesma placa, vaga e vistoria</div>
+          <div style="display:flex;flex-wrap:wrap;gap:.6rem">
+            <button class="btn btn-primary" type="button" id="replay">Repetir com a mesma chave</button>
+          </div>
+          <p class="field hint">Navegação e saída permanecem bloqueadas até a repetição ser resolvida. Se o navegador for fechado, esta tentativa é perdida.</p>
+        `;
+        $("replay").addEventListener("click", () => submitAttempt(true));
+      }
+
+      function renderRejected(reason) {
+        const region = $("result-region");
+        region.hidden = false;
+        region.className = "card success-panel";
+        region.innerHTML = `
+          <div class="alert error">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+            <div>
+              <strong>O check-in foi rejeitado (${reason.code}).</strong>
+              <p>${reason.text}</p>
+            </div>
+          </div>
+          <p class="field hint">O formulário manteve seus dados para correção. Nada foi enviado automaticamente e uma nova chave foi gerada para a próxima tentativa explícita.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:.6rem">
+            <button class="btn" type="button" id="fix-form">Corrigir o formulário</button>
+          </div>
+        `;
+        $("fix-form").addEventListener("click", () => {
+          $("plate").focus();
+          if (reason.code === "space_conflict") $("choose-space").focus();
+        });
+      }
+
+      function resetForm() {
+        $("check-in-form").reset();
+        state.space = null;
+        state.attempt = null;
+        state.key = crypto.randomUUID();
+        updateKeyLine();
+        $("space").value = "";
+        $("inspection-counter").textContent = "0 / 4000";
+        $("form-summary").hidden = true;
+        clearFieldErrors();
+        setPhase("idle");
+        $("result-region").hidden = true;
+        $("result-region").innerHTML = "";
+        renderRate();
+      }
+
+      function renderSpaces(filter = "") {
+        const visible = spaces.filter((s) => s.code.includes(filter.toUpperCase()));
+        $("space-list").innerHTML = visible
+          .map(
+            (space) => `
+            <div class="space-option">
+              <div>
+                <code>${space.code}</code>
+                <span class="badge ${space.free ? "" : "blocked"}" style="margin-left:.5rem">${space.free ? "Livre" : "Ocupada"}</span>
+              </div>
+              <button class="btn ${space.free ? "" : "btn-ghost"}" type="button" data-space="${space.code}" ${space.free ? "" : "disabled"}>
+                ${space.free ? "Selecionar" : "Indisponível"}
+              </button>
+            </div>`,
+          )
+          .join("");
+        $("space-list").querySelectorAll("[data-space]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.space = button.dataset.space;
+            $("space").value = state.space;
+            $("space").setAttribute("aria-invalid", "false");
+            $("error-space").hidden = true;
+            $("space-dialog").close();
+            toast(`Space ${state.space} selected. It is not reserved until confirmation.`);
+          });
+        });
+      }
+
+      function setRole(role) {
+        state.role = role;
+        const allowed = role === "Administrador" || role === "Caixa";
+        $("allowed").hidden = !allowed;
+        $("denied").hidden = allowed;
+        $("avatar").textContent = role === "Administrador" ? "MD" : role === "Caixa" ? "RL" : "BS";
+        $("session-name").textContent = role === "Administrador" ? "Marina Duarte" : role === "Caixa" ? "Rafael Lima" : "Bruno Salles";
+        $("session-role").textContent = `${role === "Administrador" ? "Administrador" : role === "Caixa" ? "Caixa" : "Manobrista"} · sessão verificada`;
+      }
+
+      $("profile-switch").addEventListener("change", (event) => setRole(event.target.value));
+      $("back-to-admin").addEventListener("click", () => {
+        $("profile-switch").value = "Administrador";
+        setRole("Administrador");
+      });
+      $("choose-space").addEventListener("click", () => {
+        renderSpaces();
+        $("space-dialog").showModal();
+      });
+      $("close-space").addEventListener("click", () => $("space-dialog").close());
+      $("cancel-space").addEventListener("click", () => $("space-dialog").close());
+      $("refresh-spaces").addEventListener("click", () => {
+        renderSpaces();
+        toast("Disponibilidade atualizada. A seleção atual foi preservada.");
+      });
+      $("rate-simulation").addEventListener("change", renderRate);
+      $("show-unsaved").addEventListener("change", (event) => {
+        if (event.target.checked) {
+          toast("Aviso de saída ativado. O navegador pedirá confirmação antes de sair.", "warn");
+          window.onbeforeunload = () => "Uma tentativa de check-in é mantida apenas em memória.";
+        } else {
+          window.onbeforeunload = null;
+        }
+      });
+      $("inspection").addEventListener("input", (event) => {
+        $("inspection-counter").textContent = `${event.target.value.length} / 4000`;
+      });
+
+      $("check-in-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (state.phase === "pending" || state.phase === "uncertain") {
+          toast("Já existe um check-in pendente ou incerto.", "warn");
+          return;
+        }
+        if ($("rate-simulation").value === "missing") {
+          setPhase("rejected");
+          state.key = crypto.randomUUID();
+          updateKeyLine();
+          renderRejected({ code: "business_rule_not_satisfied", text: "Nenhuma tarifa diária está publicada. Publique uma tarifa positiva antes do check-in." });
+          return;
+        }
+        const attempt = validate();
+        if (!attempt) return;
+        state.attempt = {
+          ...attempt,
+          identifier: `AT-2026-${String(120000 + Math.floor(Math.random() * 80000))}`,
+        };
+        $("form-summary").hidden = true;
+        submitAttempt(false);
+      });
+
+      $("clear-form").addEventListener("click", (event) => {
+        event.preventDefault();
+        resetForm();
+      });
+      $("logout").addEventListener("click", (event) => {
+        if (state.phase === "pending" || state.phase === "uncertain") {
+          event.preventDefault();
+          toast("Saída bloqueada: há um comando pendente ou incerto.", "warn");
+          return;
+        }
+        toast("Na aplicação real, a sessão é revogada no servidor. Estado do protótipo reiniciado.");
+        resetForm();
+      });
+      $("main-nav").querySelectorAll("a").forEach((link) => link.addEventListener("click", blockNavigation));
+
+      window.addEventListener("beforeunload", (event) => {
+        if (state.phase === "pending" || state.phase === "uncertain" || $("show-unsaved").checked) {
+          event.preventDefault();
+          event.returnValue = "Uma tentativa de check-in é mantida apenas em memória.";
+          return event.returnValue;
+        }
+      });
+
+      renderRate();
+      renderSpaces();
+      updateKeyLine();
+      setPhase("idle");
+    </script>
+  </body>
+</html>

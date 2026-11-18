@@ -1,0 +1,1234 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Busca, detalhe e leituras sensíveis auditadas de atendimentos
+  Requisitos/cenários cobertos (specs/consulta-atendimentos):
+  - Busca por placa / busca por identificador / filtros ausentes ou combinados / nenhum resultado
+  - Listagem sem conteúdo sensível / dados financeiros fora do perfil / acesso negado no servidor
+  - Leitura de documento autorizada / leitura de vistoria pelos três perfis / falha de auditoria ou decifragem / manobrista e documento
+  - Troca rápida de seleção / fechamento antes da resposta / saída durante a consulta
+  - Cópia do identificador / falha ao copiar / leitura por tecnologia assistiva
+  Também cobre specs/shell-acesso-frontend (interface por perfil) e specs/atendimentos (exibição do identificador).
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento. Recarregar restaura os dados.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Atendimentos</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --surface: #0f172a;
+        --surface-2: #111c33;
+        --raised: #1e293b;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.12);
+        --ok: #34d399;
+        --ok-soft: rgba(52, 211, 153, 0.12);
+        --warn: #fbbf24;
+        --warn-soft: rgba(251, 191, 36, 0.12);
+        --danger: #fb7185;
+        --danger-soft: rgba(251, 113, 133, 0.12);
+        --radius: 14px;
+        --space: 1rem;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+      h1,
+      h2,
+      h3,
+      p,
+      dl,
+      dd,
+      dt {
+        margin: 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      .skip-link {
+        position: absolute;
+        left: -999px;
+        top: 0;
+        z-index: 30;
+        padding: 0.5rem 1rem;
+        background: var(--accent);
+        color: var(--bg);
+        font-weight: 600;
+      }
+      .skip-link:focus {
+        left: 0;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+      .prototype-banner {
+        padding: 0.5rem var(--space);
+        background: color-mix(in srgb, var(--warn) 16%, var(--bg));
+        border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+        color: var(--warn);
+        font-size: 0.8125rem;
+      }
+      .shell-header {
+        border-bottom: 1px solid var(--border);
+        background: rgba(2, 6, 23, 0.85);
+        backdrop-filter: blur(6px);
+      }
+      .shell-inner,
+      main {
+        width: min(80rem, 100% - 2 * var(--space));
+        margin-inline: auto;
+      }
+      .shell-inner {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 0.75rem var(--space);
+        padding-block: 0.9rem;
+      }
+      .shell-inner > .brand {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .shell-inner > .session {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+      }
+      .shell-inner > nav {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+      .shell-inner .nav {
+        justify-content: center;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-weight: 600;
+      }
+      .brand svg {
+        color: var(--accent);
+      }
+      .brand small {
+        display: block;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .nav a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.65rem;
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 0.875rem;
+        text-decoration: none;
+      }
+      .nav a:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .nav a[aria-current="page"] {
+        color: var(--accent);
+        background: var(--accent-soft);
+        font-weight: 600;
+      }
+      .session {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .session strong {
+        color: var(--text);
+        font-weight: 600;
+        display: block;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+      }
+      select,
+      input,
+      textarea {
+        font: inherit;
+        color: var(--text);
+        background: #0b1220;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        padding: 0.55rem 0.7rem;
+        width: 100%;
+      }
+      select:focus,
+      input:focus,
+      textarea:focus {
+        border-color: var(--accent);
+      }
+      main {
+        padding-block: 1.75rem 4rem;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1 {
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+        line-height: 1.15;
+        margin-top: 0.2rem;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-top: 0.35rem;
+        max-width: 56rem;
+      }
+      .layout {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(0, 1.5fr) minmax(20rem, 1fr);
+        align-items: start;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding: var(--space);
+        border-bottom: 1px solid var(--border);
+      }
+      .card-head h2 {
+        font-size: 1.05rem;
+      }
+      .tabs {
+        display: flex;
+        gap: 0.25rem;
+        padding: 0.75rem var(--space) 0;
+      }
+      .tabs [role="tab"] {
+        border: 1px solid transparent;
+        border-bottom: 2px solid transparent;
+        border-radius: 8px 8px 0 0;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        padding: 0.45rem 0.75rem;
+        cursor: pointer;
+      }
+      .tabs [role="tab"][aria-selected="true"] {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+        background: var(--surface-2);
+      }
+      .search-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 0.6rem;
+        padding: 0.75rem var(--space) var(--space);
+      }
+      .field {
+        display: grid;
+        gap: 0.35rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+      .field label,
+      .field .label {
+        font-weight: 600;
+        color: var(--text);
+      }
+      .field .hint {
+        font-size: 0.75rem;
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .search-field {
+        flex: 1;
+        min-width: 13rem;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        border-radius: 9px;
+        border: 1px solid var(--border-strong);
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        padding: 0.55rem 0.9rem;
+        cursor: pointer;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #04121f;
+      }
+      .btn-primary:hover {
+        background: #7dd3fc;
+        color: #04121f;
+      }
+      .btn-ghost {
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-sm {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.8rem;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      caption {
+        text-align: left;
+        padding: 0.75rem var(--space);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.75rem var(--space);
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+      }
+      thead th {
+        color: var(--muted);
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 600;
+        background: var(--surface-2);
+      }
+      tbody tr {
+        cursor: pointer;
+      }
+      tbody tr:hover {
+        background: rgba(30, 41, 59, 0.45);
+      }
+      tbody tr[aria-selected="true"] {
+        background: var(--accent-soft);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+      }
+      .plate {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+      .status::before {
+        content: "";
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 999px;
+        background: currentColor;
+      }
+      .status.active {
+        color: var(--ok);
+      }
+      .pagination {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem var(--space);
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+      .pages {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .pages button {
+        min-width: 2.25rem;
+        padding-inline: 0.5rem;
+      }
+      .alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        border: 1px solid transparent;
+      }
+      .alert svg {
+        flex: none;
+        margin-top: 0.1rem;
+      }
+      .alert.error {
+        background: var(--danger-soft);
+        border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+        color: #fecdd3;
+      }
+      .alert.warn {
+        background: var(--warn-soft);
+        border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+        color: #fde68a;
+      }
+      .alert.ok {
+        background: var(--ok-soft);
+        border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+        color: #a7f3d0;
+      }
+      .alert.info {
+        background: var(--accent-soft);
+        border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        color: #bae6fd;
+      }
+      .alert ul {
+        margin: 0.35rem 0 0;
+        padding-left: 1.1rem;
+      }
+      .empty {
+        padding: 2.5rem var(--space);
+        text-align: center;
+        color: var(--muted);
+      }
+      .empty strong {
+        display: block;
+        color: var(--text);
+        margin-bottom: 0.35rem;
+      }
+      .detail {
+        display: grid;
+        gap: 1rem;
+      }
+      .detail-body {
+        padding: var(--space);
+        display: grid;
+        gap: 1rem;
+      }
+      .identifier {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .identifier code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 700;
+        font-size: 1rem;
+        background: var(--surface-2);
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        padding: 0.25rem 0.55rem;
+        user-select: all;
+      }
+      .detail-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .detail-grid dt {
+        color: var(--muted);
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      .detail-grid dd {
+        margin-top: 0.15rem;
+        font-weight: 600;
+      }
+      .restricted {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.7rem;
+        border: 1px dashed var(--border-strong);
+        border-radius: 9px;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .history {
+        display: grid;
+        gap: 0.75rem;
+        padding: var(--space);
+        list-style: none;
+        margin: 0;
+      }
+      .history li {
+        display: grid;
+        gap: 0.15rem;
+        padding-left: 1rem;
+        border-left: 2px solid var(--border-strong);
+      }
+      .history strong {
+        font-size: 0.875rem;
+      }
+      .history span {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+      .placeholder {
+        display: grid;
+        gap: 0.5rem;
+        justify-items: start;
+        padding: 2.5rem var(--space);
+        color: var(--muted);
+      }
+      .denied {
+        display: grid;
+        justify-items: start;
+        gap: 0.75rem;
+        padding: 2.5rem;
+      }
+      .denied svg {
+        color: var(--danger);
+      }
+      dialog {
+        width: min(36rem, calc(100vw - 1.5rem));
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text);
+        padding: 0;
+      }
+      dialog::backdrop {
+        background: rgba(2, 6, 23, 0.72);
+        backdrop-filter: blur(2px);
+      }
+      .dialog-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.15rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .dialog-head h2 {
+        font-size: 1.1rem;
+      }
+      .dialog-head p {
+        color: var(--muted);
+        font-size: 0.8125rem;
+        margin-top: 0.2rem;
+      }
+      .dialog-body {
+        padding: 1.15rem;
+        display: grid;
+        gap: 0.9rem;
+        min-height: 8rem;
+      }
+      .dialog-foot {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding: 0.9rem 1.15rem;
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+      }
+      .sensitive {
+        padding: 0.9rem;
+        border-radius: 10px;
+        background: var(--surface-2);
+        border: 1px solid var(--border-strong);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9rem;
+        white-space: pre-wrap;
+      }
+      .spinner {
+        width: 1.3rem;
+        height: 1.3rem;
+        border-radius: 999px;
+        border: 2px solid var(--border-strong);
+        border-top-color: var(--accent);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation: none;
+        }
+      }
+      .toast {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 40;
+        width: min(24rem, calc(100vw - 2rem));
+      }
+      .toast:empty {
+        display: none;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @media (max-width: 64rem) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 48rem) {
+        .shell-inner {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .shell-inner > .brand {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .shell-inner > .session {
+          grid-column: 1;
+          grid-row: 2;
+          justify-self: start;
+        }
+        .shell-inner > nav {
+          grid-column: 1;
+          grid-row: 3;
+        }
+        .shell-inner .nav {
+          justify-content: flex-start;
+          width: 100%;
+        }
+        .detail-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">
+      Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.
+    </p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+          </svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#employees">Funcionários</a></li>
+            <li><a href="#spaces">Vagas</a></li>
+            <li><a href="#rates">Tarifa diária</a></li>
+            <li><a href="#attendances" aria-current="page">Atendimentos</a></li>
+            <li><a href="#check-in">Check-in</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div>
+            <strong id="session-name">Marina Duarte</strong>
+            <span id="session-role">Administrador · sessão verificada</span>
+          </div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width: auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Operação</p>
+          <h1>Atendimentos</h1>
+          <p class="subtitle">
+            Busca exata por placa ou identificador público. As listagens nunca incluem o documento do titular
+            nem a vistoria; esses dados exigem leitura explícita e auditada e são projetados por perfil.
+          </p>
+        </div>
+      </div>
+
+      <div class="layout">
+        <div>
+          <section class="card" aria-labelledby="search-title">
+            <div class="card-head">
+              <h2 id="search-title">Localizar atendimento</h2>
+              <span class="field hint">Exatamente um critério por busca</span>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Critério de busca">
+              <button role="tab" id="tab-plate" aria-selected="true" aria-controls="search-panel" type="button">Placa</button>
+              <button role="tab" id="tab-identifier" aria-selected="false" aria-controls="search-panel" type="button">Identificador</button>
+            </div>
+
+            <div id="search-panel" role="tabpanel" aria-labelledby="tab-plate">
+              <form class="search-row" id="search-form" novalidate>
+                <div class="field search-field">
+                  <label for="search-input" id="search-label">Placa</label>
+                  <input id="search-input" autocomplete="off" placeholder="ABC1D23" />
+                  <span class="hint" id="search-hint">Espaços e hífens são ignorados; a busca é exata após normalização.</span>
+                  <span class="error" id="search-error" hidden style="color: #fda4af; font-size: 0.75rem; font-weight: 500"></span>
+                </div>
+                <button class="btn btn-primary" type="submit">Buscar</button>
+                <button class="btn" type="button" id="clear-search">Limpar</button>
+              </form>
+            </div>
+
+            <div id="search-feedback" hidden style="padding: 0 var(--space) var(--space)"></div>
+
+            <div id="search-loading" hidden style="padding: 0 var(--space) var(--space)">
+              <div class="alert info">
+                <span class="spinner" aria-hidden="true"></span>
+                <p id="loading-message">Buscando…</p>
+              </div>
+            </div>
+
+            <div id="results-region" hidden>
+              <div class="table-wrap">
+                <table>
+                  <caption id="results-caption"></caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Identificador</th>
+                      <th scope="col">Placa</th>
+                      <th scope="col">Modelo</th>
+                      <th scope="col">Titular</th>
+                      <th scope="col">Vaga</th>
+                      <th scope="col">Situação</th>
+                      <th scope="col">Entrada</th>
+                    </tr>
+                  </thead>
+                  <tbody id="results-body"></tbody>
+                </table>
+              </div>
+              <div id="results-empty" class="empty" hidden>
+                <strong>Nenhum atendimento encontrado</strong>
+                <p>Confira a placa ou o identificador. Esta resposta não revela se o valor existe em outro contexto.</p>
+              </div>
+              <div class="pagination">
+                <span id="results-summary"></span>
+                <div class="pages" role="group" aria-label="Paginação dos resultados">
+                  <button class="btn btn-ghost" id="results-prev" type="button">Anterior</button>
+                  <span id="results-indicator" class="field hint"></span>
+                  <button class="btn btn-ghost" id="results-next" type="button">Próxima</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="results-placeholder" class="placeholder">
+              <strong style="color: var(--text)">Comece por uma placa ou um identificador público</strong>
+              <p>Exemplos: a placa <code>ABC1D23</code> possui duas visitas distintas; o identificador <code>AT-2026-118204</code>.</p>
+            </div>
+          </section>
+        </div>
+
+        <aside>
+          <section class="card detail" id="detail-card" hidden aria-labelledby="detail-title">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Detalhe do atendimento</p>
+                <h2 id="detail-title">—</h2>
+              </div>
+              <button class="btn btn-ghost btn-sm" id="close-detail" type="button">Fechar</button>
+            </div>
+            <div class="detail-body" id="detail-body"></div>
+          </section>
+
+          <section class="card placeholder" id="detail-placeholder">
+            <strong style="color: var(--text)">Nenhum atendimento selecionado</strong>
+            <p>Selecione um resultado para ver o detalhe operacional, a projeção por perfil e o histórico.</p>
+          </section>
+
+          <section class="card" style="margin-top: 1rem" aria-labelledby="scenarios-title">
+            <div class="card-head" style="padding: 0.85rem 1rem">
+              <h2 id="scenarios-title" style="font-size: 0.95rem">Cenários do protótipo</h2>
+            </div>
+            <div style="display: grid; gap: 0.75rem; padding: var(--space)">
+              <label style="display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: var(--muted)">
+                <input type="checkbox" id="slow-search" style="width: 1rem; height: 1rem" />
+                Busca lenta (3 s) — permite trocar a seleção antes da resposta
+              </label>
+              <label style="display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: var(--muted)">
+                <input type="checkbox" id="fail-audit" style="width: 1rem; height: 1rem" />
+                Falhar a auditoria das leituras sensíveis
+              </label>
+              <label style="display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: var(--muted)">
+                <input type="checkbox" id="slow-read" style="width: 1rem; height: 1rem" />
+                Leitura sensível lenta (2,5 s)
+              </label>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <dialog id="read-dialog" aria-labelledby="read-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="read-title">Leitura explícita</h2>
+          <p id="read-subtitle"></p>
+        </div>
+        <button class="btn btn-ghost" type="button" id="close-read" aria-label="Fechar leitura">Fechar</button>
+      </div>
+      <div class="dialog-body" id="read-body"></div>
+      <div class="dialog-foot">
+        <span class="field hint" id="read-audit-note"></span>
+        <button class="btn" type="button" id="dismiss-read">Dispensar</button>
+      </div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const attendances = [
+        {
+          id: 101, identifier: "AT-2026-118204", plate: "ABC1D23", model: "Hatch compacto", holder: "Ana Beatriz Ferreira",
+          document: "ID 41.882.310-7", space: "A-05", status: "Ativo", enteredAt: "2026-11-18T12:14:00Z",
+          inspection: "Pequeno risco na porta traseira esquerda. Pneu dianteiro direito com desgaste visível. Estepe e macaco presentes. Nenhum pertence à vista.",
+          rate: "v6 · R$ 30,00", history: [
+            { event: "Atendimento criado no check-in", at: "2026-11-18T12:14:00Z", actor: "Marina Duarte" },
+            { event: "Vaga A-05 ocupada", at: "2026-11-18T12:14:00Z", actor: "Marina Duarte" },
+            { event: "Auditoria do check-in registrada", at: "2026-11-18T12:14:00Z", actor: "sistema" },
+          ],
+        },
+        {
+          id: 102, identifier: "AT-2026-117890", plate: "ABC1D23", model: "Hatch compacto", holder: "Ana Beatriz Ferreira",
+          document: "ID 41.882.310-7", space: "B-02", status: "Ativo", enteredAt: "2026-11-16T09:02:00Z",
+          inspection: "Lataria limpa. Pequeno atrito no para-choque traseiro. Nível de combustível abaixo de um quarto. Cadeirinha infantil no banco traseiro direito.",
+          rate: "v5 · R$ 27,50", history: [
+            { event: "Atendimento criado no check-in", at: "2026-11-16T09:02:00Z", actor: "Rafael Lima" },
+            { event: "Vaga B-02 ocupada", at: "2026-11-16T09:02:00Z", actor: "Rafael Lima" },
+            { event: "Documento lido (explícito, auditado)", at: "2026-11-16T10:20:00Z", actor: "Marina Duarte" },
+          ],
+        },
+        {
+          id: 103, identifier: "AT-2026-115377", plate: "XYZ9K88", model: "Sedan médio", holder: "Carlos Eduardo Nogueira",
+          document: "ID 77.120.554-2", space: "A-09", status: "Ativo", enteredAt: "2026-11-17T18:41:00Z",
+          inspection: "Bagageiro de teto instalado. Pequena trinca no para-brisa. Os quatro pneus acima de meio desgaste. Guarda-chuva no banco traseiro.",
+          rate: "v5 · R$ 27,50", history: [
+            { event: "Atendimento criado no check-in", at: "2026-11-17T18:41:00Z", actor: "Rafael Lima" },
+            { event: "Vaga A-09 ocupada", at: "2026-11-17T18:41:00Z", actor: "Rafael Lima" },
+          ],
+        },
+        {
+          id: 104, identifier: "AT-2026-109120", plate: "QWE2M44", model: "Picape", holder: "Fernanda Souza Ribeiro",
+          document: "ID 55.993.201-4", space: "A-02", status: "Ativo", enteredAt: "2026-11-15T07:55:00Z",
+          inspection: "Cobertura da caçamba travada. Amassado grande no para-lama traseiro direito. Pneus trocados recentemente. Caixa de ferramentas na caçamba.",
+          rate: "v4 · R$ 25,00", history: [
+            { event: "Atendimento criado no check-in", at: "2026-11-15T07:55:00Z", actor: "Marina Duarte" },
+            { event: "Vaga A-02 ocupada", at: "2026-11-15T07:55:00Z", actor: "Marina Duarte" },
+          ],
+        },
+      ];
+
+      const state = {
+        criterion: "plate",
+        results: [],
+        page: 1,
+        pageSize: 5,
+        selected: null,
+        role: "Administrador",
+        searchToken: 0,
+        readToken: 0,
+        searching: false,
+      };
+
+      const $ = (id) => document.getElementById(id);
+
+      function normalizePlate(text) {
+        return text.replace(/[\s-]/g, "").toUpperCase();
+      }
+
+      function fmt(iso) {
+        return new Date(iso).toLocaleString("pt-BR", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+      }
+
+      function toast(message, tone = "ok") {
+        $("toast").innerHTML = `<div class="alert ${tone}">${message}</div>`;
+        window.clearTimeout(toast.timer);
+        toast.timer = window.setTimeout(() => ($("toast").innerHTML = ""), 4600);
+      }
+
+      function setCriterion(criterion) {
+        state.criterion = criterion;
+        $("tab-plate").setAttribute("aria-selected", criterion === "plate" ? "true" : "false");
+        $("tab-identifier").setAttribute("aria-selected", criterion === "identifier" ? "true" : "false");
+        $("search-panel").setAttribute("aria-labelledby", criterion === "plate" ? "tab-plate" : "tab-identifier");
+        $("search-label").textContent = criterion === "plate" ? "Plate" : "Public identifier";
+        $("search-input").placeholder = criterion === "plate" ? "ABC1D23" : "AT-2026-118204";
+        $("search-hint").textContent =
+          criterion === "plate"
+            ? "Espaços e hífens são ignorados; a busca é exata após normalização."
+            : "Identificador exato exibido na confirmação do check-in.";
+        $("search-input").value = "";
+        $("search-error").hidden = true;
+      }
+
+      function renderResults() {
+        $("results-placeholder").hidden = state.searching || state.results.length > 0 || $("results-region").hidden === false;
+        const totalPages = Math.max(1, Math.ceil(state.results.length / state.pageSize));
+        state.page = Math.min(state.page, totalPages);
+        const start = (state.page - 1) * state.pageSize;
+        const slice = state.results.slice(start, start + state.pageSize);
+
+        $("results-region").hidden = false;
+        $("results-body").innerHTML = slice
+          .map(
+            (item) => `
+            <tr tabindex="0" data-id="${item.id}" aria-selected="${state.selected === item.id}" role="button" aria-label="Abrir atendimento ${item.identifier}">
+              <td><span class="mono">${item.identifier}</span></td>
+              <td><span class="plate">${item.plate}</span></td>
+              <td>${item.model}</td>
+              <td>${item.holder}</td>
+              <td><span class="mono">${item.space}</span></td>
+              <td><span class="status active">${item.status}</span></td>
+              <td><span class="field hint">${fmt(item.enteredAt)}</span></td>
+            </tr>`,
+          )
+          .join("");
+
+        $("results-body").querySelectorAll("tr[data-id]").forEach((row) => {
+          const open = () => selectAttendance(Number(row.dataset.id));
+          row.addEventListener("click", open);
+          row.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              open();
+            }
+          });
+        });
+
+        $("results-empty").hidden = state.results.length !== 0;
+        $("results-caption").textContent = state.results.length
+          ? `${state.results.length} visita${state.results.length === 1 ? "" : "s"} encontrada${state.results.length === 1 ? "" : "s"} · página ${state.page} de ${totalPages}`
+          : "Nenhum resultado para esta busca exata.";
+        $("results-summary").textContent = `Página ${state.page} de ${totalPages}`;
+        $("results-indicator").textContent = `${state.page} / ${totalPages}`;
+        $("results-prev").disabled = state.page === 1;
+        $("results-next").disabled = state.page === totalPages;
+      }
+
+      function flashSearch(message, tone = "error") {
+        const box = $("search-feedback");
+        box.hidden = false;
+        box.innerHTML = `<div class="alert ${tone}">${message}</div>`;
+      }
+
+      function clearSearchFeedback() {
+        $("search-feedback").hidden = true;
+        $("search-feedback").innerHTML = "";
+      }
+
+      function runSearch() {
+        const value = $("search-input").value.trim();
+        $("search-error").hidden = true;
+        $("results-placeholder").hidden = true;
+        if (!value) {
+          $("search-error").textContent = "Informe um valor para exatamente um critério.";
+          $("search-error").hidden = false;
+          $("search-input").setAttribute("aria-invalid", "true");
+          $("search-input").focus();
+          return;
+        }
+        $("search-input").setAttribute("aria-invalid", "false");
+        const token = ++state.searchToken;
+        state.searching = true;
+        if (state.results.length === 0) {
+          $("results-region").hidden = true;
+        }
+        $("results-placeholder").hidden = true;
+        $("search-loading").hidden = false;
+        $("loading-message").innerHTML =
+          state.criterion === "plate"
+            ? `Buscando placa exata <strong>${normalizePlate(value)}</strong>…`
+            : `Buscando identificador <strong>${value.toUpperCase()}</strong>…`;
+        $("search-loading").scrollIntoView({ block: "nearest" });
+
+        const finish = () => {
+          if (token !== state.searchToken) {
+            return;
+          }
+          state.searching = false;
+          $("search-loading").hidden = true;
+          const matches =
+            state.criterion === "plate"
+              ? attendances.filter((item) => item.plate === normalizePlate(value))
+              : attendances.filter((item) => item.identifier === value.toUpperCase());
+          state.results = matches;
+          state.page = 1;
+          state.selected = null;
+          closeDetail();
+          clearSearchFeedback();
+          renderResults();
+        };
+
+        if ($("slow-search").checked) {
+          window.setTimeout(() => {
+            if (token !== state.searchToken) {
+              return;
+            }
+            finish();
+          }, 3000);
+        } else {
+          window.setTimeout(finish, 400);
+        }
+      }
+
+      function selectAttendance(id) {
+        if (state.searching) {
+          state.searchToken += 1;
+          state.searching = false;
+          $("search-loading").hidden = true;
+          toast("Seleção alterada antes da resposta. O resultado tardio foi descartado.", "warn");
+        }
+        state.selected = id;
+        const item = attendances.find((attendance) => attendance.id === id);
+        renderDetail(item);
+        renderResults();
+      }
+
+      function closeDetail() {
+        state.selected = null;
+        state.readToken += 1;
+        $("detail-card").hidden = true;
+        $("detail-placeholder").hidden = false;
+        if ($("read-dialog").open) {
+          state.readToken += 1;
+          $("read-dialog").close();
+        }
+      }
+
+      function renderDetail(item) {
+        $("detail-card").hidden = false;
+        $("detail-placeholder").hidden = true;
+        $("detail-title").textContent = item.identifier;
+
+        const isAttendant = state.role === "Manobrista";
+        const canReadDocument = !isAttendant;
+
+        $("detail-body").innerHTML = `
+          <div class="identifier">
+            <code>${item.identifier}</code>
+            <button class="btn btn-sm" type="button" id="copy-detail">Copiar</button>
+          </div>
+          <dl class="detail-grid">
+            <div><dt>Placa</dt><dd class="plate">${item.plate}</dd></div>
+            <div><dt>Modelo</dt><dd>${item.model}</dd></div>
+            <div><dt>Titular</dt><dd>${item.holder}</dd></div>
+            <div><dt>Vaga</dt><dd class="mono">${item.space}</dd></div>
+            <div><dt>Situação</dt><dd><span class="status active">${item.status}</span></dd></div>
+            <div><dt>Entrada (servidor, UTC)</dt><dd class="mono" style="font-size:.8rem">${item.enteredAt}</dd></div>
+          </dl>
+          ${
+            isAttendant
+              ? `<div class="restricted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Snapshot da tarifa e dados financeiros são omitidos da resposta ao Manobrista.</div>`
+              : `<dl class="detail-grid"><div><dt>Daily-rate snapshot</dt><dd>${item.rate}</dd></div><div><dt>Dados financeiros</dt><dd>Visível para este perfil</dd></div></dl>`
+          }
+          <div class="actions">
+            <button class="btn" type="button" id="read-inspection">Ler vistoria de entrada</button>
+            ${
+              canReadDocument
+                ? `<button class="btn" type="button" id="read-document">Ler documento do titular</button>`
+                : `<button class="btn" type="button" disabled title="Restrito a Caixa e Administrador">Documento do titular restrito</button>`
+            }
+          </div>
+          <div>
+            <h3 style="font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem">Histórico</h3>
+            <ul class="history">
+              ${item.history
+                .filter((event) => !isAttendant || !/documento|financeir|tarifa/i.test(event.event))
+                .map((event) => `<li><strong>${event.event}</strong><span>${fmt(event.at)} · ${event.actor}</span></li>`)
+                .join("")}
+            </ul>
+            ${isAttendant ? `<p class="field hint" style="margin-top:.5rem">Eventos financeiros e de documento são filtrados da projeção do Manobrista.</p>` : ""}
+          </div>
+        `;
+
+        $("copy-detail").addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(item.identifier);
+            toast("Identificador copiado para a área de transferência.");
+          } catch {
+            toast("Área de transferência indisponível. O identificador permanece selecionável como texto.", "warn");
+          }
+        });
+        $("read-inspection").addEventListener("click", () => openRead(item, "inspection"));
+        const docButton = $("read-document");
+        if (docButton) docButton.addEventListener("click", () => openRead(item, "document"));
+      }
+
+      function openRead(item, kind) {
+        const token = ++state.readToken;
+        const title = kind === "document" ? "Documento do titular" : "Vistoria de entrada";
+        $("read-title").textContent = title;
+        $("read-subtitle").textContent = `${item.identifier} · ${item.plate} · leitura explícita`;
+        $("read-audit-note").textContent = "O evento de auditoria é registrado antes de o conteúdo ser retornado.";
+        $("read-body").innerHTML = `<div class="alert info"><span class="spinner" aria-hidden="true"></span><p>Auditando a leitura e decifrando o campo…</p></div>`;
+        $("read-dialog").showModal();
+
+        const delay = $("slow-read").checked ? 2500 : 600;
+        window.setTimeout(() => {
+          if (token !== state.readToken) return;
+          if ($("fail-audit").checked) {
+            $("read-body").innerHTML = `<div class="alert error"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><strong>O conteúdo não foi retornado.</strong><p>O evento de auditoria não pôde ser confirmado. Sem texto puro, sem valor vazio e sem conteúdo sensível no erro.</p></div></div>`;
+            $("read-audit-note").textContent = "Leitura bloqueada antes da exposição do conteúdo.";
+            return;
+          }
+          $("read-body").innerHTML = `<div class="alert ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><p><strong>Leitura auditada.</strong> Ator, alvo e horário do servidor foram registrados antes de a decifragem retornar este valor.</p></div><div class="sensitive">${kind === "document" ? item.document : item.inspection}</div>`;
+          $("read-audit-note").textContent = "Este conteúdo nunca é incluído em listas, detalhe genérico ou logs.";
+        }, delay);
+      }
+
+      function setRole(role) {
+        state.role = role;
+        $("avatar").textContent = role === "Administrador" ? "MD" : role === "Caixa" ? "RL" : "BS";
+        $("session-name").textContent = role === "Administrador" ? "Marina Duarte" : role === "Caixa" ? "Rafael Lima" : "Bruno Salles";
+        $("session-role").textContent = `${role === "Administrador" ? "Administrador" : role === "Caixa" ? "Caixa" : "Manobrista"} · sessão verificada`;
+        $("detail-placeholder").innerHTML =
+          role === "Manobrista"
+            ? "<strong style=\"color:var(--text)\">Projeção do Manobrista</strong><p>Selecione um resultado. O servidor omite o documento do titular, o snapshot da tarifa e o histórico financeiro deste perfil.</p>"
+            : "<strong style=\"color:var(--text)\">Nenhum atendimento selecionado</strong><p>Selecione um resultado para ver o detalhe operacional, a projeção por perfil e o histórico.</p>";
+        if (state.selected) {
+          renderDetail(attendances.find((item) => item.id === state.selected));
+        }
+      }
+
+      $("tab-plate").addEventListener("click", () => setCriterion("plate"));
+      $("tab-identifier").addEventListener("click", () => setCriterion("identifier"));
+      $("search-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        runSearch();
+      });
+      $("clear-search").addEventListener("click", () => {
+        $("search-input").value = "";
+        $("search-error").hidden = true;
+        $("search-feedback").hidden = true;
+        $("results-region").hidden = true;
+        $("results-placeholder").hidden = false;
+        state.results = [];
+        closeDetail();
+      });
+      $("results-prev").addEventListener("click", () => {
+        state.page -= 1;
+        renderResults();
+      });
+      $("results-next").addEventListener("click", () => {
+        state.page += 1;
+        renderResults();
+      });
+      $("close-detail").addEventListener("click", closeDetail);
+      $("close-read").addEventListener("click", () => {
+        state.readToken += 1;
+        $("read-dialog").close();
+      });
+      $("dismiss-read").addEventListener("click", () => {
+        state.readToken += 1;
+        $("read-dialog").close();
+      });
+      $("profile-switch").addEventListener("change", (event) => setRole(event.target.value));
+
+      setRole("Administrador");
+    </script>
+  </body>
+</html>

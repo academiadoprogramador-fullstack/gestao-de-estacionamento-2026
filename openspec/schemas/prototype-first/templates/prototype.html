@@ -1,0 +1,126 @@
+<!doctype html>
+<!--
+  High-fidelity prototype — <flow or screen name>
+  Covered requirements/scenarios: <specs/capability, REQ-XX, scenario>
+  100% fictional data. No network, backend, or storage access.
+  This file is self-contained: open it directly in the browser (file://).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prototype — [flow or screen name]</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --background: #020617;
+        --surface: #0f172a;
+        --surface-raised: #1e293b;
+        --border: #334155;
+        --text: #e2e8f0;
+        --text-muted: #94a3b8;
+        --accent: #38bdf8;
+        --success: #34d399;
+        --warning: #fbbf24;
+        --danger: #fb7185;
+        --radius: 12px;
+        --space: 1rem;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--background);
+        color: var(--text);
+        line-height: 1.5;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .skip-link {
+        position: absolute;
+        left: -999px;
+        top: 0;
+        padding: 0.5rem 1rem;
+        background: var(--accent);
+        color: var(--background);
+      }
+
+      .skip-link:focus {
+        left: 0;
+        z-index: 10;
+      }
+
+      .prototype-banner {
+        padding: 0.5rem var(--space);
+        background: color-mix(in srgb, var(--warning) 18%, var(--background));
+        border-bottom: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+        color: var(--warning);
+        font-size: 0.8125rem;
+      }
+
+      .topbar,
+      main {
+        width: min(72rem, 100% - 2 * var(--space));
+        margin-inline: auto;
+      }
+
+      .topbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space);
+        padding-block: var(--space);
+      }
+
+      .card {
+        padding: var(--space);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+
+      /* TODO: real screen components (forms, tables, queue, inbox). */
+
+      @media (max-width: 48rem) {
+        /* TODO: adjust the mobile experience without horizontal scrolling. */
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <p class="prototype-banner" role="note">
+      High-fidelity prototype — fictional data, no backend. Reloading restores the data.
+    </p>
+
+    <header class="topbar">
+      <strong>Prototype — [flow or screen name]</strong>
+      <!-- TODO: prototype controls (switch profile, open states, navigate between screens). -->
+    </header>
+
+    <main id="content">
+      <section class="card" aria-labelledby="screen-title">
+        <h1 id="screen-title">[screen name]</h1>
+        <!-- TODO: screen content with fictional data. -->
+      </section>
+    </main>
+
+    <script>
+      "use strict";
+
+      // TODO: in-memory state and interactions (navigation, tabs, modals,
+      // validation, and the empty/loading/error/success/no-permission states).
+    </script>
+  </body>
+</html>

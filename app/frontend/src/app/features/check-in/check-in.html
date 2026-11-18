@@ -1,0 +1,370 @@
+<main class="mx-auto w-full max-w-6xl px-4 py-8 text-slate-100">
+  <header class="mb-6 flex items-center gap-3">
+    <svg lucideCalendarClock class="h-8 w-8 text-sky-400" aria-hidden="true"></svg>
+    <div>
+      <p class="text-xs font-semibold tracking-widest text-sky-400 uppercase">Operação</p>
+      <h1 class="text-2xl font-semibold text-white">Check-in</h1>
+      <p class="mt-1 text-sm text-slate-400">
+        Horário, operador, identificador e tarifa são definidos pelo servidor. A tentativa fica
+        somente na memória do navegador.
+      </p>
+    </div>
+  </header>
+
+  @if (resultado(); as entrada) {
+    <section
+      class="mb-6 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-5"
+      aria-labelledby="titulo-sucesso"
+    >
+      <h2
+        id="titulo-sucesso"
+        class="flex items-center gap-2 text-lg font-semibold text-emerald-200"
+      >
+        <svg lucideCheck class="h-5 w-5" aria-hidden="true"></svg>
+        Entrada registrada
+      </h2>
+      <p class="mt-2 text-sm text-emerald-100">
+        Vaga {{ entrada.vagaCodigo }} · estado {{ entrada.estado }} ·
+        {{ formatarDataHora(entrada.entradaUtc) }}
+      </p>
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        <p class="rounded-lg bg-slate-950/60 px-3 py-2 font-mono text-lg text-white select-all">
+          <span class="sr-only">Identificador público: </span>{{ entrada.identificador }}
+        </p>
+        <button
+          type="button"
+          (click)="copiarIdentificador()"
+          class="inline-flex items-center gap-2 rounded-lg border border-emerald-400/50 px-3 py-1.5 text-sm text-emerald-100 transition hover:bg-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+        >
+          <svg lucideCopy class="h-4 w-4" aria-hidden="true"></svg>
+          Copiar identificador
+        </button>
+      </div>
+      @if (mensagemCopia(); as mensagem) {
+        <p class="mt-2 text-sm text-emerald-100" role="status">{{ mensagem }}</p>
+      }
+      <button
+        type="button"
+        (click)="novoCheckIn()"
+        class="mt-4 rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      >
+        Registrar outra entrada
+      </button>
+    </section>
+  }
+
+  @if (coordenador.fase() === 'incerto') {
+    <section
+      class="mb-6 rounded-xl border border-amber-500/50 bg-amber-500/10 p-5"
+      role="alert"
+      aria-labelledby="titulo-incerto"
+    >
+      <h2 id="titulo-incerto" class="flex items-center gap-2 text-lg font-semibold text-amber-200">
+        <svg lucideRotateCcw class="h-5 w-5" aria-hidden="true"></svg>
+        Resultado incerto
+      </h2>
+      <p class="mt-2 text-sm text-amber-100">
+        A resposta do check-in se perdeu. A navegação e a saída estão bloqueadas. Repita a tentativa
+        para reenviar exatamente a mesma chave e o mesmo conteúdo, sem duplicar a entrada.
+      </p>
+      <button
+        type="button"
+        (click)="repetir()"
+        [disabled]="enviando()"
+        class="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-400 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:opacity-60"
+      >
+        @if (enviando()) {
+          <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+          Repetindo…
+        } @else {
+          Repetir tentativa
+        }
+      </button>
+    </section>
+  }
+
+  @if (erro(); as mensagem) {
+    <p
+      class="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+      role="alert"
+    >
+      <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
+      {{ mensagem }}
+    </p>
+  }
+
+  <div class="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+    <section
+      class="rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+      aria-labelledby="titulo-formulario"
+    >
+      <h2
+        id="titulo-formulario"
+        class="mb-3 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+      >
+        Dados da entrada
+      </h2>
+
+      @if (resumoVisivel() && formulario().invalid()) {
+        <div
+          #resumoErro
+          tabindex="-1"
+          role="alert"
+          class="mb-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+        >
+          <p class="font-medium">Corrija os campos destacados antes de registrar.</p>
+          <ul class="mt-1 list-disc pl-5">
+            @if (formulario.placa().invalid() || placaInvalida()) {
+              <li>A placa deve ter de 1 a 16 caracteres alfanuméricos.</li>
+            }
+            @if (formulario.modelo().invalid()) {
+              <li>{{ formulario.modelo().errors()[0]?.message }}</li>
+            }
+            @if (formulario.titular().invalid()) {
+              <li>{{ formulario.titular().errors()[0]?.message }}</li>
+            }
+            @if (formulario.documento().invalid()) {
+              <li>{{ formulario.documento().errors()[0]?.message }}</li>
+            }
+            @if (formulario.vistoria().invalid()) {
+              <li>{{ formulario.vistoria().errors()[0]?.message }}</li>
+            }
+            @if (formulario.vagaId().invalid()) {
+              <li>{{ formulario.vagaId().errors()[0]?.message }}</li>
+            }
+          </ul>
+        </div>
+      }
+
+      <form class="space-y-4" (submit)="submeter($event)" novalidate>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label for="placa" class="mb-1 block text-sm text-slate-200">Placa</label>
+            <input
+              id="placa"
+              type="text"
+              autocomplete="off"
+              [formField]="formulario.placa"
+              [attr.aria-invalid]="
+                formulario.placa().invalid() || placaInvalida() ? 'true' : 'false'
+              "
+              [attr.aria-describedby]="formulario.placa().touched() ? 'erro-placa' : null"
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 uppercase focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+              placeholder="ABC1D23"
+            />
+            @if (
+              formulario.placa().touched() && (formulario.placa().invalid() || placaInvalida())
+            ) {
+              <p id="erro-placa" class="mt-1 text-sm text-rose-300">
+                A placa deve ter de 1 a 16 caracteres alfanuméricos.
+              </p>
+            }
+          </div>
+
+          <div>
+            <label for="modelo-veiculo" class="mb-1 block text-sm text-slate-200">Modelo</label>
+            <input
+              id="modelo-veiculo"
+              type="text"
+              autocomplete="off"
+              [formField]="formulario.modelo"
+              [attr.aria-invalid]="formulario.modelo().invalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="
+                formulario.modelo().touched() && formulario.modelo().invalid()
+                  ? 'erro-modelo'
+                  : null
+              "
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            />
+            @if (formulario.modelo().touched() && formulario.modelo().invalid()) {
+              <p id="erro-modelo" class="mt-1 text-sm text-rose-300">
+                {{ formulario.modelo().errors()[0]?.message }}
+              </p>
+            }
+          </div>
+
+          <div>
+            <label for="titular" class="mb-1 block text-sm text-slate-200">Titular</label>
+            <input
+              id="titular"
+              type="text"
+              autocomplete="off"
+              [formField]="formulario.titular"
+              [attr.aria-invalid]="formulario.titular().invalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="
+                formulario.titular().touched() && formulario.titular().invalid()
+                  ? 'erro-titular'
+                  : null
+              "
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            />
+            @if (formulario.titular().touched() && formulario.titular().invalid()) {
+              <p id="erro-titular" class="mt-1 text-sm text-rose-300">
+                {{ formulario.titular().errors()[0]?.message }}
+              </p>
+            }
+          </div>
+
+          <div>
+            <label for="documento" class="mb-1 block text-sm text-slate-200"
+              >Documento do titular</label
+            >
+            <input
+              id="documento"
+              type="text"
+              autocomplete="off"
+              [formField]="formulario.documento"
+              [attr.aria-invalid]="formulario.documento().invalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="
+                formulario.documento().touched() && formulario.documento().invalid()
+                  ? 'erro-documento'
+                  : null
+              "
+              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            />
+            @if (formulario.documento().touched() && formulario.documento().invalid()) {
+              <p id="erro-documento" class="mt-1 text-sm text-rose-300">
+                {{ formulario.documento().errors()[0]?.message }}
+              </p>
+            }
+          </div>
+        </div>
+
+        <div>
+          <label for="vistoria" class="mb-1 block text-sm text-slate-200"
+            >Vistoria de entrada</label
+          >
+          <textarea
+            id="vistoria"
+            rows="5"
+            [formField]="formulario.vistoria"
+            [attr.aria-invalid]="formulario.vistoria().invalid() ? 'true' : 'false'"
+            [attr.aria-describedby]="
+              formulario.vistoria().touched() && formulario.vistoria().invalid()
+                ? 'erro-vistoria'
+                : null
+            "
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            placeholder="Condições observadas na entrada"
+          ></textarea>
+          @if (formulario.vistoria().touched() && formulario.vistoria().invalid()) {
+            <p id="erro-vistoria" class="mt-1 text-sm text-rose-300">
+              {{ formulario.vistoria().errors()[0]?.message }}
+            </p>
+          }
+        </div>
+
+        <div>
+          <label for="vaga" class="mb-1 block text-sm text-slate-200">Vaga livre</label>
+          <select
+            id="vaga"
+            [formField]="formulario.vagaId"
+            [attr.aria-invalid]="formulario.vagaId().invalid() ? 'true' : 'false'"
+            [attr.aria-describedby]="
+              formulario.vagaId().touched() && formulario.vagaId().invalid() ? 'erro-vaga' : null
+            "
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            <option value="">Selecione uma vaga</option>
+            @for (vaga of vagas(); track vaga.id) {
+              <option [value]="vaga.id">{{ vaga.codigo }}</option>
+            }
+          </select>
+          @if (formulario.vagaId().touched() && formulario.vagaId().invalid()) {
+            <p id="erro-vaga" class="mt-1 text-sm text-rose-300">
+              {{ formulario.vagaId().errors()[0]?.message }}
+            </p>
+          }
+        </div>
+
+        <button
+          type="submit"
+          [disabled]="enviando() || coordenador.bloqueado()"
+          class="flex items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          @if (enviando() || coordenador.fase() === 'pendente') {
+            <svg lucideLoaderCircle class="h-5 w-5 animate-spin" aria-hidden="true"></svg>
+            Registrando…
+          } @else {
+            <svg lucideClipboard class="h-5 w-5" aria-hidden="true"></svg>
+            Registrar entrada
+          }
+        </button>
+      </form>
+    </section>
+
+    <section
+      class="rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+      aria-labelledby="titulo-vagas-checkin"
+    >
+      <div class="mb-3 flex items-center justify-between gap-2">
+        <h2
+          id="titulo-vagas-checkin"
+          class="text-sm font-semibold tracking-wide text-slate-300 uppercase"
+        >
+          Vagas livres
+        </h2>
+        <button
+          type="button"
+          (click)="carregarVagas()"
+          [disabled]="carregandoVagas()"
+          class="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+        >
+          <svg lucideRefreshCw class="h-3.5 w-3.5" aria-hidden="true"></svg>
+          Atualizar
+        </button>
+      </div>
+
+      @if (erroVagas(); as mensagem) {
+        <p class="mb-2 text-sm text-rose-300" role="alert">{{ mensagem }}</p>
+      }
+
+      @if (carregandoVagas()) {
+        <p class="flex items-center gap-2 text-sm text-slate-300" role="status">
+          <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+          Consultando…
+        </p>
+      } @else if (vagas().length === 0) {
+        <p class="text-sm text-slate-400" role="status">Nenhuma vaga livre na página.</p>
+      } @else {
+        <ul class="space-y-1 text-sm">
+          @for (vaga of vagas(); track vaga.id) {
+            <li
+              class="flex items-center justify-between rounded-md border border-slate-800 px-3 py-1.5"
+            >
+              <span class="font-mono">{{ vaga.codigo }}</span>
+              <span class="text-emerald-300">livre</span>
+            </li>
+          }
+        </ul>
+      }
+
+      <nav
+        class="mt-3 flex items-center justify-between gap-2 text-xs"
+        aria-label="Paginação de vagas livres"
+      >
+        <button
+          type="button"
+          (click)="irParaPaginaVagas(paginaVagas() - 1)"
+          [disabled]="paginaVagas() <= 1"
+          class="rounded-md border border-slate-700 px-2 py-1 text-slate-200 disabled:opacity-50"
+        >
+          Anterior
+        </button>
+        <span>Página {{ paginaVagas() }} de {{ totalPaginasVagas() }}</span>
+        <button
+          type="button"
+          (click)="irParaPaginaVagas(paginaVagas() + 1)"
+          [disabled]="paginaVagas() >= totalPaginasVagas()"
+          class="rounded-md border border-slate-700 px-2 py-1 text-slate-200 disabled:opacity-50"
+        >
+          Próxima
+        </button>
+      </nav>
+
+      <p class="mt-4 text-xs text-slate-400">
+        A seleção não reserva a vaga. A atribuição definitiva acontece na transação do servidor.
+      </p>
+    </section>
+  </div>
+</main>

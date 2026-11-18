@@ -8,6 +8,8 @@ export const ambiente = {
   apiUrl: 'https://localhost:4300',
   /** Origem local da SPA, usada apenas em mensagens e testes. */
   origemSpa: 'https://localhost:4200',
+  /** Intervalo padrão do polling de vagas, configurável por ambiente. */
+  intervaloPollingSegundos: 30,
 } as const;
 
 export function urlApi(caminho: string): string {

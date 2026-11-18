@@ -6,7 +6,6 @@ import {
   LucideCircleAlert,
   LucideLayoutDashboard,
   LucideLoaderCircle,
-  LucideLogOut,
   LucideParkingSquare,
   LucideShieldCheck,
   LucideUserRound,
@@ -29,7 +28,6 @@ interface AreaTrabalho {
     LucideCircleAlert,
     LucideLayoutDashboard,
     LucideLoaderCircle,
-    LucideLogOut,
     LucideParkingSquare,
     LucideShieldCheck,
     LucideUserRound,
@@ -45,7 +43,6 @@ export class Dashboard implements OnInit {
   readonly area = signal<AreaTrabalho | null>(null);
   readonly carregando = signal(true);
   readonly erro = signal<string | null>(null);
-  readonly saindo = signal(false);
   readonly ehAdministrador = computed(() => this.sessao.possuiPerfil(['Administrador']));
 
   ngOnInit(): void {
@@ -71,16 +68,5 @@ export class Dashboard implements OnInit {
     }
   }
 
-  async sair(): Promise<void> {
-    if (this.saindo()) {
-      return;
-    }
 
-    this.saindo.set(true);
-    const confirmada = await this.sessao.logout();
-
-    await this.router.navigate(['/login'], {
-      queryParams: confirmada ? {} : { logout: 'sem-confirmacao' },
-    });
-  }
 }

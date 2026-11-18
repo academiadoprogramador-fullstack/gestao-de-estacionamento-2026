@@ -1,0 +1,232 @@
+<main class="mx-auto w-full max-w-6xl px-4 py-8 text-slate-100">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <svg lucideReceipt class="h-8 w-8 text-sky-400" aria-hidden="true"></svg>
+      <div>
+        <p class="text-xs font-semibold tracking-widest text-sky-400 uppercase">Configuração</p>
+        <h1 class="text-2xl font-semibold text-white">Tarifas</h1>
+        <p class="mt-1 text-sm text-slate-400">
+          Versões imutáveis de diária. A entrada captura a versão e o valor vigentes; não há valor
+          comercial padrão.
+        </p>
+      </div>
+    </div>
+    <button
+      type="button"
+      (click)="recarregar()"
+      class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+    >
+      Recarregar
+    </button>
+  </header>
+
+  @if (!ehAdministrador()) {
+    <section class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-5" role="alert">
+      <h2 class="font-semibold text-amber-200">Acesso negado</h2>
+      <p class="mt-2 text-sm text-amber-100">
+        Somente o Administrador pode publicar ou consultar o histórico de tarifas.
+      </p>
+    </section>
+  } @else {
+    @if (erro(); as mensagem) {
+      <p
+        class="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+        role="alert"
+      >
+        <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (sucesso(); as mensagem) {
+      <p
+        class="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100"
+        role="status"
+      >
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (carregando()) {
+      <p class="flex items-center gap-2 text-sm text-slate-300" role="status">
+        <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+        Carregando tarifas…
+      </p>
+    } @else {
+      <section
+        class="mb-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+        aria-labelledby="titulo-corrente"
+      >
+        <h2
+          id="titulo-corrente"
+          class="flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+        >
+          <svg lucideBadgeDollarSign class="h-4 w-4 text-sky-400" aria-hidden="true"></svg>
+          Tarifa corrente
+        </h2>
+
+        @if (corrente(); as atual) {
+          @if (!atual.temTarifa) {
+            <p
+              class="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100"
+              role="status"
+            >
+              Nenhuma tarifa foi publicada. A entrada permanece bloqueada até a publicação de uma
+              versão positiva.
+            </p>
+          } @else {
+            <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+              <div>
+                <dt class="text-slate-400">Versão</dt>
+                <dd class="font-mono text-lg text-white">{{ atual.versao }}</dd>
+              </div>
+              <div>
+                <dt class="text-slate-400">Valor da diária</dt>
+                <dd class="text-lg text-white">{{ formatarValor(atual.valor) }}</dd>
+              </div>
+              <div>
+                <dt class="text-slate-400">Publicada em</dt>
+                <dd>{{ atual.publicadoEmUtc }}</dd>
+              </div>
+            </dl>
+          }
+        }
+      </section>
+
+      <section
+        class="mb-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+        aria-labelledby="titulo-publicar"
+      >
+        <h2
+          id="titulo-publicar"
+          class="mb-3 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+        >
+          Publicar nova versão
+        </h2>
+
+        @if (resumoVisivel() && (formulario().invalid() || erroValor())) {
+          <div
+            #resumoErro
+            tabindex="-1"
+            role="alert"
+            class="mb-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+          >
+            <ul class="list-disc space-y-1 pl-5">
+              @if (formulario.valor().invalid()) {
+                <li>{{ formulario.valor().errors()[0]?.message }}</li>
+              }
+              @if (erroValor(); as mensagem) {
+                <li>{{ mensagem }}</li>
+              }
+            </ul>
+          </div>
+        }
+
+        <form class="flex flex-wrap items-end gap-3" (submit)="publicar($event)" novalidate>
+          <div>
+            <label for="valor-diaria" class="mb-1 block text-sm text-slate-200">Valor (BRL)</label>
+            <input
+              id="valor-diaria"
+              type="text"
+              inputmode="decimal"
+              [formField]="formulario.valor"
+              [attr.aria-invalid]="formulario.valor().invalid() || !!erroValor() ? 'true' : 'false'"
+              [attr.aria-describedby]="
+                formulario.valor().touched() && (formulario.valor().invalid() || erroValor())
+                  ? 'erro-valor-diaria'
+                  : null
+              "
+              class="w-44 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+              placeholder="20,00"
+            />
+            @if (formulario.valor().touched() && (formulario.valor().invalid() || erroValor())) {
+              <p id="erro-valor-diaria" class="mt-1 text-sm text-rose-300">
+                {{ erroValor() ?? formulario.valor().errors()[0]?.message }}
+              </p>
+            }
+          </div>
+
+          <button
+            type="submit"
+            [disabled]="publicando()"
+            class="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-60"
+          >
+            @if (publicando()) {
+              <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+              Publicando…
+            } @else {
+              Publicar
+            }
+          </button>
+        </form>
+      </section>
+
+      <section
+        class="rounded-xl border border-slate-800 bg-slate-900/70"
+        aria-labelledby="titulo-historico"
+      >
+        <h2
+          id="titulo-historico"
+          class="border-b border-slate-800 px-4 py-3 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+        >
+          Histórico de versões
+        </h2>
+
+        @if (historico().length === 0) {
+          <p class="p-4 text-sm text-slate-400" role="status">Nenhuma versão publicada.</p>
+        } @else {
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <caption class="sr-only">
+                Histórico imutável de versões de tarifa
+              </caption>
+              <thead class="text-xs tracking-wide text-slate-400 uppercase">
+                <tr>
+                  <th scope="col" class="px-4 py-2">Versão</th>
+                  <th scope="col" class="px-4 py-2">Valor</th>
+                  <th scope="col" class="px-4 py-2">Autor</th>
+                  <th scope="col" class="px-4 py-2">Publicada em (UTC)</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (tarifa of historico(); track tarifa.versao) {
+                  <tr class="border-t border-slate-800/70">
+                    <td class="px-4 py-2 font-mono">{{ tarifa.versao }}</td>
+                    <td class="px-4 py-2">{{ formatarValor(tarifa.valor) }}</td>
+                    <td class="px-4 py-2 text-slate-300">{{ tarifa.publicadoPorNome }}</td>
+                    <td class="px-4 py-2 font-mono text-xs text-slate-400">
+                      {{ tarifa.publicadoEmUtc }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <nav
+            class="flex items-center justify-between gap-3 border-t border-slate-800 px-4 py-3 text-sm"
+            aria-label="Paginação de tarifas"
+          >
+            <button
+              type="button"
+              (click)="irParaPagina(pagina() - 1)"
+              [disabled]="pagina() <= 1"
+              class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
+            >
+              Anterior
+            </button>
+            <span>Página {{ pagina() }} de {{ totalPaginas() }} · {{ total() }} versão(ões)</span>
+            <button
+              type="button"
+              (click)="irParaPagina(pagina() + 1)"
+              [disabled]="pagina() >= totalPaginas()"
+              class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
+            >
+              Próxima
+            </button>
+          </nav>
+        }
+      </section>
+    }
+  }
+</main>

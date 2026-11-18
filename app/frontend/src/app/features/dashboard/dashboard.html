@@ -8,20 +8,6 @@
       </div>
     </div>
 
-    <button
-      type="button"
-      (click)="sair()"
-      [disabled]="saindo()"
-      class="flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      @if (saindo()) {
-        <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
-        Encerrando…
-      } @else {
-        <svg lucideLogOut class="h-4 w-4" aria-hidden="true"></svg>
-        Sair
-      }
-    </button>
   </header>
 
   <section class="grid gap-4 sm:grid-cols-2">

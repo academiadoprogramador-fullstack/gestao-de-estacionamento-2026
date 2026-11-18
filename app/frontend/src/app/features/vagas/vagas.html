@@ -1,0 +1,251 @@
+<main class="mx-auto w-full max-w-6xl px-4 py-8 text-slate-100">
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <svg lucideSquareParking class="h-8 w-8 text-sky-400" aria-hidden="true"></svg>
+      <div>
+        <p class="text-xs font-semibold tracking-widest text-sky-400 uppercase">Preparação</p>
+        <h1 class="text-2xl font-semibold text-white">Vagas</h1>
+        <p class="mt-1 text-sm text-slate-400">
+          Consulta compartilhada pelos três perfis. A disponibilidade é atualizada a cada
+          {{ intervaloSegundos }} segundos e não reserva a vaga.
+        </p>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      (click)="atualizarAgora()"
+      [disabled]="atualizando()"
+      class="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+    >
+      <svg
+        lucideRefreshCw
+        class="h-4 w-4"
+        [class.animate-spin]="atualizando()"
+        aria-hidden="true"
+      ></svg>
+      Atualizar agora
+    </button>
+  </header>
+
+  @if (erro(); as mensagem) {
+    <p
+      class="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+      role="alert"
+    >
+      <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
+      {{ mensagem }}
+    </p>
+  }
+
+  @if (sucesso(); as mensagem) {
+    <p
+      class="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100"
+      role="status"
+    >
+      {{ mensagem }}
+    </p>
+  }
+
+  <section
+    class="mb-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+    aria-labelledby="titulo-filtros"
+  >
+    <h2
+      id="titulo-filtros"
+      class="mb-3 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+    >
+      Filtros
+    </h2>
+    <form class="flex flex-wrap items-end gap-3" (submit)="aplicarFiltros($event)" novalidate>
+      <div>
+        <label for="filtro-codigo" class="mb-1 block text-sm text-slate-200">Código</label>
+        <input
+          id="filtro-codigo"
+          type="text"
+          [value]="codigoFiltro()"
+          (input)="codigoFiltro.set($any($event.target).value)"
+          class="w-44 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          placeholder="A-01"
+        />
+      </div>
+
+      <div>
+        <label for="filtro-situacao" class="mb-1 block text-sm text-slate-200">Situação</label>
+        <select
+          id="filtro-situacao"
+          [value]="situacaoFiltro()"
+          (change)="situacaoFiltro.set($any($event.target).value)"
+          class="w-44 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        >
+          <option value="">Todas</option>
+          <option value="livre">Livre</option>
+          <option value="ocupada">Ocupada</option>
+        </select>
+      </div>
+
+      <button
+        type="submit"
+        class="rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+      >
+        Aplicar
+      </button>
+      <button
+        type="button"
+        (click)="limparFiltros()"
+        class="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      >
+        Limpar
+      </button>
+    </form>
+  </section>
+
+  @if (ehAdministrador()) {
+    <section
+      class="mb-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+      aria-labelledby="titulo-cadastro"
+    >
+      <h2
+        id="titulo-cadastro"
+        class="mb-3 flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+      >
+        <svg lucidePlus class="h-4 w-4 text-sky-400" aria-hidden="true"></svg>
+        Cadastrar vaga
+      </h2>
+
+      @if (resumoVisivel() && formulario().invalid()) {
+        <div
+          #resumoErro
+          tabindex="-1"
+          role="alert"
+          class="mb-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+        >
+          Corrija os campos destacados antes de cadastrar.
+          @if (formulario.codigo().invalid()) {
+            <p class="mt-1">{{ formulario.codigo().errors()[0]?.message }}</p>
+          }
+        </div>
+      }
+
+      <form class="flex flex-wrap items-end gap-3" (submit)="cadastrar($event)" novalidate>
+        <div>
+          <label for="codigo-vaga" class="mb-1 block text-sm text-slate-200">Código</label>
+          <input
+            id="codigo-vaga"
+            type="text"
+            [formField]="formulario.codigo"
+            [attr.aria-invalid]="formulario.codigo().invalid() ? 'true' : 'false'"
+            [attr.aria-describedby]="
+              formulario.codigo().touched() && formulario.codigo().invalid()
+                ? 'erro-codigo-vaga'
+                : null
+            "
+            class="w-52 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            placeholder="A-01"
+          />
+          @if (formulario.codigo().touched() && formulario.codigo().invalid()) {
+            <p id="erro-codigo-vaga" class="mt-1 text-sm text-rose-300">
+              {{ formulario.codigo().errors()[0]?.message }}
+            </p>
+          }
+        </div>
+
+        <button
+          type="submit"
+          [disabled]="salvando()"
+          class="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-60"
+        >
+          @if (salvando()) {
+            <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+            Cadastrando…
+          } @else {
+            Cadastrar
+          }
+        </button>
+      </form>
+    </section>
+  } @else {
+    <p
+      class="mb-6 rounded-lg border border-slate-800 bg-slate-900/50 p-3 text-sm text-slate-400"
+      role="status"
+    >
+      O cadastro de vagas é exclusivo do Administrador.
+    </p>
+  }
+
+  <section
+    aria-labelledby="titulo-lista"
+    class="rounded-xl border border-slate-800 bg-slate-900/70"
+  >
+    <h2
+      id="titulo-lista"
+      class="border-b border-slate-800 px-4 py-3 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+    >
+      Lista de vagas
+    </h2>
+
+    @if (carregandoInicial()) {
+      <p class="flex items-center gap-2 p-4 text-sm text-slate-300" role="status">
+        <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+        Carregando vagas…
+      </p>
+    } @else if (itens().length === 0) {
+      <p class="p-4 text-sm text-slate-400" role="status">Nenhuma vaga corresponde aos filtros.</p>
+    } @else {
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <caption class="sr-only">
+            Vagas cadastradas com código e situação derivada da ocupação
+          </caption>
+          <thead class="text-xs tracking-wide text-slate-400 uppercase">
+            <tr>
+              <th scope="col" class="px-4 py-2">Código</th>
+              <th scope="col" class="px-4 py-2">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (vaga of itens(); track vaga.id) {
+              <tr class="border-t border-slate-800/70">
+                <td class="px-4 py-2 font-mono">{{ vaga.codigo }}</td>
+                <td class="px-4 py-2">
+                  <span
+                    class="rounded-full px-2 py-0.5 text-xs font-medium"
+                    [class.bg-emerald-500/10]="vaga.situacao === 'livre'"
+                    [class.text-emerald-300]="vaga.situacao === 'livre'"
+                    [class.bg-amber-500/10]="vaga.situacao === 'ocupada'"
+                    [class.text-amber-300]="vaga.situacao === 'ocupada'"
+                  >
+                    {{ vaga.situacao }}
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <nav
+        class="flex items-center justify-between gap-3 border-t border-slate-800 px-4 py-3 text-sm"
+        aria-label="Paginação de vagas"
+      >
+        <button
+          type="button"
+          (click)="irParaPagina(pagina() - 1)"
+          [disabled]="pagina() <= 1"
+          class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
+        >
+          Anterior
+        </button>
+        <span>Página {{ pagina() }} de {{ totalPaginas() }} · {{ total() }} vaga(s)</span>
+        <button
+          type="button"
+          (click)="irParaPagina(pagina() + 1)"
+          [disabled]="pagina() >= totalPaginas()"
+          class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
+        >
+          Próxima
+        </button>
+      </nav>
+    }
+  </section>
+</main>

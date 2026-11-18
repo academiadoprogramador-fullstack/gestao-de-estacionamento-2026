@@ -1,0 +1,372 @@
+<main class="mx-auto w-full max-w-6xl px-4 py-8 text-slate-100">
+  <header class="mb-6 flex items-center gap-3">
+    <svg lucideUsers class="h-8 w-8 text-sky-400" aria-hidden="true"></svg>
+    <div>
+      <p class="text-xs font-semibold tracking-widest text-sky-400 uppercase">Acessos</p>
+      <h1 class="text-2xl font-semibold text-white">Funcionários</h1>
+      <p class="mt-1 text-sm text-slate-400">
+        Criação e manutenção de perfis fixos. Não há autorregistro nem recuperação de senha.
+      </p>
+    </div>
+  </header>
+
+  @if (!ehAdministrador()) {
+    <section
+      class="rounded-xl border border-amber-500/40 bg-amber-500/10 p-5"
+      role="alert"
+      aria-labelledby="acesso-negado"
+    >
+      <h2 id="acesso-negado" class="flex items-center gap-2 font-semibold text-amber-200">
+        <svg lucideShieldCheck class="h-5 w-5" aria-hidden="true"></svg>
+        Acesso negado
+      </h2>
+      <p class="mt-2 text-sm text-amber-100">
+        Somente o Administrador pode consultar ou alterar funcionários e acessos. A API também
+        recusa esta operação para o seu perfil.
+      </p>
+    </section>
+  } @else {
+    @if (erro(); as mensagem) {
+      <p
+        class="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+        role="alert"
+      >
+        <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (sucesso(); as mensagem) {
+      <p
+        class="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100"
+        role="status"
+      >
+        {{ mensagem }}
+      </p>
+    }
+
+    <section
+      class="mb-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+      aria-labelledby="titulo-criar"
+    >
+      <h2
+        id="titulo-criar"
+        class="mb-3 flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+      >
+        <svg lucideUserPlus class="h-4 w-4 text-sky-400" aria-hidden="true"></svg>
+        Novo funcionário
+      </h2>
+
+      @if (resumoVisivel() && (formulario().invalid() || erroPerfis())) {
+        <div
+          #resumoErro
+          tabindex="-1"
+          role="alert"
+          class="mb-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+        >
+          <ul class="list-disc space-y-1 pl-5">
+            @if (formulario.nome().invalid()) {
+              <li>{{ formulario.nome().errors()[0]?.message }}</li>
+            }
+            @if (formulario.email().invalid()) {
+              <li>{{ formulario.email().errors()[0]?.message }}</li>
+            }
+            @if (formulario.senhaInicial().invalid()) {
+              <li>{{ formulario.senhaInicial().errors()[0]?.message }}</li>
+            }
+            @if (erroPerfis(); as mensagem) {
+              <li>{{ mensagem }}</li>
+            }
+          </ul>
+        </div>
+      }
+
+      <form class="grid gap-4 md:grid-cols-2" (submit)="criar($event)" novalidate>
+        <div>
+          <label for="nome" class="mb-1 block text-sm text-slate-200">Nome</label>
+          <input
+            id="nome"
+            type="text"
+            autocomplete="off"
+            [formField]="formulario.nome"
+            [attr.aria-invalid]="formulario.nome().invalid() ? 'true' : 'false'"
+            [attr.aria-describedby]="
+              formulario.nome().touched() && formulario.nome().invalid() ? 'erro-nome' : null
+            "
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          />
+          @if (formulario.nome().touched() && formulario.nome().invalid()) {
+            <p id="erro-nome" class="mt-1 text-sm text-rose-300">
+              {{ formulario.nome().errors()[0]?.message }}
+            </p>
+          }
+        </div>
+
+        <div>
+          <label for="email-funcionario" class="mb-1 block text-sm text-slate-200">E-mail</label>
+          <input
+            id="email-funcionario"
+            type="email"
+            autocomplete="off"
+            [formField]="formulario.email"
+            [attr.aria-invalid]="formulario.email().invalid() ? 'true' : 'false'"
+            [attr.aria-describedby]="
+              formulario.email().touched() && formulario.email().invalid()
+                ? 'erro-email-funcionario'
+                : null
+            "
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          />
+          @if (formulario.email().touched() && formulario.email().invalid()) {
+            <p id="erro-email-funcionario" class="mt-1 text-sm text-rose-300">
+              {{ formulario.email().errors()[0]?.message }}
+            </p>
+          }
+        </div>
+
+        <div>
+          <label for="senha-inicial" class="mb-1 block text-sm text-slate-200">Senha inicial</label>
+          <input
+            id="senha-inicial"
+            type="password"
+            autocomplete="new-password"
+            [formField]="formulario.senhaInicial"
+            [attr.aria-invalid]="formulario.senhaInicial().invalid() ? 'true' : 'false'"
+            [attr.aria-describedby]="
+              formulario.senhaInicial().touched() && formulario.senhaInicial().invalid()
+                ? 'erro-senha-inicial'
+                : null
+            "
+            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          />
+          @if (formulario.senhaInicial().touched() && formulario.senhaInicial().invalid()) {
+            <p id="erro-senha-inicial" class="mt-1 text-sm text-rose-300">
+              {{ formulario.senhaInicial().errors()[0]?.message }}
+            </p>
+          }
+        </div>
+
+        <fieldset class="md:col-span-2">
+          <legend class="mb-2 text-sm text-slate-200">Perfis fixos</legend>
+          <div class="flex flex-wrap gap-4">
+            @for (perfil of perfisFixos; track perfil) {
+              <label class="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  [checked]="perfisSelecionados().includes(perfil)"
+                  (change)="alternarPerfil(perfil)"
+                  class="h-4 w-4 rounded border-slate-600 bg-slate-950 text-sky-500 focus:ring-sky-400"
+                />
+                {{ perfil }}
+              </label>
+            }
+          </div>
+          @if (erroPerfis(); as mensagem) {
+            <p class="mt-1 text-sm text-rose-300">{{ mensagem }}</p>
+          }
+        </fieldset>
+
+        <div class="md:col-span-2">
+          <button
+            type="submit"
+            [disabled]="salvando()"
+            class="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-60"
+          >
+            @if (salvando()) {
+              <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+              Criando…
+            } @else {
+              Criar funcionário
+            }
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section
+      class="rounded-xl border border-slate-800 bg-slate-900/70"
+      aria-labelledby="titulo-lista-funcionarios"
+    >
+      <div
+        class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 px-4 py-3"
+      >
+        <h2
+          id="titulo-lista-funcionarios"
+          class="text-sm font-semibold tracking-wide text-slate-300 uppercase"
+        >
+          Funcionários cadastrados
+        </h2>
+        <div>
+          <label for="filtro-status-funcionario" class="mr-2 text-sm text-slate-300">Status</label>
+          <select
+            id="filtro-status-funcionario"
+            [value]="statusFiltro()"
+            (change)="aplicarStatus($any($event.target).value)"
+            class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            <option value="">Todos</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </select>
+        </div>
+      </div>
+
+      @if (carregando()) {
+        <p class="flex items-center gap-2 p-4 text-sm text-slate-300" role="status">
+          <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+          Carregando funcionários…
+        </p>
+      } @else if (itens().length === 0) {
+        <p class="p-4 text-sm text-slate-400" role="status">Nenhum funcionário encontrado.</p>
+      } @else {
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <caption class="sr-only">
+              Funcionários com estado e perfis; nenhuma credencial é exibida
+            </caption>
+            <thead class="text-xs tracking-wide text-slate-400 uppercase">
+              <tr>
+                <th scope="col" class="px-4 py-2">Nome</th>
+                <th scope="col" class="px-4 py-2">E-mail</th>
+                <th scope="col" class="px-4 py-2">Perfis</th>
+                <th scope="col" class="px-4 py-2">Estado</th>
+                <th scope="col" class="px-4 py-2"><span class="sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (funcionario of itens(); track funcionario.id) {
+                <tr class="border-t border-slate-800/70">
+                  <td class="px-4 py-2">{{ funcionario.nome }}</td>
+                  <td class="px-4 py-2 text-slate-300">{{ funcionario.email }}</td>
+                  <td class="px-4 py-2 text-slate-300">{{ funcionario.perfis.join(', ') }}</td>
+                  <td class="px-4 py-2">
+                    <span
+                      class="rounded-full px-2 py-0.5 text-xs font-medium"
+                      [class.bg-emerald-500/10]="funcionario.ativo"
+                      [class.text-emerald-300]="funcionario.ativo"
+                      [class.bg-slate-700/50]="!funcionario.ativo"
+                      [class.text-slate-300]="!funcionario.ativo"
+                    >
+                      {{ funcionario.ativo ? 'ativo' : 'inativo' }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      (click)="abrirEdicao(funcionario, $event)"
+                      class="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                    >
+                      <svg lucidePencil class="h-3.5 w-3.5" aria-hidden="true"></svg>
+                      Alterar acesso
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <nav
+          class="flex items-center justify-between gap-3 border-t border-slate-800 px-4 py-3 text-sm"
+          aria-label="Paginação de funcionários"
+        >
+          <button
+            type="button"
+            (click)="irParaPagina(pagina() - 1)"
+            [disabled]="pagina() <= 1"
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <span>Página {{ pagina() }} de {{ totalPaginas() }} · {{ total() }} funcionário(s)</span>
+          <button
+            type="button"
+            (click)="irParaPagina(pagina() + 1)"
+            [disabled]="pagina() >= totalPaginas()"
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
+          >
+            Próxima
+          </button>
+        </nav>
+      }
+    </section>
+
+    @if (edicao(); as atual) {
+      <section
+        class="mt-6 rounded-xl border border-sky-500/40 bg-slate-900/90 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-edicao"
+      >
+        <h2
+          #tituloEdicao
+          id="titulo-edicao"
+          tabindex="-1"
+          class="text-lg font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        >
+          Alterar acesso de {{ atual.funcionario.nome }}
+        </h2>
+        <p class="mt-1 text-sm text-slate-400">
+          A alteração revoga as sessões do funcionário e exige novo login. O token de concorrência
+          impede sobrescrever mudanças feitas por outro administrador.
+        </p>
+
+        @if (erroEdicao(); as mensagem) {
+          <p
+            class="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+            role="alert"
+          >
+            {{ mensagem }}
+          </p>
+        }
+
+        <form class="mt-4 space-y-4" (submit)="salvarEdicao($event)" novalidate>
+          <label class="flex items-center gap-2 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              [checked]="atual.ativo"
+              (change)="definirAtivoEdicao($event)"
+              class="h-4 w-4 rounded border-slate-600 bg-slate-950 text-sky-500 focus:ring-sky-400"
+            />
+            Conta ativa
+          </label>
+
+          <fieldset>
+            <legend class="mb-2 text-sm text-slate-200">Perfis fixos</legend>
+            <div class="flex flex-wrap gap-4">
+              @for (perfil of perfisFixos; track perfil) {
+                <label class="flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    [checked]="atual.perfis.includes(perfil)"
+                    (change)="alternarPerfilEdicao(perfil)"
+                    class="h-4 w-4 rounded border-slate-600 bg-slate-950 text-sky-500 focus:ring-sky-400"
+                  />
+                  {{ perfil }}
+                </label>
+              }
+            </div>
+          </fieldset>
+
+          <div class="flex gap-3">
+            <button
+              type="submit"
+              [disabled]="salvandoEdicao()"
+              class="rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-60"
+            >
+              {{ salvandoEdicao() ? 'Salvando…' : 'Salvar acesso' }}
+            </button>
+            <button
+              type="button"
+              (click)="fecharEdicao()"
+              [disabled]="salvandoEdicao()"
+              class="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </section>
+    }
+  }
+</main>

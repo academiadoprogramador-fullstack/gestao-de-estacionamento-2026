@@ -1,5 +1,6 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn, CanDeactivateFn, Router } from '@angular/router';
+import { ComandoPendenteService } from '../comando/comando-pendente.service';
 import { SessaoService } from '../sessao/sessao.service';
 
 /**
@@ -17,13 +18,32 @@ export const guardaSessao: CanActivateFn = () => {
  * Complementa a autorização da API: sem o perfil exigido, encaminha para a
  * área de acesso negado. A API continua sendo a autoridade final.
  */
-export const guardaPerfil = (perfisPermitidos: readonly string[]): CanActivateFn => () => {
-  const sessao = inject(SessaoService);
-  const router = inject(Router);
+export const guardaPerfil =
+  (perfisPermitidos: readonly string[]): CanActivateFn =>
+  () => {
+    const sessao = inject(SessaoService);
+    const router = inject(Router);
 
-  if (!sessao.autenticado()) {
-    return router.createUrlTree(['/login']);
+    if (!sessao.autenticado()) {
+      return router.createUrlTree(['/login']);
+    }
+
+    return sessao.possuiPerfil(perfisPermitidos) ? true : router.createUrlTree(['/forbidden']);
+  };
+
+/**
+ * Impede a saída de uma tela enquanto um comando crítico está pendente ou
+ * incerto. O aviso antes de fechar/recarregar o navegador é armado pelo
+ * coordenador do comando.
+ */
+export const guardaComandoPendente: CanDeactivateFn<unknown> = () => {
+  const comando = inject(ComandoPendenteService);
+
+  if (!comando.bloqueado()) {
+    return true;
   }
 
-  return sessao.possuiPerfil(perfisPermitidos) ? true : router.createUrlTree(['/forbidden']);
+  return window.confirm(
+    'Existe uma tentativa de check-in pendente ou incerta. Saia somente se aceitar perder o resultado desta tentativa.',
+  );
 };

@@ -1,0 +1,355 @@
+<main class="mx-auto w-full max-w-6xl px-4 py-8 text-slate-100">
+  <header class="mb-6 flex items-center gap-3">
+    <svg lucideClipboardList class="h-8 w-8 text-sky-400" aria-hidden="true"></svg>
+    <div>
+      <p class="text-xs font-semibold tracking-widest text-sky-400 uppercase">Operação</p>
+      <h1 class="text-2xl font-semibold text-white">Atendimentos</h1>
+      <p class="mt-1 text-sm text-slate-400">
+        Busca exata por placa ou identificador. Documento e vistoria exigem leitura explícita e
+        auditada.
+      </p>
+    </div>
+  </header>
+
+  <section
+    class="mb-6 rounded-xl border border-slate-800 bg-slate-900/70 p-4"
+    aria-labelledby="titulo-busca"
+  >
+    <h2
+      id="titulo-busca"
+      class="mb-3 flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+    >
+      <svg lucideSearch class="h-4 w-4 text-sky-400" aria-hidden="true"></svg>
+      Buscar atendimento
+    </h2>
+
+    <form (submit)="buscar($event)" novalidate>
+      <fieldset class="mb-3">
+        <legend class="mb-2 text-sm text-slate-200">Critério (exatamente um)</legend>
+        <div class="flex flex-wrap gap-4 text-sm">
+          <label class="flex items-center gap-2">
+            <input
+              type="radio"
+              name="tipo-busca"
+              value="placa"
+              [checked]="tipoBusca() === 'placa'"
+              (change)="selecionarTipo('placa')"
+              class="h-4 w-4 text-sky-500 focus:ring-sky-400"
+            />
+            Placa
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="radio"
+              name="tipo-busca"
+              value="identificador"
+              [checked]="tipoBusca() === 'identificador'"
+              (change)="selecionarTipo('identificador')"
+              class="h-4 w-4 text-sky-500 focus:ring-sky-400"
+            />
+            Identificador
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="flex flex-wrap items-end gap-3">
+        <div>
+          <label for="termo-busca" class="mb-1 block text-sm text-slate-200">
+            {{ tipoBusca() === 'placa' ? 'Placa' : 'Identificador' }}
+          </label>
+          <input
+            id="termo-busca"
+            type="text"
+            [value]="termo()"
+            (input)="termo.set($any($event.target).value)"
+            [attr.placeholder]="tipoBusca() === 'placa' ? 'ABC1D23' : 'AT-2026-000001'"
+            class="w-64 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          />
+        </div>
+        <button
+          type="submit"
+          [disabled]="buscando()"
+          class="flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-60"
+        >
+          @if (buscando()) {
+            <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+            Buscando…
+          } @else {
+            Buscar
+          }
+        </button>
+      </div>
+    </form>
+
+    @if (erroBusca(); as mensagem) {
+      <p
+        class="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+        role="alert"
+      >
+        {{ mensagem }}
+      </p>
+    }
+  </section>
+
+  <div class="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+    <section
+      class="rounded-xl border border-slate-800 bg-slate-900/70"
+      aria-labelledby="titulo-resultados"
+    >
+      <h2
+        id="titulo-resultados"
+        class="border-b border-slate-800 px-4 py-3 text-sm font-semibold tracking-wide text-slate-300 uppercase"
+      >
+        Resultados
+      </h2>
+
+      @if (buscando()) {
+        <p class="flex items-center gap-2 p-4 text-sm text-slate-300" role="status">
+          <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+          Consultando…
+        </p>
+      } @else if (!buscou()) {
+        <p class="p-4 text-sm text-slate-400">
+          Informe um critério para buscar. A tela não lista todos por omissão.
+        </p>
+      } @else if (resultados().length === 0) {
+        <p class="p-4 text-sm text-slate-400" role="status">Nenhum atendimento encontrado.</p>
+      } @else {
+        <ul class="divide-y divide-slate-800/70">
+          @for (item of resultados(); track item.id) {
+            <li>
+              <button
+                type="button"
+                (click)="selecionar(item.id)"
+                [attr.aria-current]="selecionado() === item.id ? 'true' : null"
+                class="flex w-full flex-col gap-1 px-4 py-3 text-left transition hover:bg-slate-800/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+              >
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono text-sm text-sky-300">{{ item.identificador }}</span>
+                  <span class="text-xs text-slate-400">{{ item.estado }}</span>
+                  <span class="rounded-full bg-slate-700/50 px-2 py-0.5 text-xs text-slate-200">
+                    vaga {{ item.vagaCodigo || '—' }}
+                  </span>
+                </span>
+                <span class="text-sm text-slate-100">{{ item.placa }} · {{ item.modelo }}</span>
+                <span class="text-xs text-slate-400"
+                  >{{ item.titular }} · {{ formatarDataHora(item.entradaUtc) }}</span
+                >
+              </button>
+            </li>
+          }
+        </ul>
+
+        <nav
+          class="flex items-center justify-between gap-3 border-t border-slate-800 px-4 py-3 text-sm"
+          aria-label="Paginação de atendimentos"
+        >
+          <button
+            type="button"
+            (click)="irParaPagina(pagina() - 1)"
+            [disabled]="pagina() <= 1"
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <span>Página {{ pagina() }} · {{ total() }} visita(s)</span>
+          <button
+            type="button"
+            (click)="irParaPagina(pagina() + 1)"
+            [disabled]="pagina() * tamanhoPagina >= total()"
+            class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
+          >
+            Próxima
+          </button>
+        </nav>
+      }
+    </section>
+
+    <section
+      class="rounded-xl border border-slate-800 bg-slate-900/70"
+      aria-labelledby="titulo-detalhe"
+    >
+      <div class="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+        <h2
+          id="titulo-detalhe"
+          class="text-sm font-semibold tracking-wide text-slate-300 uppercase"
+        >
+          Detalhe do atendimento
+        </h2>
+        @if (selecionado()) {
+          <button
+            type="button"
+            (click)="fechar()"
+            class="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            <svg lucideX class="h-3.5 w-3.5" aria-hidden="true"></svg>
+            Fechar
+          </button>
+        }
+      </div>
+
+      @if (!selecionado()) {
+        <p class="p-4 text-sm text-slate-400">
+          Selecione um resultado para ver detalhe e histórico.
+        </p>
+      } @else if (carregandoDetalhe()) {
+        <p class="flex items-center gap-2 p-4 text-sm text-slate-300" role="status">
+          <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+          Carregando detalhe…
+        </p>
+      } @else if (erroDetalhe(); as mensagem) {
+        <p
+          class="m-4 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+          role="alert"
+        >
+          {{ mensagem }}
+        </p>
+      } @else if (detalhe(); as item) {
+        <div class="space-y-4 p-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <p class="font-mono text-lg text-white select-all">
+              <span class="sr-only">Identificador público: </span>{{ item.identificador }}
+            </p>
+            <button
+              type="button"
+              (click)="copiarIdentificador(item.identificador)"
+              class="inline-flex items-center gap-1.5 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              <svg lucideCopy class="h-3.5 w-3.5" aria-hidden="true"></svg>
+              Copiar
+            </button>
+          </div>
+
+          @if (mensagemCopia(); as mensagem) {
+            <p class="text-sm text-slate-300" role="status">{{ mensagem }}</p>
+          }
+
+          <dl class="grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt class="text-slate-400">Placa</dt>
+              <dd class="font-mono">{{ item.placa }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-400">Modelo</dt>
+              <dd>{{ item.modelo }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-400">Titular</dt>
+              <dd>{{ item.titular }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-400">Estado</dt>
+              <dd>{{ item.estado }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-400">Vaga</dt>
+              <dd class="font-mono">{{ item.vagaCodigo || '—' }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-400">Entrada</dt>
+              <dd>{{ formatarDataHora(item.entradaUtc) }}</dd>
+            </div>
+          </dl>
+
+          @if (item.tarifaValorSnapshot !== undefined) {
+            <section
+              class="rounded-lg border border-slate-800 bg-slate-950/40 p-3"
+              aria-labelledby="titulo-tarifa-snapshot"
+            >
+              <h3
+                id="titulo-tarifa-snapshot"
+                class="text-xs font-semibold tracking-wide text-slate-400 uppercase"
+              >
+                Tarifa capturada na entrada
+              </h3>
+              <p class="mt-1 text-sm">
+                Versão {{ item.tarifaVersao }} · {{ formatarValor(item.tarifaValorSnapshot) }}
+              </p>
+            </section>
+          }
+
+          <section aria-labelledby="titulo-leituras">
+            <h3
+              id="titulo-leituras"
+              class="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase"
+            >
+              Leituras explícitas e auditadas
+            </h3>
+            <div class="flex flex-wrap gap-2">
+              @if (ehOperador()) {
+                <button
+                  type="button"
+                  (click)="ler('documento')"
+                  [disabled]="lendo() !== null"
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                >
+                  <svg lucideFileText class="h-4 w-4" aria-hidden="true"></svg>
+                  {{ lendo() === 'documento' ? 'Lendo documento…' : 'Ler documento' }}
+                </button>
+              }
+              <button
+                type="button"
+                (click)="ler('vistoria')"
+                [disabled]="lendo() !== null"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+              >
+                <svg lucideEye class="h-4 w-4" aria-hidden="true"></svg>
+                {{ lendo() === 'vistoria' ? 'Lendo vistoria…' : 'Ler vistoria de entrada' }}
+              </button>
+            </div>
+
+            @if (erroLeitura(); as mensagem) {
+              <p
+                class="mt-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+                role="alert"
+              >
+                {{ mensagem }}
+              </p>
+            }
+
+            @if (leitura(); as conteudo) {
+              <div class="mt-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <h4 class="text-xs font-semibold tracking-wide text-slate-400 uppercase">
+                  {{
+                    conteudo.tipo === 'documento' ? 'Documento do titular' : 'Vistoria de entrada'
+                  }}
+                </h4>
+                <p class="mt-1 text-sm whitespace-pre-wrap text-slate-100 select-all">
+                  {{ conteudo.conteudo }}
+                </p>
+                <p class="mt-1 text-xs text-slate-500">
+                  Leitura registrada na auditoria antes da exibição.
+                </p>
+              </div>
+            }
+          </section>
+
+          <section aria-labelledby="titulo-historico">
+            <h3
+              id="titulo-historico"
+              class="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase"
+            >
+              Histórico
+            </h3>
+            @if (historico().length === 0) {
+              <p class="text-sm text-slate-400">Sem eventos visíveis para o seu perfil.</p>
+            } @else {
+              <ol class="space-y-1 text-sm">
+                @for (evento of historico(); track evento.ocorridoEmUtc + evento.tipo) {
+                  <li
+                    class="flex flex-wrap justify-between gap-2 rounded-md border border-slate-800 px-3 py-1.5"
+                  >
+                    <span class="text-slate-100">{{ evento.tipo }}</span>
+                    <span class="text-xs text-slate-400">{{
+                      formatarDataHora(evento.ocorridoEmUtc)
+                    }}</span>
+                  </li>
+                }
+              </ol>
+            }
+          </section>
+        </div>
+      }
+    </section>
+  </div>
+</main>

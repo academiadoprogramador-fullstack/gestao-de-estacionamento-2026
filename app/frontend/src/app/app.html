@@ -1,6 +1,8 @@
 <div class="min-h-screen bg-slate-950 text-slate-100">
   <header class="border-b border-slate-800 bg-slate-900/60">
-    <div class="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-3">
+    <div
+      class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3"
+    >
       <a
         routerLink="/dashboard"
         class="flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
@@ -10,7 +12,7 @@
       </a>
 
       @if (sessao.autenticado()) {
-        <nav class="flex items-center gap-2 text-sm" aria-label="Navegação principal">
+        <nav class="flex flex-wrap items-center gap-1 text-sm" aria-label="Navegação principal">
           <a
             routerLink="/dashboard"
             routerLinkActive="text-sky-300"
@@ -19,8 +21,70 @@
             <svg lucideLayoutDashboard class="h-4 w-4" aria-hidden="true"></svg>
             Área de trabalho
           </a>
-          <span class="text-slate-400">{{ sessao.estado()?.funcionario?.nome }}</span>
+          <a
+            routerLink="/spaces"
+            routerLinkActive="text-sky-300"
+            class="flex items-center gap-1.5 rounded-md px-2 py-1 text-slate-300 transition hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            <svg lucideSquareParking class="h-4 w-4" aria-hidden="true"></svg>
+            Vagas
+          </a>
+          <a
+            routerLink="/attendances"
+            routerLinkActive="text-sky-300"
+            class="flex items-center gap-1.5 rounded-md px-2 py-1 text-slate-300 transition hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            <svg lucideClipboardList class="h-4 w-4" aria-hidden="true"></svg>
+            Atendimentos
+          </a>
+          @if (sessao.possuiPerfil(['Administrador', 'Caixa'])) {
+            <a
+              routerLink="/check-in"
+              routerLinkActive="text-sky-300"
+              class="flex items-center gap-1.5 rounded-md px-2 py-1 text-slate-300 transition hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              <svg lucideCalendarClock class="h-4 w-4" aria-hidden="true"></svg>
+              Check-in
+            </a>
+          }
+          @if (sessao.possuiPerfil(['Administrador'])) {
+            <a
+              routerLink="/employees"
+              routerLinkActive="text-sky-300"
+              class="flex items-center gap-1.5 rounded-md px-2 py-1 text-slate-300 transition hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              <svg lucideUsers class="h-4 w-4" aria-hidden="true"></svg>
+              Funcionários
+            </a>
+            <a
+              routerLink="/daily-rates"
+              routerLinkActive="text-sky-300"
+              class="flex items-center gap-1.5 rounded-md px-2 py-1 text-slate-300 transition hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              <svg lucideReceipt class="h-4 w-4" aria-hidden="true"></svg>
+              Tarifas
+            </a>
+          }
         </nav>
+
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-slate-400">{{ sessao.estado()?.funcionario?.nome }}</span>
+          <button
+            type="button"
+            (click)="sair()"
+            [disabled]="comando.bloqueado()"
+            [attr.aria-describedby]="comando.bloqueado() ? 'comando-pendente-logout' : null"
+            class="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg lucideLogOut class="h-4 w-4" aria-hidden="true"></svg>
+            Sair
+          </button>
+          @if (comando.bloqueado()) {
+            <span id="comando-pendente-logout" class="sr-only">
+              A saída está bloqueada enquanto existe uma tentativa de check-in pendente ou incerta.
+            </span>
+          }
+        </div>
       }
     </div>
   </header>

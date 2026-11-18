@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { guardaPerfil, guardaSessao } from './core/guards/guards';
+import { guardaComandoPendente, guardaPerfil, guardaSessao } from './core/guards/guards';
 
 export const routes: Routes = [
   {
@@ -13,6 +13,39 @@ export const routes: Routes = [
     canActivate: [guardaSessao],
     loadComponent: () =>
       import('./features/dashboard/dashboard').then((modulo) => modulo.Dashboard),
+  },
+  {
+    path: 'employees',
+    title: 'Funcionários — Gestão de Estacionamento',
+    canActivate: [guardaSessao, guardaPerfil(['Administrador'])],
+    loadComponent: () =>
+      import('./features/funcionarios/funcionarios').then((modulo) => modulo.Funcionarios),
+  },
+  {
+    path: 'spaces',
+    title: 'Vagas — Gestão de Estacionamento',
+    canActivate: [guardaSessao],
+    loadComponent: () => import('./features/vagas/vagas').then((modulo) => modulo.Vagas),
+  },
+  {
+    path: 'daily-rates',
+    title: 'Tarifas — Gestão de Estacionamento',
+    canActivate: [guardaSessao, guardaPerfil(['Administrador'])],
+    loadComponent: () => import('./features/tarifas/tarifas').then((modulo) => modulo.Tarifas),
+  },
+  {
+    path: 'check-in',
+    title: 'Check-in — Gestão de Estacionamento',
+    canActivate: [guardaSessao, guardaPerfil(['Administrador', 'Caixa'])],
+    canDeactivate: [guardaComandoPendente],
+    loadComponent: () => import('./features/check-in/check-in').then((modulo) => modulo.CheckIn),
+  },
+  {
+    path: 'attendances',
+    title: 'Atendimentos — Gestão de Estacionamento',
+    canActivate: [guardaSessao],
+    loadComponent: () =>
+      import('./features/atendimentos/atendimentos').then((modulo) => modulo.Atendimentos),
   },
   {
     path: 'administracao',

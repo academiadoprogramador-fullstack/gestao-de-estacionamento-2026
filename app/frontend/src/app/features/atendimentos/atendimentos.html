@@ -81,6 +81,11 @@
       </div>
     </form>
 
+    <p class="mt-2 text-xs text-slate-400">
+      A lista de atendimentos em aberto é carregada automaticamente. A busca exata por placa ou
+      identificador é opcional e pode ser limpa para voltar à lista.
+    </p>
+
     @if (erroBusca(); as mensagem) {
       <p
         class="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
@@ -96,27 +101,47 @@
       class="rounded-xl border border-slate-800 bg-slate-900/70"
       aria-labelledby="titulo-resultados"
     >
-      <h2
-        id="titulo-resultados"
-        class="border-b border-slate-800 px-4 py-3 text-sm font-semibold tracking-wide text-slate-300 uppercase"
-      >
-        Resultados
-      </h2>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+        <h2
+          id="titulo-resultados"
+          class="text-sm font-semibold tracking-wide text-slate-300 uppercase"
+        >
+          {{ buscou() ? 'Resultados da busca' : 'Atendimentos em aberto' }}
+        </h2>
+        @if (buscou()) {
+          <button
+            type="button"
+            (click)="limparBusca()"
+            class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            Limpar busca
+          </button>
+        }
+      </div>
 
-      @if (buscando()) {
+      @if (carregandoExibido()) {
         <p class="flex items-center gap-2 p-4 text-sm text-slate-300" role="status">
           <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
-          Consultando…
+          {{ buscou() ? 'Consultando busca…' : 'Carregando atendimentos em aberto…' }}
         </p>
-      } @else if (!buscou()) {
-        <p class="p-4 text-sm text-slate-400">
-          Informe um critério para buscar. A tela não lista todos por omissão.
+      } @else if (erroExibido(); as mensagem) {
+        <p
+          class="m-4 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+          role="alert"
+        >
+          {{ mensagem }}
         </p>
-      } @else if (resultados().length === 0) {
-        <p class="p-4 text-sm text-slate-400" role="status">Nenhum atendimento encontrado.</p>
+      } @else if (itensExibidos().length === 0) {
+        <p class="p-4 text-sm text-slate-400" role="status">
+          {{
+            buscou()
+              ? 'Nenhum atendimento encontrado para o critério informado.'
+              : 'Nenhum atendimento em aberto na unidade.'
+          }}
+        </p>
       } @else {
         <ul class="divide-y divide-slate-800/70">
-          @for (item of resultados(); track item.id) {
+          @for (item of itensExibidos(); track item.id) {
             <li>
               <button
                 type="button"
@@ -130,6 +155,15 @@
                   <span class="rounded-full bg-slate-700/50 px-2 py-0.5 text-xs text-slate-200">
                     vaga {{ item.vagaCodigo || '—' }}
                   </span>
+                  @if (item.estadoRetirada) {
+                    <span class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300">
+                      Retirada: {{ item.estadoRetirada }}
+                    </span>
+                  } @else {
+                    <span class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                      Sem pedido
+                    </span>
+                  }
                 </span>
                 <span class="text-sm text-slate-100">{{ item.placa }} · {{ item.modelo }}</span>
                 <span class="text-xs text-slate-400"
@@ -146,17 +180,20 @@
         >
           <button
             type="button"
-            (click)="irParaPagina(pagina() - 1)"
-            [disabled]="pagina() <= 1"
+            (click)="irParaPaginaExibida(paginaExibida() - 1)"
+            [disabled]="paginaExibida() <= 1"
             class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
           >
             Anterior
           </button>
-          <span>Página {{ pagina() }} · {{ total() }} visita(s)</span>
+          <span>
+            Página {{ paginaExibida() }} de {{ totalPaginasExibidas() }} ·
+            {{ totalExibido() }} atendimento(s)
+          </span>
           <button
             type="button"
-            (click)="irParaPagina(pagina() + 1)"
-            [disabled]="pagina() * tamanhoPagina >= total()"
+            (click)="irParaPaginaExibida(paginaExibida() + 1)"
+            [disabled]="paginaExibida() >= totalPaginasExibidas()"
             class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 disabled:opacity-50"
           >
             Próxima

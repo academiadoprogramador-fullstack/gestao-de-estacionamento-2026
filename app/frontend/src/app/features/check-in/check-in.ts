@@ -273,6 +273,15 @@ export class CheckIn implements OnInit, OnDestroy {
     this.resultado.set(resultado);
     this.modelo.update((atual) => ({ ...atual, documento: '', vistoria: '' }));
     this.formulario.vagaId().value.set('');
+    // O sucesso não é um erro: limpa o resumo e o estado “touched” para que a
+    // validação não reapareça enquanto o formulário aguarda outra entrada.
+    this.resumoVisivel.set(false);
+    this.formulario.placa().reset();
+    this.formulario.modelo().reset();
+    this.formulario.titular().reset();
+    this.formulario.documento().reset();
+    this.formulario.vistoria().reset();
+    this.formulario.vagaId().reset();
     await this.carregarVagas();
   }
 

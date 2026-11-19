@@ -1,0 +1,436 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Atendimentos e lista de abertos (Fase 3)
+  Source: specs/consulta-atendimentos/spec.md, design.md (D4/D11)
+  Covered:
+    - Lista padrão de atendimentos em aberto, com paginação e situação da retirada
+    - Busca exata por placa ou identificador como filtro opcional e "Limpar busca"
+    - Seleção do atendimento e detalhe operacional por perfil
+    - Leitura explícita e auditada de documento/vistoria
+    - Manobrista sem documento completo e sem dados financeiros
+  Not specified (presentational only):
+    - Navegação do shell e seletor de perfil para revisão
+    - Dados fictícios de histórico e leituras
+  Open questions: none
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Atendimentos</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617; --surface: #0f172a; --surface-2: #111c33; --raised: #1e293b;
+        --border: #1e293b; --border-strong: #334155; --text: #e2e8f0; --muted: #94a3b8;
+        --accent: #38bdf8; --accent-soft: rgba(56,189,248,.12);
+        --ok: #34d399; --ok-soft: rgba(52,211,153,.12);
+        --warn: #fbbf24; --warn-soft: rgba(251,191,36,.12);
+        --danger: #fb7185; --danger-soft: rgba(251,113,133,.12);
+        --radius: 14px;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.5; }
+      h1, h2, h3, p, dl, dd, dt, ul { margin: 0; }
+      a { color: var(--accent); }
+      .skip-link { position: absolute; left: -999px; top: 0; z-index: 30; padding: .5rem 1rem; background: var(--accent); color: var(--bg); font-weight: 700; }
+      .skip-link:focus { left: 0; }
+      .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+      .prototype-banner { padding: .5rem 1rem; background: color-mix(in srgb, var(--warn) 14%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); color: var(--warn); font-size: .8125rem; }
+      .shell-header { position: sticky; top: 0; z-index: 20; background: rgba(2,6,23,.92); border-bottom: 1px solid var(--border); backdrop-filter: blur(8px); }
+      .shell-inner { width: min(84rem, 100% - 2rem); margin-inline: auto; display: flex; align-items: center; gap: 1.25rem; padding-block: .7rem; flex-wrap: wrap; }
+      .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; }
+      .brand svg { color: var(--accent); }
+      .brand small { display: block; color: var(--muted); font-size: .68rem; font-weight: 500; }
+      .nav { display: flex; gap: .25rem; list-style: none; padding: 0; flex-wrap: wrap; }
+      .nav a { display: inline-flex; padding: .35rem .6rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: .8125rem; font-weight: 600; }
+      .nav a:hover { color: var(--text); background: var(--surface-2); }
+      .nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+      .session { margin-left: auto; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+      .avatar { width: 2rem; height: 2rem; border-radius: 999px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: .72rem; font-weight: 700; }
+      .session strong { display: block; font-size: .8rem; }
+      .session span { display: block; font-size: .66rem; color: var(--muted); }
+      select, input { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 9px; padding: .45rem .6rem; }
+      select:focus-visible, input:focus-visible { border-color: var(--accent); }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .45rem .8rem; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; text-decoration: none; }
+      .btn:hover { border-color: var(--accent); }
+      .btn:disabled { opacity: .55; cursor: not-allowed; }
+      .btn-primary { background: var(--accent); border-color: var(--accent); color: #04121f; }
+      .btn-ghost { background: transparent; }
+      .btn-sm { padding: .28rem .55rem; font-size: .75rem; }
+      main { width: min(84rem, 100% - 2rem); margin-inline: auto; padding-block: 1.75rem 4rem; }
+      .page-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+      .eyebrow { color: var(--accent); font-size: .7rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { font-size: clamp(1.6rem, 3.5vw, 2.1rem); line-height: 1.15; margin-top: .2rem; }
+      .subtitle { color: var(--muted); max-width: 58rem; margin-top: .35rem; font-size: .9rem; }
+      .layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.05fr) minmax(18rem, .95fr); align-items: start; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+      .card-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 1rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+      .card-head h2 { font-size: .95rem; }
+      .card-body { padding: 1rem; display: grid; gap: .85rem; }
+      .field { display: grid; gap: .25rem; }
+      .field label, .field legend { color: var(--muted); font-size: .74rem; font-weight: 600; }
+      .hint { color: var(--muted); font-size: .7rem; }
+      .radio-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .25rem; }
+      .radio-row label { display: inline-flex; align-items: center; gap: .35rem; color: var(--text); font-size: .8rem; font-weight: 500; }
+      .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; }
+      .toolbar .field { flex: 1; min-width: 12rem; }
+      .search-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+      .list { list-style: none; padding: 0; margin: 0; }
+      .list li { border-bottom: 1px solid var(--border); }
+      .list li:last-child { border-bottom: 0; }
+      .list button { width: 100%; text-align: left; background: transparent; border: 0; color: var(--text); padding: .7rem .9rem; display: grid; gap: .2rem; cursor: pointer; font: inherit; }
+      .list button:hover { background: var(--surface-2); }
+      .list button[aria-current="true"] { background: var(--accent-soft); }
+      .identificador { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); font-size: .78rem; }
+      .badge { display: inline-flex; align-items: center; gap: .3rem; padding: .12rem .5rem; border-radius: 999px; font-size: .68rem; font-weight: 700; white-space: nowrap; }
+      .badge.neutral { background: var(--surface-2); color: var(--muted); }
+      .badge.pending { background: var(--warn-soft); color: var(--warn); }
+      .badge.info { background: var(--accent-soft); color: var(--accent); }
+      .pagination { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem .9rem; border-top: 1px solid var(--border); flex-wrap: wrap; }
+      .pagination p { color: var(--muted); font-size: .76rem; }
+      .empty { padding: 1.3rem .9rem; text-align: center; color: var(--muted); font-size: .82rem; }
+      .summary-grid { display: grid; gap: .65rem; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); }
+      .metric { padding: .65rem .75rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+      .metric dt { color: var(--muted); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; }
+      .metric dd { font-size: .95rem; font-weight: 700; margin-top: .12rem; font-variant-numeric: tabular-nums; }
+      .metric small { display: block; color: var(--muted); font-size: .66rem; margin-top: .08rem; }
+      .detail-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+      .timeline { list-style: none; padding: 0; display: grid; gap: .55rem; }
+      .timeline li { display: grid; grid-template-columns: 7rem 1fr; gap: .6rem; font-size: .8rem; }
+      .timeline time { color: var(--muted); font-variant-numeric: tabular-nums; }
+      .alert { display: flex; gap: .6rem; align-items: start; padding: .7rem .85rem; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-2); font-size: .8rem; }
+      .alert.info { border-color: color-mix(in srgb, var(--accent) 38%, transparent); background: var(--accent-soft); }
+      .alert.warn { border-color: color-mix(in srgb, var(--warn) 42%, transparent); background: var(--warn-soft); }
+      .alert svg { flex: none; margin-top: .1rem; }
+      .toast { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(26rem, calc(100vw - 2rem)); padding: .8rem 1rem; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: 0 18px 40px rgba(2,6,23,.55); font-size: .82rem; }
+      .toast:empty { display: none; }
+      dialog { width: min(36rem, calc(100vw - 1.5rem)); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 0; }
+      dialog::backdrop { background: rgba(2,6,23,.72); backdrop-filter: blur(2px); }
+      .dialog-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; padding: 1rem 1.15rem; border-bottom: 1px solid var(--border); }
+      .dialog-head h2 { font-size: 1.05rem; }
+      .dialog-body { padding: 1.15rem; display: grid; gap: .8rem; }
+      .dialog-foot { display: flex; justify-content: end; gap: .6rem; padding: .85rem 1.15rem; border-top: 1px solid var(--border); background: var(--surface-2); }
+      @media (max-width: 70rem) { .layout { grid-template-columns: 1fr; } .nav { order: 3; } .session { width: 100%; margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.</p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#spaces">Vagas</a></li>
+            <li><a href="#rates">Tarifa diária</a></li>
+            <li><a href="atendimentos.html" aria-current="page">Atendimentos</a></li>
+            <li><a href="fila-retiradas.html">Fila de retiradas</a></li>
+            <li><a href="caixa.html">Caixa</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div><strong id="session-name">Marina Duarte</strong><span id="session-role">Administrador · sessão verificada</span></div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width:auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+          <button class="btn btn-ghost" id="logout" type="button">Sair</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Operação</p>
+          <h1>Atendimentos</h1>
+          <p class="subtitle">
+            A lista de atendimentos em aberto é a visão padrão. Documento e vistoria continuam
+            exigindo leitura explícita e auditada; o Manobrista não recebe documento completo nem
+            finanças.
+          </p>
+        </div>
+        <a class="btn" href="fila-retiradas.html">Ver fila de retiradas</a>
+      </div>
+
+      <section class="card" aria-labelledby="filtro-title" style="margin-bottom:1rem">
+        <div class="card-head">
+          <div>
+            <h2 id="filtro-title">Buscar atendimento</h2>
+            <p class="hint">A busca exata é opcional; limpe o filtro para voltar à lista de abertos.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <form id="search-form" novalidate class="grid" style="gap:.8rem">
+            <fieldset style="border:0; padding:0; margin:0" id="search-fieldset">
+              <legend class="hint">Critério (exatamente um)</legend>
+              <div class="radio-row">
+                <label><input type="radio" name="criterio" value="placa" checked /> Placa</label>
+                <label><input type="radio" name="criterio" value="identificador" /> Identificador</label>
+              </div>
+            </fieldset>
+            <div class="toolbar">
+              <div class="field">
+                <label for="termo-busca" id="termo-label">Placa</label>
+                <input id="termo-busca" type="text" placeholder="ABC1D23" />
+              </div>
+              <div class="search-actions">
+                <button class="btn btn-primary" type="submit" id="buscar">Buscar</button>
+                <button class="btn btn-ghost" type="button" id="limpar-busca" hidden>Limpar busca</button>
+              </div>
+            </div>
+            <p class="hint" id="search-error" role="alert" hidden></p>
+          </form>
+        </div>
+      </section>
+
+      <div class="layout">
+        <section class="card" aria-labelledby="lista-title">
+          <div class="card-head">
+            <h2 id="lista-title">Atendimentos em aberto</h2>
+            <span class="badge info" id="modo-badge">Lista padrão</span>
+          </div>
+          <ul class="list" id="lista" aria-label="Atendimentos"></ul>
+          <div class="empty" id="lista-vazia" hidden>
+            Nenhum atendimento em aberto ou encontrado para o filtro.
+          </div>
+          <div class="pagination">
+            <p id="page-info">Página 1 de 1</p>
+            <div class="search-actions">
+              <button class="btn btn-sm" type="button" id="prev">Anterior</button>
+              <button class="btn btn-sm" type="button" id="next">Próxima</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="detalhe-title">
+          <div class="card-head">
+            <h2 id="detalhe-title">Detalhe do atendimento</h2>
+            <button class="btn btn-sm btn-ghost" type="button" id="fechar-detalhe" hidden>Fechar</button>
+          </div>
+          <div class="card-body" id="detalhe-vazio">
+            <p class="hint">Selecione um atendimento na lista para ver detalhe e histórico.</p>
+          </div>
+          <div class="card-body" id="detalhe" hidden>
+            <dl class="summary-grid" id="detalhe-resumo"></dl>
+            <div class="alert warn" id="detalhe-pedido" hidden>
+              <p>Este atendimento já possui pedido de retirada. Acompanhe o saldo e os lançamentos no caixa.</p>
+            </div>
+            <section aria-labelledby="leituras-title">
+              <h3 id="leituras-title" class="hint" style="font-weight:700; text-transform:uppercase; letter-spacing:.08em">Leituras explícitas e auditadas</h3>
+              <div class="detail-actions" style="margin-top:.4rem">
+                <button class="btn btn-sm" type="button" id="ler-documento">Ler documento</button>
+                <button class="btn btn-sm" type="button" id="ler-vistoria">Ler vistoria de entrada</button>
+              </div>
+            </section>
+            <section aria-labelledby="historico-title">
+              <h3 id="historico-title" class="hint" style="font-weight:700; text-transform:uppercase; letter-spacing:.08em">Histórico</h3>
+              <ol class="timeline" id="historico" style="margin-top:.4rem"></ol>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <dialog id="leitura-dialog" aria-labelledby="leitura-title">
+      <div class="dialog-head">
+        <div><h2 id="leitura-title">Leitura auditada</h2><p class="hint">Auditoria confirmada antes da exibição.</p></div>
+        <button class="btn btn-ghost" type="button" id="fechar-leitura">Fechar</button>
+      </div>
+      <div class="dialog-body">
+        <p id="leitura-texto" style="padding:.7rem .9rem; border:1px solid var(--border-strong); border-radius:9px; background:var(--surface-2); font-family:ui-monospace,monospace"></p>
+        <p class="hint">Dado sintético. Não copiar para outro sistema ou registrar em log.</p>
+      </div>
+      <div class="dialog-foot"><button class="btn" type="button" id="fechar-leitura-2">Entendi</button></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const perfis = {
+        Administrador: { iniciais: "MD", nome: "Marina Duarte" },
+        Caixa: { iniciais: "JC", nome: "João Cardoso" },
+        Manobrista: { iniciais: "RS", nome: "Rafael Souza" }
+      };
+
+      const atendimentos = [
+        { id: "AT-2026-000041", placa: "BRA2E19", modelo: "Hatch prata", titular: "Ana Beatriz Ferreira", vaga: "A-03", entrada: "19/11/2026 07:10", estado: "ativo", retirada: null, tarifaVersao: 6, tarifa: 20, documento: "DOC 12.345.678-9 · Ana Beatriz Ferreira", vistoria: "Vistoria de entrada sintética · sem avarias.", historico: [{ tipo: "entrada_registrada", em: "19/11/2026 07:10" }, { tipo: "vaga_ocupada", em: "19/11/2026 07:10" }] },
+        { id: "AT-2026-000038", placa: "QWE4R56", modelo: "Sedan branco", titular: "Carlos Eduardo Lima", vaga: "B-07", entrada: "19/11/2026 06:58", estado: "aguardando", retirada: "aguardando", tarifaVersao: 6, tarifa: 20, documento: "DOC 98.765.432-1 · Carlos Eduardo Lima", vistoria: "Vistoria de entrada sintética · para-choque riscado.", historico: [{ tipo: "entrada_registrada", em: "19/11/2026 06:58" }, { tipo: "pedido_retirada_registrado", em: "19/11/2026 09:12" }, { tipo: "conferencia_retirada_registrada", em: "19/11/2026 09:12" }] },
+        { id: "AT-2026-000035", placa: "JKL7M89", modelo: "SUV cinza", titular: "Fernanda Alves", vaga: "A-01", entrada: "19/11/2026 04:40", estado: "em busca", retirada: "em busca", tarifaVersao: 6, tarifa: 20, documento: "DOC 11.222.333-4 · Fernanda Alves", vistoria: "Vistoria de entrada sintética · pneus em bom estado.", historico: [{ tipo: "entrada_registrada", em: "19/11/2026 04:40" }, { tipo: "pedido_retirada_registrado", em: "19/11/2026 08:58" }, { tipo: "busca_iniciada", em: "19/11/2026 09:05" }] },
+        { id: "AT-2026-000031", placa: "TUV1W23", modelo: "Compacto azul", titular: "Bruno Martins", vaga: "C-02", entrada: "19/11/2026 04:21", estado: "ativo", retirada: null, tarifaVersao: 6, tarifa: 20, documento: "DOC 55.666.777-8 · Bruno Martins", vistoria: "Vistoria de entrada sintética · interior limpo.", historico: [{ tipo: "entrada_registrada", em: "19/11/2026 04:21" }, { tipo: "vaga_ocupada", em: "19/11/2026 04:21" }] },
+        { id: "AT-2026-000027", placa: "XYZ9A01", modelo: "Picape vermelha", titular: "Patrícia Nunes", vaga: "B-02", entrada: "19/11/2026 04:05", estado: "ativo", retirada: null, tarifaVersao: 6, tarifa: 20, documento: "DOC 22.333.444-5 · Patrícia Nunes", vistoria: "Vistoria de entrada sintética · caçamba vazia.", historico: [{ tipo: "entrada_registrada", em: "19/11/2026 04:05" }, { tipo: "vaga_ocupada", em: "19/11/2026 04:05" }] }
+      ];
+
+      const state = { perfil: "Administrador", pagina: 1, tamanho: 3, buscou: false, criterio: "placa", termo: "", selecionado: null, leitura: null };
+      const $ = (id) => document.getElementById(id);
+
+      function perfilAtual() { return state.perfil; }
+      function podeLerDocumento() { return perfilAtual() !== "Manobrista"; }
+
+      function filtrados() {
+        if (!state.buscou) return atendimentos;
+        const termo = state.termo.trim().toUpperCase();
+        return atendimentos.filter((item) => state.criterio === "placa" ? item.placa === termo : item.id === termo);
+      }
+
+      function renderLista() {
+        const lista = filtrados();
+        const paginas = Math.max(1, Math.ceil(lista.length / state.tamanho));
+        state.pagina = Math.min(state.pagina, paginas);
+        const inicio = (state.pagina - 1) * state.tamanho;
+        const pagina = lista.slice(inicio, inicio + state.tamanho);
+
+        $("modo-badge").textContent = state.buscou ? "Busca exata" : "Lista padrão";
+        $("lista-title").textContent = state.buscou ? "Resultados da busca" : "Atendimentos em aberto";
+        $("limpar-busca").hidden = !state.buscou;
+        $("lista").innerHTML = pagina.map((item) => {
+          const retirada = item.retirada
+            ? `<span class="badge pending">Retirada: ${item.retirada}</span>`
+            : `<span class="badge neutral">Sem pedido</span>`;
+          return `<li>
+            <button type="button" data-selecionar="${item.id}" aria-current="${state.selecionado === item.id}">
+              <span style="display:flex; flex-wrap:wrap; gap:.4rem; align-items:center">
+                <span class="identificador">${item.id}</span>
+                <span class="badge info">vaga ${item.vaga}</span>
+                ${retirada}
+              </span>
+              <span>${item.placa} · ${item.modelo}</span>
+              <span class="hint">${item.titular} · ${item.entrada} · ${item.estado}</span>
+            </button>
+          </li>`;
+        }).join("");
+        $("lista-vazia").hidden = pagina.length !== 0;
+        $("page-info").textContent = `Página ${state.pagina} de ${paginas} · ${lista.length} atendimento(s)`;
+        $("prev").disabled = state.pagina <= 1;
+        $("next").disabled = state.pagina >= paginas;
+
+        $("lista").querySelectorAll("[data-selecionar]").forEach((botao) => {
+          botao.addEventListener("click", () => selecionar(botao.dataset.selecionar));
+        });
+      }
+
+      function selecionar(id) {
+        state.selecionado = id;
+        const item = atendimentos.find((registro) => registro.id === id);
+        $("detalhe-vazio").hidden = true;
+        $("detalhe").hidden = false;
+        $("fechar-detalhe").hidden = false;
+        $("detalhe-resumo").innerHTML = `
+          <div class="metric"><dt>Identificador</dt><dd class="identificador">${item.id}</dd><small>copiável no detalhe</small></div>
+          <div class="metric"><dt>Veículo</dt><dd>${item.placa}</dd><small>${item.modelo}</small></div>
+          <div class="metric"><dt>Vaga</dt><dd>${item.vaga}</dd><small>ocupação aberta</small></div>
+          <div class="metric"><dt>Entrada</dt><dd style="font-size:.8rem">${item.entrada}</dd><small>horário do servidor</small></div>
+          <div class="metric"><dt>Titular</dt><dd style="font-size:.8rem">${item.titular}</dd><small>dado sintético</small></div>
+          <div class="metric"><dt>Estado</dt><dd style="font-size:.8rem">${item.estado}</dd><small>retirada ${item.retirada || "não iniciada"}</small></div>`;
+        $("detalhe-pedido").hidden = !item.retirada;
+        $("ler-documento").hidden = !podeLerDocumento();
+        $("historico").innerHTML = item.historico.map((evento) =>
+          `<li><time>${evento.em}</time><div><strong>${evento.tipo}</strong><span>ator opaco</span></div></li>`
+        ).join("");
+        renderLista();
+        $("detalhe-title").focus?.();
+      }
+
+      function limparDetalhe() {
+        state.selecionado = null;
+        $("detalhe").hidden = true;
+        $("detalhe-vazio").hidden = false;
+        $("fechar-detalhe").hidden = true;
+        renderLista();
+      }
+
+      function buscar(evento) {
+        evento.preventDefault();
+        const termo = $("termo-busca").value.trim();
+        $("search-error").hidden = true;
+        if (!termo) {
+          $("search-error").textContent = "Informe uma placa ou um identificador para buscar.";
+          $("search-error").hidden = false;
+          $("termo-busca").setAttribute("aria-invalid", "true");
+          return;
+        }
+        $("termo-busca").removeAttribute("aria-invalid");
+        state.criterio = document.querySelector('input[name="criterio"]:checked').value;
+        state.termo = termo;
+        state.buscou = true;
+        state.pagina = 1;
+        renderLista();
+      }
+
+      function limparBusca() {
+        state.buscou = false;
+        state.termo = "";
+        state.pagina = 1;
+        $("termo-busca").value = "";
+        $("search-error").hidden = true;
+        $("termo-busca").removeAttribute("aria-invalid");
+        renderLista();
+      }
+
+      function aplicarPerfil() {
+        const dados = perfis[state.perfil];
+        $("avatar").textContent = dados.iniciais;
+        $("session-name").textContent = dados.nome;
+        $("session-role").textContent = state.perfil + " · sessão verificada";
+        $("ler-documento").hidden = !podeLerDocumento();
+        renderLista();
+      }
+
+      function aviso(texto) {
+        const toast = $("toast");
+        toast.textContent = texto;
+        setTimeout(() => { toast.textContent = ""; }, 6500);
+      }
+
+      $("profile-switch").addEventListener("change", (evento) => { state.perfil = evento.target.value; aplicarPerfil(); });
+      document.querySelectorAll('input[name="criterio"]').forEach((radio) => {
+        radio.addEventListener("change", (evento) => {
+          state.criterio = evento.target.value;
+          $("termo-label").textContent = state.criterio === "placa" ? "Placa" : "Identificador";
+          $("termo-busca").placeholder = state.criterio === "placa" ? "ABC1D23" : "AT-2026-000001";
+        });
+      });
+      $("search-form").addEventListener("submit", buscar);
+      $("limpar-busca").addEventListener("click", limparBusca);
+      $("prev").addEventListener("click", () => { state.pagina -= 1; renderLista(); });
+      $("next").addEventListener("click", () => { state.pagina += 1; renderLista(); });
+      $("fechar-detalhe").addEventListener("click", limparDetalhe);
+      $("ler-documento").addEventListener("click", () => {
+        const item = atendimentos.find((registro) => registro.id === state.selecionado);
+        $("leitura-title").textContent = "Documento do titular";
+        $("leitura-texto").textContent = item.documento;
+        $("leitura-dialog").showModal();
+        $("fechar-leitura").focus();
+      });
+      $("ler-vistoria").addEventListener("click", () => {
+        const item = atendimentos.find((registro) => registro.id === state.selecionado);
+        $("leitura-title").textContent = "Vistoria de entrada";
+        $("leitura-texto").textContent = item.vistoria;
+        $("leitura-dialog").showModal();
+        $("fechar-leitura").focus();
+      });
+      $("fechar-leitura").addEventListener("click", () => $("leitura-dialog").close());
+      $("fechar-leitura-2").addEventListener("click", () => $("leitura-dialog").close());
+      $("logout").addEventListener("click", () => aviso("Logout do protótipo: a sessão seria revogada no servidor."));
+
+      aplicarPerfil();
+      renderLista();
+    </script>
+  </body>
+</html>

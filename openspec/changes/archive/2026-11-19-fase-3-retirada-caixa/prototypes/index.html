@@ -1,0 +1,88 @@
+<!doctype html>
+<!--
+  Índice de protótipos — Fase 3: retirada e caixa
+  Liga os protótipos autocontidos que cobrem as specs delta desta mudança.
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Fase 3: retirada e caixa</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617; --surface: #0f172a; --surface-2: #111c33; --border: #1e293b; --border-strong: #334155;
+        --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --accent-soft: rgba(56,189,248,.12);
+        --ok: #34d399; --warn: #fbbf24; --radius: 14px;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.5; }
+      h1, h2, p { margin: 0; }
+      .banner { padding: .5rem 1rem; background: color-mix(in srgb, var(--warn) 16%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); color: var(--warn); font-size: .8125rem; }
+      main { width: min(64rem, 100% - 2rem); margin-inline: auto; padding-block: 2.5rem 4rem; }
+      .eyebrow { color: var(--accent); font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin: .25rem 0 .5rem; line-height: 1.15; }
+      p { color: var(--muted); max-width: 52rem; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+      .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); margin-top: 2rem; }
+      a.card { display: grid; gap: .5rem; padding: 1.15rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); text-decoration: none; }
+      a.card:hover { border-color: var(--accent); background: var(--surface-2); }
+      a.card strong { font-size: 1.05rem; }
+      a.card span { color: var(--muted); font-size: .85rem; }
+      .tag { justify-self: start; display: inline-flex; padding: .15rem .5rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+      .note { margin-top: 2rem; padding: 1rem; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-2); display: grid; gap: .5rem; }
+      .note strong { color: var(--text); }
+      ul { color: var(--muted); padding-left: 1.2rem; margin: .25rem 0 0; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+    </style>
+  </head>
+  <body>
+    <p class="banner" role="note">Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.</p>
+    <main>
+      <p class="eyebrow">Fase 3 · SDD</p>
+      <h1>Retirada e caixa</h1>
+      <p>
+        Protótipos autocontidos para revisão do pedido de retirada, da fila operacional e do caixa.
+        Cada tela abre diretamente do disco e representa somente o comportamento descrito nas specs delta;
+        entrega, vistoria de saída, consumo de autorização e liberação de vaga não fazem parte desta fase.
+      </p>
+
+      <div class="grid">
+        <a class="card" href="atendimentos.html">
+          <span class="tag">Atendimentos</span>
+          <strong>Atendimentos em aberto</strong>
+          <span>Lista padrão de atendimentos em aberto com paginação, situação da retirada, busca exata opcional, detalhe por perfil e leituras auditadas.</span>
+        </a>
+        <a class="card" href="fila-retiradas.html">
+          <span class="tag">Fila</span>
+          <strong>Fila de retiradas</strong>
+          <span>Pedidos aguardando e em busca, início de busca pelos três perfis, polling de 30 s e projeções sem finanças ao manobrista.</span>
+        </a>
+        <a class="card" href="pedido-retirada.html">
+          <span class="tag">Pedido</span>
+          <strong>Registrar pedido de retirada</strong>
+          <span>Lista paginada de atendimentos em aberto para seleção, conferência presencial do titular, recusa de terceiro, cálculo de 24 h com snapshot imutável, replay e divergência preservada.</span>
+        </a>
+        <a class="card" href="caixa.html">
+          <span class="tag">Caixa</span>
+          <strong>Caixa do atendimento</strong>
+          <span>Acerto integral, desconto e estorno administrativos, confirmação explícita da operação, saldo reconstruído, autorizações separadas e histórico por perfil.</span>
+        </a>
+      </div>
+
+      <div class="note">
+        <strong>Limites da revisão</strong>
+        <ul>
+          <li>Nenhuma tela executa entrega, marca o pedido como entregue, coleta vistoria de saída, consome autorização ou libera vaga.</li>
+          <li>O cenário “entregue com saldo” do caixa é uma fixture sintética para o contrato de acerto posterior à entrega excepcional da Fase 4.</li>
+          <li>O seletor de perfil e os controles de cenário existem apenas para revisão; a autorização real é aplicada pela API.</li>
+          <li>Após sucesso, os formulários limpam o resumo de validação e o caixa mantém o diálogo de confirmação até a ação de concluir.</li>
+          <li>Os dados de placas, nomes, documentos e valores são fictícios. Não há persistência, storage, cookie ou chamada de rede.</li>
+        </ul>
+      </div>
+    </main>
+  </body>
+</html>

@@ -204,6 +204,11 @@ export class Funcionarios implements OnInit {
       this.sucesso.set(`Funcionário ${criado.nome} criado.`);
       this.modelo.set({ nome: '', email: '', senhaInicial: '' });
       this.perfisSelecionados.set([]);
+      this.resumoVisivel.set(false);
+      this.erroPerfis.set(null);
+      this.formulario.nome().reset();
+      this.formulario.email().reset();
+      this.formulario.senhaInicial().reset();
       this.pagina.set(1);
       await this.carregar();
     } catch (erro) {

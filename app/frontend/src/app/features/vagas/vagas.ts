@@ -200,6 +200,8 @@ export class Vagas implements OnInit, OnDestroy {
 
       this.sucesso.set(`Vaga ${criada.codigo} cadastrada.`);
       this.modelo.set({ codigo: '' });
+      this.resumoVisivel.set(false);
+      this.formulario.codigo().reset();
       this.pagina.set(1);
       await this.polling.notificarComando();
     } catch (erro) {

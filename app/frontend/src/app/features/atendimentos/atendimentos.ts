@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, DestroyRef, OnInit, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { takeUntil } from 'rxjs/operators';
 import { Subject, firstValueFrom } from 'rxjs';
 import {
@@ -25,6 +25,8 @@ interface AtendimentoLista {
   readonly estado: string;
   readonly vagaCodigo: string;
   readonly entradaUtc: string;
+  readonly pedidoId?: string | null;
+  readonly estadoRetirada?: string | null;
 }
 
 interface AtendimentoDetalhe extends AtendimentoLista {
@@ -77,6 +79,13 @@ export class Atendimentos implements OnInit {
   readonly buscando = signal(false);
   readonly erroBusca = signal<string | null>(null);
 
+  readonly abertos = signal<readonly AtendimentoLista[]>([]);
+  readonly totalAbertos = signal(0);
+  readonly paginaAbertos = signal(1);
+  readonly tamanhoAbertos = 20;
+  readonly carregandoAbertos = signal(true);
+  readonly erroAbertos = signal<string | null>(null);
+
   readonly selecionado = signal<string | null>(null);
   readonly detalhe = signal<AtendimentoDetalhe | null>(null);
   readonly historico = signal<readonly EventoHistorico[]>([]);
@@ -90,12 +99,15 @@ export class Atendimentos implements OnInit {
 
   private contexto = 0;
   private sinalAtual: Subject<void> | null = null;
+  private contextoAbertos = 0;
+  private sinalAbertos: Subject<void> | null = null;
 
   constructor() {
     effect(() => {
       if (!this.sessao.autenticado()) {
         this.invalidar();
         this.resultados.set([]);
+        this.abertos.set([]);
         this.selecionado.set(null);
         this.detalhe.set(null);
         this.historico.set([]);
@@ -106,6 +118,7 @@ export class Atendimentos implements OnInit {
     this.destruicao.onDestroy(() => {
       this.invalidar();
       this.resultados.set([]);
+      this.abertos.set([]);
       this.detalhe.set(null);
       this.historico.set([]);
       this.leitura.set(null);
@@ -113,7 +126,42 @@ export class Atendimentos implements OnInit {
   }
 
   ngOnInit(): void {
-    // Nenhuma consulta automática: a busca exige exatamente um filtro.
+    // A lista de atendimentos em aberto é a visão padrão; a busca exata é um
+    // filtro opcional.
+    void this.carregarAbertos();
+  }
+
+  readonly itensExibidos = computed(() =>
+    this.buscou() ? this.resultados() : this.abertos(),
+  );
+
+  readonly totalExibido = computed(() => (this.buscou() ? this.total() : this.totalAbertos()));
+
+  readonly paginaExibida = computed(() => (this.buscou() ? this.pagina() : this.paginaAbertos()));
+
+  readonly tamanhoExibido = computed(() =>
+    this.buscou() ? this.tamanhoPagina : this.tamanhoAbertos,
+  );
+
+  readonly totalPaginasExibidas = computed(() =>
+    Math.max(1, Math.ceil(this.totalExibido() / this.tamanhoExibido())),
+  );
+
+  readonly carregandoExibido = computed(() =>
+    this.buscou() ? this.buscando() : this.carregandoAbertos(),
+  );
+
+  readonly erroExibido = computed(() =>
+    this.buscou() ? this.erroBusca() : this.erroAbertos(),
+  );
+
+  async irParaPaginaExibida(novaPagina: number): Promise<void> {
+    if (this.buscou()) {
+      this.irParaPagina(novaPagina);
+      return;
+    }
+
+    await this.irParaPaginaAbertos(novaPagina);
   }
 
   selecionarTipo(tipo: TipoBusca): void {
@@ -138,6 +186,7 @@ export class Atendimentos implements OnInit {
 
     const token = this.iniciarContexto();
     const sinal = this.sinalAtual!;
+    this.pagina.set(1);
     this.buscando.set(true);
     this.buscou.set(true);
     this.iniciarFechamentoDetalhe();
@@ -175,6 +224,64 @@ export class Atendimentos implements OnInit {
         this.buscando.set(false);
       }
     }
+  }
+
+  async carregarAbertos(): Promise<void> {
+    const token = this.iniciarContextoAbertos();
+    const sinal = this.sinalAbertos!;
+    this.carregandoAbertos.set(true);
+    this.erroAbertos.set(null);
+
+    try {
+      const resposta = await firstValueFrom(
+        this.http
+          .get<Pagina<AtendimentoLista>>(
+            urlApi(
+              `/api/v1/attendances?status=aberto&page=${this.paginaAbertos()}&pageSize=${this.tamanhoAbertos}`,
+            ),
+          )
+          .pipe(takeUntil(sinal)),
+      );
+
+      if (token !== this.contextoAbertos) {
+        return;
+      }
+
+      this.abertos.set(resposta.items);
+      this.totalAbertos.set(resposta.total);
+    } catch (erro) {
+      if (token === this.contextoAbertos) {
+        this.erroAbertos.set(
+          mensagemDoErro(erro, 'Não foi possível carregar os atendimentos em aberto.'),
+        );
+      }
+    } finally {
+      if (token === this.contextoAbertos) {
+        this.carregandoAbertos.set(false);
+      }
+    }
+  }
+
+  limparBusca(): void {
+    this.buscou.set(false);
+    this.termo.set('');
+    this.resultados.set([]);
+    this.erroBusca.set(null);
+    this.pagina.set(1);
+    this.iniciarFechamentoDetalhe();
+  }
+
+  async irParaPaginaAbertos(novaPagina: number): Promise<void> {
+    if (novaPagina < 1 || novaPagina > this.totalPaginasAbertas()) {
+      return;
+    }
+
+    this.paginaAbertos.set(novaPagina);
+    await this.carregarAbertos();
+  }
+
+  private totalPaginasAbertas(): number {
+    return Math.max(1, Math.ceil(this.totalAbertos() / this.tamanhoAbertos));
   }
 
   async selecionar(id: string): Promise<void> {
@@ -294,10 +401,20 @@ export class Atendimentos implements OnInit {
     return this.contexto;
   }
 
+  private iniciarContextoAbertos(): number {
+    this.contextoAbertos += 1;
+    this.sinalAbertos?.next();
+    this.sinalAbertos = new Subject<void>();
+    return this.contextoAbertos;
+  }
+
   private invalidar(): void {
     this.contexto += 1;
     this.sinalAtual?.next();
     this.sinalAtual = null;
+    this.contextoAbertos += 1;
+    this.sinalAbertos?.next();
+    this.sinalAbertos = null;
   }
 
   private iniciarFechamentoDetalhe(): void {

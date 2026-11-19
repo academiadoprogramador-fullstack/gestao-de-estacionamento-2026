@@ -144,6 +144,9 @@ export class Tarifas implements OnInit {
         `Versão ${publicada.versao} publicada com ${formatarValor(publicada.valor)}.`,
       );
       this.modelo.set({ valor: '' });
+      this.resumoVisivel.set(false);
+      this.erroValor.set(null);
+      this.formulario.valor().reset();
       this.pagina.set(1);
       await this.carregarTudo();
     } catch (erro) {

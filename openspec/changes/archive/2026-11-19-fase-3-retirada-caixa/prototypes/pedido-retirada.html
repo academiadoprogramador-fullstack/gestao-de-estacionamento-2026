@@ -1,0 +1,788 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Pedido de retirada (Fase 3)
+  Source: proposal.md (What Changes — Pedido de retirada), specs/solicitacao-retirada/spec.md,
+          specs/cobranca-atendimento/spec.md
+  Covered:
+    - Lista de atendimentos em aberto com seleção, paginação e busca opcional
+    - Pedido confirmado / atendimento inelegível / segundo pedido / replay -> contexto, recusa e recibo
+    - Conferência aprovada / divergente -> radio, recibo e bloqueio textual da entrega normal
+    - Presença não declarada / terceiro tenta retirar -> validação sem chamada e recusa
+    - Documento não fotografado -> aviso e ausência de upload
+    - Cobrança fixada / publicação posterior / cálculo não confirmado -> prévia, recibo e recusa sem valor parcial
+    - Cálculo por períodos iniciados de 24 h -> cenários 0 h, 24 h, 24 h + fração, 48 h
+    - Atomicidade e auditoria do pedido -> máquina de estados, rollback no conflito
+    - Tentativa incerta e replay do pedido -> painel pendente/incerto, mesma chave e conteúdo
+  Not specified (presentational only):
+    - Navegação do shell, seletor de perfil e controles "Cenários do protótipo"
+    - Diálogo de leitura explícita do documento (comportamento já definido na Fase 2)
+  Open questions: none
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento. Recarregar restaura os dados.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Pedido de retirada</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617; --surface: #0f172a; --surface-2: #111c33; --raised: #1e293b;
+        --border: #1e293b; --border-strong: #334155; --text: #e2e8f0; --muted: #94a3b8;
+        --accent: #38bdf8; --accent-soft: rgba(56,189,248,.12);
+        --ok: #34d399; --ok-soft: rgba(52,211,153,.12);
+        --warn: #fbbf24; --warn-soft: rgba(251,191,36,.12);
+        --danger: #fb7185; --danger-soft: rgba(251,113,133,.12);
+        --radius: 14px;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.5; }
+      h1, h2, h3, p, dl, dd, dt, ul, fieldset { margin: 0; }
+      a { color: var(--accent); }
+      .skip-link { position: absolute; left: -999px; top: 0; z-index: 30; padding: .5rem 1rem; background: var(--accent); color: var(--bg); font-weight: 700; }
+      .skip-link:focus { left: 0; }
+      .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+      .prototype-banner { padding: .5rem 1rem; background: color-mix(in srgb, var(--warn) 14%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); color: var(--warn); font-size: .8125rem; }
+      .shell-header { position: sticky; top: 0; z-index: 20; background: rgba(2,6,23,.92); border-bottom: 1px solid var(--border); backdrop-filter: blur(8px); }
+      .shell-inner { width: min(84rem, 100% - 2rem); margin-inline: auto; display: flex; align-items: center; gap: 1.25rem; padding-block: .7rem; flex-wrap: wrap; }
+      .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; }
+      .brand svg { color: var(--accent); }
+      .brand small { display: block; color: var(--muted); font-size: .68rem; font-weight: 500; }
+      .nav { display: flex; gap: .25rem; list-style: none; padding: 0; flex-wrap: wrap; }
+      .nav a { display: inline-flex; padding: .35rem .6rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: .8125rem; font-weight: 600; }
+      .nav a:hover { color: var(--text); background: var(--surface-2); }
+      .nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+      .session { margin-left: auto; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+      .avatar { width: 2rem; height: 2rem; border-radius: 999px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: .72rem; font-weight: 700; }
+      .session strong { display: block; font-size: .8rem; }
+      .session span { display: block; font-size: .66rem; color: var(--muted); }
+      select, input, textarea { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 9px; padding: .45rem .6rem; }
+      select:focus-visible, input:focus-visible, textarea:focus-visible { border-color: var(--accent); }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .45rem .8rem; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; text-decoration: none; }
+      .btn:hover { border-color: var(--accent); }
+      .btn:disabled { opacity: .55; cursor: not-allowed; }
+      .btn-primary { background: var(--accent); border-color: var(--accent); color: #04121f; }
+      .btn-ghost { background: transparent; }
+      main { width: min(84rem, 100% - 2rem); margin-inline: auto; padding-block: 1.75rem 4rem; }
+      .page-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+      .eyebrow { color: var(--accent); font-size: .7rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { font-size: clamp(1.6rem, 3.5vw, 2.1rem); line-height: 1.15; margin-top: .2rem; }
+      .subtitle { color: var(--muted); max-width: 58rem; margin-top: .35rem; font-size: .9rem; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+      .card-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 1rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+      .card-head h2 { font-size: .95rem; }
+      .card-head p { color: var(--muted); font-size: .75rem; margin-top: .15rem; }
+      .card-body { padding: 1rem; display: grid; gap: 1rem; }
+      .layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.65fr) minmax(17rem, .85fr); align-items: start; }
+      .alert { display: flex; gap: .65rem; align-items: start; padding: .75rem .9rem; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-2); font-size: .82rem; }
+      .alert p { color: var(--text); }
+      .alert.info { border-color: color-mix(in srgb, var(--accent) 38%, transparent); background: var(--accent-soft); }
+      .alert.warn { border-color: color-mix(in srgb, var(--warn) 42%, transparent); background: var(--warn-soft); }
+      .alert.danger { border-color: color-mix(in srgb, var(--danger) 42%, transparent); background: var(--danger-soft); }
+      .alert.ok { border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: var(--ok-soft); }
+      .alert svg { flex: none; margin-top: .1rem; }
+      .summary-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); }
+      .open-list { margin-top: .85rem; overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+      .open-list table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+      .open-list caption { text-align: left; color: var(--muted); font-size: .72rem; padding: .55rem .7rem; }
+      .open-list th { text-align: left; color: var(--muted); font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; padding: .45rem .6rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+      .open-list td { padding: .55rem .6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+      .open-list tr:last-child td { border-bottom: 0; }
+      .open-list code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; color: var(--accent); }
+      .open-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
+      .badge-open { display: inline-flex; padding: .15rem .5rem; border-radius: 999px; font-size: .68rem; font-weight: 700; white-space: nowrap; background: var(--surface-2); color: var(--muted); }
+      .badge-open.pending { background: var(--warn-soft); color: var(--warn); }
+      .metric { padding: .75rem .85rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+      .metric dt { color: var(--muted); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; }
+      .metric dd { font-size: 1.05rem; font-weight: 700; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+      .metric small { display: block; color: var(--muted); font-size: .68rem; font-weight: 500; margin-top: .1rem; }
+      .field { display: grid; gap: .3rem; }
+      .field label, .field legend { color: var(--muted); font-size: .76rem; font-weight: 600; }
+      .field input[readonly] { color: var(--muted); }
+      .hint { color: var(--muted); font-size: .7rem; }
+      .required { color: var(--danger); }
+      fieldset { border: 1px solid var(--border); border-radius: 10px; padding: .8rem .9rem 1rem; }
+      legend { padding-inline: .35rem; color: var(--text); font-weight: 700; font-size: .85rem; }
+      .radio-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .35rem; }
+      .radio-row label { display: inline-flex; align-items: center; gap: .4rem; color: var(--text); font-size: .82rem; font-weight: 500; }
+      .checkline { display: flex; gap: .5rem; align-items: start; color: var(--text); font-size: .82rem; font-weight: 500; }
+      .checkline input { width: 1rem; height: 1rem; margin-top: .2rem; flex: none; }
+      .form-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; padding-top: .4rem; border-top: 1px solid var(--border); }
+      .keyline { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; color: var(--muted); }
+      .summary { padding: .85rem 1rem; border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); background: var(--danger-soft); border-radius: 10px; font-size: .82rem; }
+      .summary h2 { font-size: .9rem; margin-bottom: .35rem; }
+      .summary ul { padding-left: 1.2rem; display: grid; gap: .2rem; }
+      .error { color: var(--danger); font-size: .72rem; }
+      input[aria-invalid="true"], fieldset[aria-invalid="true"] { border-color: var(--danger); }
+      .receipt { display: grid; gap: .85rem; padding: 1rem; border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent); border-radius: 12px; background: var(--ok-soft); }
+      .receipt dl { display: grid; gap: .65rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+      .receipt dt { color: var(--muted); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; }
+      .receipt dd { font-weight: 700; margin-top: .1rem; }
+      .identifier { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+      .identifier code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.05rem; font-weight: 700; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; padding: .3rem .6rem; user-select: all; }
+      .sidebar { display: grid; gap: 1rem; }
+      .scenario-grid { display: grid; gap: .75rem; }
+      .pending-panel { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; padding: 1rem; background: rgba(2,6,23,.78); backdrop-filter: blur(3px); }
+      .pending-panel[hidden] { display: none; }
+      .pending-card { width: min(31rem, 100%); padding: 1.4rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); display: grid; gap: .9rem; }
+      .spinner { width: 1.4rem; height: 1.4rem; border-radius: 999px; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: spin .9s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .spinner { animation: none; border-top-color: var(--accent); } }
+      .denied { display: grid; justify-items: start; gap: .8rem; padding: 2.4rem; }
+      .denied svg { color: var(--danger); }
+      .toast { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(26rem, calc(100vw - 2rem)); padding: .85rem 1rem; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: 0 18px 40px rgba(2,6,23,.55); font-size: .82rem; }
+      .toast:empty { display: none; }
+      dialog { width: min(36rem, calc(100vw - 1.5rem)); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 0; }
+      dialog::backdrop { background: rgba(2,6,23,.72); backdrop-filter: blur(2px); }
+      .dialog-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; padding: 1rem 1.15rem; border-bottom: 1px solid var(--border); }
+      .dialog-head h2 { font-size: 1.05rem; }
+      .dialog-body { padding: 1.15rem; display: grid; gap: .8rem; }
+      .dialog-foot { display: flex; justify-content: end; gap: .6rem; padding: .85rem 1.15rem; border-top: 1px solid var(--border); background: var(--surface-2); }
+      @media (max-width: 68rem) { .layout { grid-template-columns: 1fr; } .nav { order: 3; } .session { width: 100%; margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.</p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" /><path d="M9 17V7h4a3 3 0 0 1 0 6H9" /></svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#spaces">Vagas</a></li>
+            <li><a href="#rates">Tarifa diária</a></li>
+            <li><a href="#attendances">Atendimentos</a></li>
+            <li><a href="#check-in">Check-in</a></li>
+            <li><a href="fila-retiradas.html">Fila de retiradas</a></li>
+            <li id="nav-cashier"><a href="caixa.html">Caixa</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div><strong id="session-name">Marina Duarte</strong><span id="session-role">Administrador · sessão verificada</span></div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width: auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+          <button class="btn btn-ghost" id="logout" type="button">Sair</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Operação de retirada</p>
+          <h1>Registrar pedido de retirada</h1>
+          <p class="subtitle">
+            Confira presencialmente o titular, registre a conferência e fixe o valor no instante do
+            pedido. Horário, operador, diárias e total são do servidor e não mudam depois.
+          </p>
+        </div>
+        <a class="btn" href="fila-retiradas.html">Voltar à fila</a>
+      </div>
+
+      <div id="allowed">
+        <div class="layout">
+          <div style="display: grid; gap: 1rem">
+            <section class="card" aria-labelledby="context-title">
+              <div class="card-head">
+                <div>
+                  <h2 id="context-title">Atendimentos em aberto</h2>
+                  <p>Lista dos veículos ainda na unidade; selecione um para conferência e pedido.</p>
+                </div>
+                <span class="badge" id="context-badge" style="padding:.15rem .5rem;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:.7rem;font-weight:700">Ativo</span>
+              </div>
+              <div class="card-body">
+                <div class="field" style="max-width: 34rem">
+                  <label for="termo-lista">Busca exata (opcional)</label>
+                  <div class="radio-row" style="margin-top:.2rem">
+                    <label><input type="radio" name="criterio-lista" value="placa" checked /> Placa</label>
+                    <label><input type="radio" name="criterio-lista" value="identificador" /> Identificador</label>
+                  </div>
+                  <div class="open-actions" style="margin-top:.35rem">
+                    <input id="termo-lista" type="text" placeholder="BRA2E19 ou AT-2026-000041" aria-describedby="lista-hint" style="flex:1; min-width:14rem" />
+                    <button class="btn" type="button" id="buscar-lista">Buscar</button>
+                    <button class="btn btn-ghost" type="button" id="limpar-lista" hidden>Limpar filtro</button>
+                  </div>
+                  <span class="hint" id="lista-hint">A lista mostra os atendimentos em aberto da unidade; a busca exata apenas filtra.</span>
+                </div>
+                <p class="hint" id="open-mode-label" style="margin-top:.2rem">Atendimentos em aberto na unidade</p>
+                <div class="open-list">
+                  <table>
+                    <caption>Atendimentos em aberto, ordenados por entrada.</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Atendimento</th>
+                        <th scope="col">Veículo e vaga</th>
+                        <th scope="col">Entrada</th>
+                        <th scope="col">Retirada</th>
+                        <th scope="col">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody id="open-body"></tbody>
+                  </table>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem">
+                  <p class="hint" id="open-page-info"></p>
+                  <div class="open-actions">
+                    <button class="btn btn-sm" type="button" id="open-prev">Anterior</button>
+                    <button class="btn btn-sm" type="button" id="open-next">Próxima</button>
+                  </div>
+                </div>
+                <dl class="summary-grid" id="attendance-summary"></dl>
+                <div class="alert warn" id="existing-request" hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+                  <p>
+                    Este atendimento já possui pedido <strong>aguardando</strong> com cobrança fixada.
+                    Um segundo pedido no mesmo ciclo é recusado; use o caixa para acompanhar o pedido original.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section class="card" id="form-card" aria-labelledby="form-title">
+              <div class="card-head">
+                <div>
+                  <h2 id="form-title">Conferência e pedido</h2>
+                  <p>Campos com <span class="required" aria-hidden="true">*</span> são obrigatórios.</p>
+                </div>
+                <span class="hint" id="key-badge">Tentativa apenas em memória</span>
+              </div>
+              <div class="card-body">
+                <div id="form-summary" class="summary" tabindex="-1" role="alert" hidden></div>
+
+                <form id="withdrawal-form" novalidate style="display: grid; gap: 1rem">
+                  <fieldset id="presence-fieldset">
+                    <legend>Conferência presencial do titular</legend>
+                    <label class="checkline" for="holder-present">
+                      <input type="checkbox" id="holder-present" aria-describedby="presence-hint" />
+                      <span>Declaro que o titular está presente e apresentou documento com foto.</span>
+                    </label>
+                    <p class="hint" id="presence-hint" style="margin-top:.35rem">
+                      A conferência é humana, feita contra nome e número registrados na entrada.
+                      Não fotografe o documento nem colete novo número. Retirada por terceiro é recusada.
+                    </p>
+                    <span class="error" id="error-presence" hidden></span>
+
+                    <div style="display:flex; gap:.5rem; align-items:end; flex-wrap:wrap; margin-top:.9rem">
+                      <div class="field" style="flex:1; min-width:15rem">
+                        <label for="registered-document">Documento registrado</label>
+                        <input id="registered-document" readonly value="DOC 12.345.678-9 (mascarado)" />
+                      </div>
+                      <button class="btn" type="button" id="read-document">Ler documento completo</button>
+                    </div>
+
+                    <div style="margin-top:.9rem">
+                      <fieldset style="border:0; padding:0; margin:0">
+                        <legend style="padding:0; font-size:.76rem; color:var(--muted); font-weight:600">Resultado da conferência <span class="required" aria-hidden="true">*</span></legend>
+                        <div class="radio-row">
+                          <label><input type="radio" name="conference" value="aprovada" /> Aprovada — documento confere</label>
+                          <label><input type="radio" name="conference" value="divergente" /> Divergente — documento não confere</label>
+                        </div>
+                      </fieldset>
+                      <span class="error" id="error-conference" hidden></span>
+                      <p class="hint" style="margin-top:.35rem">
+                        Divergência preserva o pedido e o cálculo, mas bloqueia a entrega normal até
+                        autorização documental do administrador.
+                      </p>
+                    </div>
+                  </fieldset>
+
+                  <section aria-labelledby="calc-title" style="display:grid; gap:.65rem">
+                    <div>
+                      <h2 id="calc-title" style="font-size:.9rem">Cobrança fixada no pedido</h2>
+                      <p class="hint">Calculada pelo servidor no instante do pedido, com a tarifa capturada na entrada.</p>
+                    </div>
+                    <dl class="summary-grid" id="calculation"></dl>
+                  </section>
+
+                  <div class="form-actions">
+                    <div>
+                      <p class="keyline" id="key-line">Idempotency-Key: —</p>
+                      <p class="hint">Gerada em memória; nunca armazenada no navegador.</p>
+                    </div>
+                    <div style="display:flex; gap:.6rem; flex-wrap:wrap">
+                      <button class="btn" type="reset" id="clear-form">Limpar</button>
+                      <button class="btn btn-primary" type="submit" id="submit-withdrawal">Registrar pedido</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </section>
+
+            <section id="result-region" hidden></section>
+          </div>
+
+          <aside class="sidebar" aria-label="Contexto e cenários do protótipo">
+            <section class="card" aria-labelledby="tariff-title">
+              <div class="card-head"><h2 id="tariff-title" style="font-size:.92rem">Tarifa da entrada</h2></div>
+              <div class="card-body">
+                <dl class="summary-grid" style="grid-template-columns:1fr 1fr">
+                  <div class="metric"><dt>Versão</dt><dd>v6</dd><small>capturada na entrada</small></div>
+                  <div class="metric"><dt>Diária</dt><dd>R$ 20,00</dd><small>snapshot imutável</small></div>
+                </dl>
+                <p class="hint">Publicações posteriores de tarifa não alteram este atendimento.</p>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="controls-title">
+              <div class="card-head"><h2 id="controls-title" style="font-size:.92rem">Cenários do protótipo</h2></div>
+              <div class="card-body">
+                <div class="scenario-grid">
+                  <div class="field">
+                    <label for="request-offset">Instante do pedido</label>
+                    <select id="request-offset">
+                      <option value="0">Imediatamente após a entrada (0 h)</option>
+                      <option value="86400" selected>Exatamente 24 h após a entrada</option>
+                      <option value="86401">24 h + 1 s (nova diária)</option>
+                      <option value="108000">30 h após a entrada</option>
+                      <option value="172800">Exatamente 48 h</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="next-outcome">Próxima resposta do servidor</label>
+                    <select id="next-outcome">
+                      <option value="success">Sucesso — pedido criado</option>
+                      <option value="lost">Rede perdida — resultado desconhecido</option>
+                      <option value="conflict">Conflito — segundo pedido recusado (409)</option>
+                    </select>
+                  </div>
+                  <button class="btn btn-ghost" type="button" id="simulate-absent">Simular titular ausente</button>
+                </div>
+              </div>
+            </section>
+
+            <div class="alert info">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+              <p>O pedido não entrega o veículo. Vistoria de saída, entrega, consumo de autorização e liberação da vaga pertencem à Fase 4.</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <section id="denied" class="card denied" hidden aria-labelledby="denied-title">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        <h1 id="denied-title" style="font-size:1.5rem">Acesso negado</h1>
+        <p class="subtitle">O pedido de retirada é restrito a Caixa e Administrador. O Manobrista pode consultar a fila e iniciar a busca, mas não registrar pedido.</p>
+        <button class="btn" type="button" id="back-to-admin">Voltar à visualização de Administrador</button>
+      </section>
+    </main>
+
+    <div class="pending-panel" id="pending-panel" hidden role="dialog" aria-modal="true" aria-labelledby="pending-title">
+      <div class="pending-card">
+        <div style="display:flex; align-items:center; gap:.75rem">
+          <span class="spinner" aria-hidden="true"></span>
+          <h2 id="pending-title" style="font-size:1.05rem">Registrando pedido…</h2>
+        </div>
+        <p class="hint" id="pending-message">Comando pendente. A navegação interna e a saída ficam bloqueadas até o resultado ser conhecido.</p>
+        <div class="alert warn" id="pending-warning">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+          <p>Não recarregue o navegador. A tentativa existe apenas em memória e será perdida se a página fechar.</p>
+        </div>
+        <div id="pending-actions" hidden style="display:flex; gap:.6rem; flex-wrap:wrap">
+          <button class="btn btn-primary" type="button" id="retry-same">Repetir mesmo pedido</button>
+          <button class="btn btn-ghost" type="button" id="discard-attempt">Descartar tentativa</button>
+        </div>
+      </div>
+    </div>
+
+    <dialog id="document-dialog" aria-labelledby="document-title">
+      <div class="dialog-head">
+        <div>
+          <h2 id="document-title">Documento do titular</h2>
+          <p class="hint">Leitura explícita e auditada antes de retornar o conteúdo.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" id="close-document">Fechar</button>
+      </div>
+      <div class="dialog-body">
+        <p class="hint">Evento de auditoria registrado para <strong id="audit-actor">Marina Duarte</strong> em <strong>19/11/2026 09:20</strong>.</p>
+        <p style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:1rem; padding:.75rem; border:1px solid var(--border-strong); border-radius:9px; background:var(--surface-2)">
+          DOC 12.345.678-9 · Ana Beatriz Ferreira
+        </p>
+        <p class="hint">Dado sintético. Não fotografar, copiar para outro sistema ou registrar em log.</p>
+      </div>
+      <div class="dialog-foot"><button class="btn" type="button" id="close-document-2">Entendi</button></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const perfis = {
+        Administrador: { iniciais: "MD", nome: "Marina Duarte" },
+        Caixa: { iniciais: "JC", nome: "João Cardoso" },
+        Manobrista: { iniciais: "RS", nome: "Rafael Souza" }
+      };
+
+      const atendimentos = {
+        "AT-2026-000041": { id: "AT-2026-000041", placa: "BRA2E19", modelo: "Hatch prata", vaga: "A-03", entrada: "19/11/2026 07:10", entradaIso: "2026-11-19T10:10:00Z", titular: "Ana Beatriz Ferreira", tarifa: 20, pedido: null },
+        "AT-2026-000038": { id: "AT-2026-000038", placa: "QWE4R56", modelo: "Sedan branco", vaga: "B-07", entrada: "19/11/2026 06:58", entradaIso: "2026-11-19T09:58:00Z", titular: "Carlos Eduardo Lima", tarifa: 20, pedido: { estado: "aguardando", total: 40 } },
+        "AT-2026-000035": { id: "AT-2026-000035", placa: "JKL7M89", modelo: "SUV cinza", vaga: "A-01", entrada: "19/11/2026 04:40", entradaIso: "2026-11-19T07:40:00Z", titular: "Fernanda Alves", tarifa: 20, pedido: null },
+        "AT-2026-000031": { id: "AT-2026-000031", placa: "TUV1W23", modelo: "Compacto azul", vaga: "C-02", entrada: "19/11/2026 04:21", entradaIso: "2026-11-19T07:21:00Z", titular: "Bruno Martins", tarifa: 20, pedido: null },
+        "AT-2026-000027": { id: "AT-2026-000027", placa: "XYZ9A01", modelo: "Picape vermelha", vaga: "B-02", entrada: "19/11/2026 04:05", entradaIso: "2026-11-19T07:05:00Z", titular: "Patrícia Nunes", tarifa: 20, pedido: { estado: "em busca", total: 40 } }
+      };
+
+      const state = { perfil: "Administrador", tentativa: null, resultado: null, atendimentoId: "AT-2026-000041", paginaAbertos: 1, tamanhoAbertos: 3, criterioAbertos: "placa", termoAbertos: "", buscouAbertos: false };
+      const $ = (id) => document.getElementById(id);
+      let chave = novaChave();
+
+      function novaChave() {
+        const hex = () => Math.floor(Math.random() * 16).toString(16);
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => (c === "x" ? hex() : ((Math.random() * 4 | 8).toString(16))));
+      }
+
+      function moeda(valor) { return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+
+      function atendimentoAtual() { return atendimentos[state.atendimentoId]; }
+
+      function abertosFiltrados() {
+        const termo = state.termoAbertos.trim().toUpperCase();
+        const todos = Object.values(atendimentos);
+        const filtrados = state.buscouAbertos
+          ? todos.filter((item) => state.criterioAbertos === "placa" ? item.placa === termo : item.id === termo)
+          : todos;
+        return filtrados.sort((a, b) => (a.entradaIso < b.entradaIso ? 1 : -1));
+      }
+
+      function renderAbertos() {
+        const filtrados = abertosFiltrados();
+        const paginas = Math.max(1, Math.ceil(filtrados.length / state.tamanhoAbertos));
+        state.paginaAbertos = Math.min(state.paginaAbertos, paginas);
+        const inicio = (state.paginaAbertos - 1) * state.tamanhoAbertos;
+        const pagina = filtrados.slice(inicio, inicio + state.tamanhoAbertos);
+
+        $("open-body").innerHTML = pagina.length
+          ? pagina.map((item) => {
+              const retirada = item.pedido
+                ? `<span class="badge-open pending">${item.pedido.estado}</span>`
+                : `<span class="badge-open">Sem pedido</span>`;
+              const acao = item.pedido
+                ? `<a class="btn btn-sm btn-ghost" href="caixa.html">Abrir caixa</a><button class="btn btn-sm" type="button" data-selecionar="${item.id}">Ver detalhe</button>`
+                : `<button class="btn btn-sm" type="button" data-selecionar="${item.id}">Ver detalhe</button><button class="btn btn-sm btn-primary" type="button" data-selecionar="${item.id}">Selecionar</button>`;
+              return `<tr>
+                <td><code>${item.id}</code></td>
+                <td><strong>${item.placa}</strong><span class="hint" style="display:block">${item.modelo} · vaga ${item.vaga}</span></td>
+                <td>${item.entrada}</td>
+                <td>${retirada}</td>
+                <td><div class="open-actions">${acao}</div></td>
+              </tr>`;
+            }).join("")
+          : `<tr><td colspan="5"><span class="hint">Nenhum atendimento em aberto para o filtro.</span></td></tr>`;
+
+        $("open-mode-label").textContent = state.buscouAbertos
+          ? "Resultados da busca"
+          : "Atendimentos em aberto na unidade";
+        $("limpar-lista").hidden = !state.buscouAbertos;
+        $("open-page-info").textContent = `Página ${state.paginaAbertos} de ${paginas} · ${filtrados.length} atendimento(s)`;
+        $("open-prev").disabled = state.paginaAbertos <= 1;
+        $("open-next").disabled = state.paginaAbertos >= paginas;
+        $("open-body").querySelectorAll("[data-selecionar]").forEach((botao) => {
+          botao.addEventListener("click", () => {
+            state.atendimentoId = botao.dataset.selecionar;
+            limparResultado();
+            limparErros();
+            renderContexto();
+          });
+        });
+      }
+
+      function formatarData(iso) {
+        return new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+
+      function formatarDuracao(segundos) {
+        const horas = Math.floor(segundos / 3600);
+        const minutos = Math.floor((segundos % 3600) / 60);
+        if (horas === 0) return `${minutos} min`;
+        return `${horas} h ${String(minutos).padStart(2, "0")} min`;
+      }
+
+      function calcular() {
+        const atendimento = atendimentoAtual();
+        const offset = Number($("request-offset").value);
+        const diarias = Math.max(1, Math.ceil(offset / 86400));
+        const total = diarias * atendimento.tarifa;
+        const pedidoIso = new Date(new Date(atendimento.entradaIso).getTime() + offset * 1000).toISOString();
+        return { offset, diarias, total, pedidoIso, duracao: formatarDuracao(offset) };
+      }
+
+      function renderContexto() {
+        const atendimento = atendimentoAtual();
+        const calc = calcular();
+        const existente = Boolean(atendimento.pedido);
+        $("attendance-summary").innerHTML = `
+          <div class="metric"><dt>Identificador</dt><dd style="font-family:ui-monospace,monospace;font-size:.9rem">${atendimento.id}</dd><small>copiável no detalhe</small></div>
+          <div class="metric"><dt>Veículo</dt><dd>${atendimento.placa}</dd><small>${atendimento.modelo}</small></div>
+          <div class="metric"><dt>Vaga</dt><dd>${atendimento.vaga}</dd><small>ocupação aberta</small></div>
+          <div class="metric"><dt>Entrada</dt><dd style="font-size:.9rem">${atendimento.entrada}</dd><small>horário do servidor</small></div>
+          <div class="metric"><dt>Titular</dt><dd style="font-size:.9rem">${atendimento.titular}</dd><small>dado sintético</small></div>`;
+        $("calculation").innerHTML = existente
+          ? `
+          <div class="metric"><dt>Pedido original</dt><dd style="font-size:.9rem">Cobrança fixada</dd><small>não será recalculada</small></div>
+          <div class="metric"><dt>Diárias</dt><dd>2</dd><small>fixadas no pedido</small></div>
+          <div class="metric"><dt>Total original</dt><dd>${moeda(atendimento.pedido.total)}</dd><small>snapshot da entrada</small></div>
+          <div class="metric"><dt>Estado</dt><dd style="font-size:.9rem">Aguardando</dd><small>um pedido por ciclo</small></div>`
+          : `
+          <div class="metric"><dt>Instante do pedido</dt><dd style="font-size:.9rem">${formatarData(calc.pedidoIso)}</dd><small>America/Sao_Paulo</small></div>
+          <div class="metric"><dt>Tempo decorrido</dt><dd style="font-size:.9rem">${calc.duracao}</dd><small>até o pedido</small></div>
+          <div class="metric"><dt>Diárias iniciadas</dt><dd>${calc.diarias}</dd><small>mínimo de uma · 24 h cada</small></div>
+          <div class="metric"><dt>Total fixado</dt><dd>${moeda(calc.total)}</dd><small>${calc.diarias} × ${moeda(atendimento.tarifa)}</small></div>`;
+
+        $("existing-request").hidden = !existente;
+        $("form-card").hidden = existente;
+        $("withdrawal-form").querySelectorAll("input, button[type=submit]").forEach((el) => { el.disabled = existente; });
+        $("context-badge").textContent = existente ? "Pedido existente" : "Ativo";
+        $("context-badge").style.background = existente ? "var(--warn-soft)" : "var(--accent-soft)";
+        $("context-badge").style.color = existente ? "var(--warn)" : "var(--accent)";
+      }
+
+      function aplicarPerfil() {
+        const dados = perfis[state.perfil];
+        $("avatar").textContent = dados.iniciais;
+        $("session-name").textContent = dados.nome;
+        $("session-role").textContent = state.perfil + " · sessão verificada";
+        const permitido = state.perfil !== "Manobrista";
+        $("allowed").hidden = !permitido;
+        $("denied").hidden = permitido;
+        $("nav-cashier").hidden = !permitido;
+        $("audit-actor").textContent = dados.nome;
+      }
+
+      function limparResultado() {
+        $("result-region").hidden = true;
+        $("result-region").innerHTML = "";
+        state.resultado = null;
+      }
+
+      function aviso(texto) {
+        const toast = $("toast");
+        toast.textContent = texto;
+        setTimeout(() => { toast.textContent = ""; }, 6500);
+      }
+
+      function limparErros() {
+        $("form-summary").hidden = true;
+        $("form-summary").innerHTML = "";
+        ["presence", "conference"].forEach((nome) => {
+          const erro = $("error-" + nome);
+          if (erro) erro.hidden = true;
+        });
+        $("holder-present").removeAttribute("aria-invalid");
+        $("presence-fieldset").removeAttribute("aria-invalid");
+      }
+
+      function validar() {
+        limparErros();
+        const mensagens = [];
+        const atendimento = atendimentoAtual();
+        if (atendimento.pedido) mensagens.push("Este atendimento já possui pedido; um segundo pedido é recusado.");
+        if (!$("holder-present").checked) {
+          mensagens.push("Declare a presença do titular. Retirada por terceiro ou com titular ausente não é permitida no MVP.");
+          $("holder-present").setAttribute("aria-invalid", "true");
+          $("error-presence").textContent = "Presença do titular não declarada.";
+          $("error-presence").hidden = false;
+        }
+        const conferencia = document.querySelector('input[name="conference"]:checked');
+        if (!conferencia) {
+          mensagens.push("Informe o resultado da conferência: aprovada ou divergente.");
+          $("presence-fieldset").setAttribute("aria-invalid", "true");
+          $("error-conference").textContent = "Resultado da conferência não informado.";
+          $("error-conference").hidden = false;
+        }
+        if (mensagens.length) {
+          $("form-summary").innerHTML = `<h2>Corrija antes de registrar</h2><ul>${mensagens.map((m) => `<li>${m}</li>`).join("")}</ul>`;
+          $("form-summary").hidden = false;
+          $("form-summary").focus();
+          return false;
+        }
+        return true;
+      }
+
+      function mostrarRecibo(conferencia) {
+        const atendimento = atendimentoAtual();
+        const calc = calcular();
+        const divergente = conferencia === "divergente";
+        $("result-region").hidden = false;
+        $("result-region").innerHTML = `
+          <section class="card" aria-labelledby="result-title">
+            <div class="card-head">
+              <h2 id="result-title">Pedido registrado</h2>
+              <span style="padding:.15rem .5rem;border-radius:999px;background:var(--warn-soft);color:var(--warn);font-size:.7rem;font-weight:700">Aguardando busca</span>
+            </div>
+            <div class="card-body">
+              <div class="receipt">
+                <div class="identifier">
+                  <span class="hint">Identificador</span>
+                  <code>${atendimento.id}</code>
+                  <button class="btn btn-sm" type="button" id="copy-id">Copiar</button>
+                </div>
+                <dl>
+                  <div><dt>Pedido em</dt><dd>${formatarData(calc.pedidoIso)}</dd></div>
+                  <div><dt>Tempo decorrido</dt><dd>${calc.duracao}</dd></div>
+                  <div><dt>Diárias</dt><dd>${calc.diarias}</dd></div>
+                  <div><dt>Total fixado</dt><dd>${moeda(calc.total)}</dd></div>
+                  <div><dt>Conferência</dt><dd>${divergente ? "Divergente" : "Aprovada"}</dd></div>
+                  <div><dt>Saldo</dt><dd>${moeda(calc.total)}</dd></div>
+                </dl>
+              </div>
+              ${divergente ? `<div class="alert warn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+                <p>Entrega normal bloqueada: a conferência divergente exige autorização documental vigente. O pedido e o cálculo foram preservados.</p>
+              </div>` : ""}
+              <div class="alert info">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+                <p>O valor está fixado e não muda com nova tarifa. A entrega do veículo e a liberação da vaga pertencem à Fase 4.</p>
+              </div>
+              <div style="display:flex; gap:.6rem; flex-wrap:wrap">
+                <a class="btn btn-primary" href="caixa.html">Ir para o caixa</a>
+                <a class="btn" href="fila-retiradas.html">Ver fila</a>
+              </div>
+            </div>
+          </section>`;
+        $("result-region").querySelector("#copy-id").addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(atendimento.id);
+            aviso("Identificador copiado.");
+          } catch {
+            aviso("Área de transferência indisponível; o identificador permanece selecionável.");
+          }
+        });
+        $("result-region").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function mostrarRecusa() {
+        $("result-region").hidden = false;
+        $("result-region").innerHTML = `
+          <section class="card" aria-labelledby="result-title">
+            <div class="card-head"><h2 id="result-title">Pedido recusado</h2></div>
+            <div class="card-body">
+              <div class="alert danger">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+                <p><strong>Segundo pedido recusado (409).</strong> O pedido e o cálculo originais permanecem inalterados. Nenhum novo valor foi fixado.</p>
+              </div>
+              <div style="display:flex; gap:.6rem; flex-wrap:wrap">
+                <a class="btn btn-primary" href="caixa.html">Abrir caixa do pedido original</a>
+                <a class="btn" href="fila-retiradas.html">Ver fila</a>
+              </div>
+            </div>
+          </section>`;
+        $("result-region").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function iniciarEnvio() {
+        if (!validar()) return;
+        const conferencia = document.querySelector('input[name="conference"]:checked').value;
+        state.tentativa = { chave, atendimentoId: atendimentoAtual().id, conferencia };
+        $("pending-panel").hidden = false;
+        $("pending-title").textContent = "Registrando pedido…";
+        $("pending-message").textContent = "Comando pendente. A navegação interna e a saída ficam bloqueadas até o resultado ser conhecido.";
+        $("pending-warning").hidden = false;
+        $("pending-actions").hidden = true;
+
+        const resultado = $("next-outcome").value;
+        setTimeout(() => {
+          if (resultado === "lost") {
+            $("pending-title").textContent = "Resultado incerto";
+            $("pending-message").textContent = "A resposta se perdeu. Repita o mesmo pedido com a mesma chave e o mesmo conteúdo para saber se ele foi confirmado.";
+            $("pending-actions").hidden = false;
+            return;
+          }
+          $("pending-panel").hidden = true;
+          if (resultado === "conflict") {
+            mostrarRecusa();
+            chave = novaChave();
+            $("key-line").textContent = "Idempotency-Key: " + chave;
+            return;
+          }
+          atendimentoAtual().pedido = { estado: "aguardando", total: calcular().total };
+          mostrarRecibo(conferencia);
+          chave = novaChave();
+          $("key-line").textContent = "Idempotency-Key: " + chave;
+          renderContexto();
+        }, 950);
+      }
+
+      function repetirMesmo() {
+        if (!state.tentativa) return;
+        $("pending-title").textContent = "Repetindo o mesmo pedido…";
+        $("pending-message").textContent = "Mesma chave e mesmo conteúdo. Nenhuma nova tentativa é gerada.";
+        $("pending-actions").hidden = true;
+        $("pending-warning").hidden = false;
+        setTimeout(() => {
+          $("pending-panel").hidden = true;
+          atendimentoAtual().pedido = { estado: "aguardando", total: calcular().total };
+          mostrarRecibo(state.tentativa.conferencia);
+          state.tentativa = null;
+          chave = novaChave();
+          $("key-line").textContent = "Idempotency-Key: " + chave;
+          renderContexto();
+        }, 900);
+      }
+
+      $("profile-switch").addEventListener("change", (e) => { state.perfil = e.target.value; aplicarPerfil(); });
+      $("back-to-admin").addEventListener("click", () => { state.perfil = "Administrador"; $("profile-switch").value = "Administrador"; aplicarPerfil(); });
+      document.querySelectorAll('input[name="criterio-lista"]').forEach((radio) => {
+        radio.addEventListener("change", (evento) => {
+          state.criterioAbertos = evento.target.value;
+          state.paginaAbertos = 1;
+          if (state.buscouAbertos) renderAbertos();
+        });
+      });
+      $("buscar-lista").addEventListener("click", () => {
+        const termo = $("termo-lista").value.trim();
+        if (!termo) {
+          aviso("Informe a placa ou o identificador para a busca exata.");
+          return;
+        }
+        state.criterioAbertos = document.querySelector('input[name="criterio-lista"]:checked').value;
+        state.termoAbertos = termo;
+        state.buscouAbertos = true;
+        state.paginaAbertos = 1;
+        renderAbertos();
+      });
+      $("limpar-lista").addEventListener("click", () => {
+        state.termoAbertos = "";
+        state.buscouAbertos = false;
+        state.paginaAbertos = 1;
+        $("termo-lista").value = "";
+        renderAbertos();
+      });
+      $("termo-lista").addEventListener("keydown", (evento) => {
+        if (evento.key === "Enter") {
+          evento.preventDefault();
+          $("buscar-lista").click();
+        }
+      });
+      $("open-prev").addEventListener("click", () => { state.paginaAbertos -= 1; renderAbertos(); });
+      $("open-next").addEventListener("click", () => { state.paginaAbertos += 1; renderAbertos(); });
+      $("request-offset").addEventListener("change", renderContexto);
+      $("withdrawal-form").addEventListener("submit", (e) => { e.preventDefault(); iniciarEnvio(); });
+      $("clear-form").addEventListener("click", () => { limparErros(); limparResultado(); $("withdrawal-form").reset(); chave = novaChave(); $("key-line").textContent = "Idempotency-Key: " + chave; renderContexto(); });
+      $("retry-same").addEventListener("click", repetirMesmo);
+      $("discard-attempt").addEventListener("click", () => { state.tentativa = null; $("pending-panel").hidden = true; chave = novaChave(); $("key-line").textContent = "Idempotency-Key: " + chave; aviso("Tentativa descartada; o resultado no servidor permanece desconhecido."); });
+      $("simulate-absent").addEventListener("click", () => { $("holder-present").checked = false; aviso("Cenário: titular ausente. O pedido será recusado."); });
+      $("read-document").addEventListener("click", () => { $("document-dialog").showModal(); $("close-document").focus(); });
+      $("close-document").addEventListener("click", () => $("document-dialog").close());
+      $("close-document-2").addEventListener("click", () => $("document-dialog").close());
+      $("logout").addEventListener("click", () => aviso("Logout do protótipo: a sessão seria revogada no servidor."));
+
+      $("key-line").textContent = "Idempotency-Key: " + chave;
+      aplicarPerfil();
+      renderAbertos();
+      renderContexto();
+    </script>
+  </body>
+</html>

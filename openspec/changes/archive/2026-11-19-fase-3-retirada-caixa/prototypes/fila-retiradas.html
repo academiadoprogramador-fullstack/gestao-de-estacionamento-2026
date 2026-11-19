@@ -1,0 +1,523 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Fila de retiradas (Fase 3)
+  Source: proposal.md (What Changes — Fila de retiradas), specs/fila-retiradas/spec.md
+  Covered:
+    - Fila paginada de pedidos de retirada -> tabela, filtro de estado, paginação, estado vazio
+    - Consulta pelos três perfis / paginação completa -> seletor de perfil, página anterior/próxima, tamanho
+    - Estado entregue ausente -> aviso de limite da fase, sem ação de entrega
+    - Início de busca registrado -> ação "Iniciar busca", responsável/horário, conflito simulado
+    - Início repetido ou concorrente / pedido inelegível -> botão desabilitado, aviso de conflito
+    - Atualização periódica sem sobreposição -> indicador de polling 30 s, atualização manual, aba oculta
+    - Projeções por perfil na fila -> colunas financeiras e acesso ao caixa apenas para Caixa/Admin
+    - Ausência de entrega antecipada -> nenhum comando de entrega, vaga e ocupação preservadas
+  Not specified (presentational only):
+    - Navegação do shell e seletor de perfil para revisão
+    - Atalhos para registrar pedido e abrir o caixa
+    - Filtro por estado e tamanho de página (a spec exige paginação e filtros preservados)
+    - Controles "Cenários do protótipo" para simular conflito e aba oculta
+  Open questions: none
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento. Recarregar restaura os dados.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Fila de retiradas</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --surface: #0f172a;
+        --surface-2: #111c33;
+        --raised: #1e293b;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.12);
+        --ok: #34d399;
+        --ok-soft: rgba(52, 211, 153, 0.12);
+        --warn: #fbbf24;
+        --warn-soft: rgba(251, 191, 36, 0.12);
+        --danger: #fb7185;
+        --danger-soft: rgba(251, 113, 133, 0.12);
+        --radius: 14px;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.5; }
+      h1, h2, h3, p, dl, dd, dt, ul { margin: 0; }
+      a { color: var(--accent); }
+      .skip-link { position: absolute; left: -999px; top: 0; z-index: 30; padding: 0.5rem 1rem; background: var(--accent); color: var(--bg); font-weight: 700; }
+      .skip-link:focus { left: 0; }
+      .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+      .prototype-banner { padding: 0.5rem 1rem; background: color-mix(in srgb, var(--warn) 14%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); color: var(--warn); font-size: 0.8125rem; }
+      .shell-header { position: sticky; top: 0; z-index: 20; background: rgba(2, 6, 23, 0.92); border-bottom: 1px solid var(--border); backdrop-filter: blur(8px); }
+      .shell-inner { width: min(84rem, 100% - 2rem); margin-inline: auto; display: flex; align-items: center; gap: 1.25rem; padding-block: 0.7rem; flex-wrap: wrap; }
+      .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; }
+      .brand svg { color: var(--accent); }
+      .brand small { display: block; color: var(--muted); font-size: 0.68rem; font-weight: 500; letter-spacing: 0.04em; }
+      .nav { display: flex; gap: 0.25rem; list-style: none; padding: 0; flex-wrap: wrap; }
+      .nav a { display: inline-flex; padding: 0.35rem 0.6rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 0.8125rem; font-weight: 600; }
+      .nav a:hover { color: var(--text); background: var(--surface-2); }
+      .nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+      .session { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+      .avatar { width: 2rem; height: 2rem; border-radius: 999px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 0.72rem; font-weight: 700; }
+      .session strong { display: block; font-size: 0.8rem; }
+      .session span { display: block; font-size: 0.66rem; color: var(--muted); }
+      select, input { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 9px; padding: 0.45rem 0.6rem; }
+      select:focus-visible, input:focus-visible { border-color: var(--accent); }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.45rem 0.8rem; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; text-decoration: none; }
+      .btn:hover { border-color: var(--accent); }
+      .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+      .btn-primary { background: var(--accent); border-color: var(--accent); color: #04121f; }
+      .btn-ghost { background: transparent; }
+      .btn-sm { padding: 0.28rem 0.55rem; font-size: 0.75rem; }
+      main { width: min(84rem, 100% - 2rem); margin-inline: auto; padding-block: 1.75rem 4rem; }
+      .page-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+      .eyebrow { color: var(--accent); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+      h1 { font-size: clamp(1.6rem, 3.5vw, 2.1rem); line-height: 1.15; margin-top: 0.2rem; }
+      .subtitle { color: var(--muted); max-width: 58rem; margin-top: 0.35rem; font-size: 0.9rem; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+      .card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+      .card-head h2 { font-size: 0.95rem; }
+      .card-body { padding: 1rem; }
+      .alert { display: flex; gap: 0.65rem; align-items: start; padding: 0.75rem 0.9rem; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-2); font-size: 0.82rem; }
+      .alert p { color: var(--text); }
+      .alert.info { border-color: color-mix(in srgb, var(--accent) 38%, transparent); background: var(--accent-soft); }
+      .alert.warn { border-color: color-mix(in srgb, var(--warn) 42%, transparent); background: var(--warn-soft); }
+      .alert.ok { border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: var(--ok-soft); }
+      .alert svg { flex: none; margin-top: 0.1rem; }
+      .summary-grid { display: grid; gap: 0.85rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-block: 1rem; }
+      .metric { padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+      .metric dt { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; }
+      .metric dd { font-size: 1.5rem; font-weight: 700; margin-top: 0.2rem; }
+      .metric small { display: block; color: var(--muted); font-size: 0.7rem; font-weight: 500; margin-top: 0.15rem; }
+      .toolbar { display: flex; align-items: end; gap: 0.75rem; flex-wrap: wrap; padding: 1rem; border-bottom: 1px solid var(--border); }
+      .field { display: grid; gap: 0.25rem; }
+      .field label { color: var(--muted); font-size: 0.74rem; font-weight: 600; }
+      .hint { color: var(--muted); font-size: 0.7rem; }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+      caption { text-align: left; color: var(--muted); padding: 0.6rem 1rem; font-size: 0.72rem; }
+      th { text-align: left; color: var(--muted); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+      td { padding: 0.7rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+      tbody tr:hover { background: var(--surface-2); }
+      td code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
+      .vehicle strong { display: block; }
+      .vehicle span { color: var(--muted); font-size: 0.75rem; }
+      .badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+      .badge.waiting { background: var(--warn-soft); color: var(--warn); }
+      .badge.searching { background: var(--accent-soft); color: var(--accent); }
+      .badge.delivered { background: var(--ok-soft); color: var(--ok); }
+      .money { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+      .row-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+      .pagination { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.8rem 1rem; flex-wrap: wrap; }
+      .pagination p { color: var(--muted); font-size: 0.78rem; }
+      .empty { padding: 2.2rem 1rem; text-align: center; color: var(--muted); display: grid; gap: 0.4rem; justify-items: center; }
+      .empty strong { color: var(--text); }
+      .scenario-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+      .toast { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(26rem, calc(100vw - 2rem)); padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: 0 18px 40px rgba(2, 6, 23, 0.55); font-size: 0.82rem; }
+      .toast:empty { display: none; }
+      .toast[data-kind="ok"] { border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+      .toast[data-kind="danger"] { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+      .loading-line { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.72rem; }
+      .dot { width: 0.45rem; height: 0.45rem; border-radius: 999px; background: var(--ok); }
+      @media (max-width: 60rem) { .nav { order: 3; } .session { width: 100%; margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">
+      Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.
+    </p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+          </svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#spaces">Vagas</a></li>
+            <li><a href="#rates">Tarifa diária</a></li>
+            <li><a href="#attendances">Atendimentos</a></li>
+            <li><a href="#check-in">Check-in</a></li>
+            <li><a href="fila-retiradas.html" aria-current="page">Fila de retiradas</a></li>
+            <li id="nav-cashier"><a href="caixa.html">Caixa</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div>
+            <strong id="session-name">Marina Duarte</strong>
+            <span id="session-role">Administrador · sessão verificada</span>
+          </div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width: auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+          <button class="btn btn-ghost" id="logout" type="button">Sair</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Operação de retirada</p>
+          <h1>Fila de retiradas</h1>
+          <p class="subtitle">
+            Pedidos calculados e aguardando busca. O manobrista acompanha a operação sem finanças,
+            conferência ou autorizações; a entrega e a liberação da vaga pertencem à Fase 4.
+          </p>
+        </div>
+        <div class="row-actions" id="page-actions">
+          <a class="btn" href="pedido-retirada.html">Registrar pedido</a>
+          <a class="btn btn-primary" href="caixa.html">Abrir caixa</a>
+        </div>
+      </div>
+
+      <div class="alert info" style="margin-bottom: 1rem">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+        <p>
+          Esta fase registra pedido, busca, cobrança e caixa. Não há comando de entrega: o pedido não
+          passa a <strong>entregue</strong>, a vaga continua ocupada e autorizações não são consumidas.
+        </p>
+      </div>
+
+      <dl class="summary-grid" aria-label="Resumo da fila">
+        <div class="metric">
+          <dt>Aguardando</dt>
+          <dd id="metric-waiting">—</dd>
+          <small>Na página atual, ainda sem busca</small>
+        </div>
+        <div class="metric">
+          <dt>Em busca</dt>
+          <dd id="metric-searching">—</dd>
+          <small>Na página atual, com responsável e horário</small>
+        </div>
+        <div class="metric">
+          <dt>Atualização</dt>
+          <dd style="font-size: 1rem">30 s</dd>
+          <small id="polling-status" aria-live="polite">Polling ativo · sem sobreposição</small>
+        </div>
+        <div class="metric">
+          <dt>Entregues nesta fase</dt>
+          <dd style="font-size: 1rem">Fase 4</dd>
+          <small>Estado e liberação de vaga não são produzidos</small>
+        </div>
+      </dl>
+
+      <section class="card" aria-labelledby="queue-title">
+        <div class="card-head">
+          <div>
+            <h2 id="queue-title">Pedidos na fila</h2>
+            <p class="hint" id="queue-context">Visão de Administrador · página 1</p>
+          </div>
+          <span class="badge searching" id="profile-badge">Administrador</span>
+        </div>
+
+        <div class="toolbar" role="search" aria-label="Filtros da fila">
+          <div class="field">
+            <label for="state-filter">Estado</label>
+            <select id="state-filter">
+              <option value="todos">Todos</option>
+              <option value="aguardando">Aguardando</option>
+              <option value="em busca">Em busca</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="page-size">Itens por página</label>
+            <select id="page-size">
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <button class="btn" type="button" id="refresh-now">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+            Atualizar agora
+          </button>
+          <span class="loading-line" id="loading-line" hidden><span class="dot" aria-hidden="true"></span>Consultando fila…</span>
+          <span class="hint" id="last-refresh" style="margin-left: auto">Atualizado agora</span>
+        </div>
+
+        <div class="table-wrap">
+          <table id="queue-table">
+            <caption id="table-caption">Pedidos de retirada da unidade, ordenados por horário do pedido.</caption>
+            <thead>
+              <tr id="table-head"></tr>
+            </thead>
+            <tbody id="queue-body"></tbody>
+          </table>
+          <div class="empty" id="empty-state" hidden>
+            <strong>Nenhum pedido neste estado</strong>
+            <span>Altere o filtro ou aguarde a próxima atualização. Nenhum dado foi inventado.</span>
+          </div>
+        </div>
+
+        <div class="pagination">
+          <p id="page-info">Página 1 de 1 · 0 pedidos</p>
+          <div class="row-actions">
+            <button class="btn btn-sm" type="button" id="prev-page" disabled>Anterior</button>
+            <button class="btn btn-sm" type="button" id="next-page" disabled>Próxima</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="scenario-title" style="margin-top: 1rem">
+        <div class="card-head">
+          <div>
+            <h2 id="scenario-title">Cenários do protótipo</h2>
+            <p class="hint">Controles de revisão. Não representam funcionalidades adicionais.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="scenario-grid">
+            <div class="field">
+              <label for="next-outcome">Próxima resposta ao iniciar busca</label>
+              <select id="next-outcome">
+                <option value="success">Sucesso — transição confirmada</option>
+                <option value="conflict">Conflito — outro funcionário iniciou</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="hidden-tab">Atualização periódica</label>
+              <label style="display: inline-flex; align-items: center; gap: 0.45rem; color: var(--text); font-weight: 500">
+                <input type="checkbox" id="hidden-tab" style="width: 1rem; height: 1rem" />
+                Simular aba oculta (pausar polling)
+              </label>
+              <span class="hint">Ao retomar, a fila consulta o estado atual antes de renderizar.</span>
+            </div>
+          </div>
+          <p class="hint" style="margin-top: 0.9rem">
+            O polling real usa 30 s configuráveis, cancela ao sair, não sobrepõe consultas e atualiza
+            após comando e ao recuperar o foco.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const perfis = {
+        Administrador: { iniciais: "MD", nome: "Marina Duarte" },
+        Caixa: { iniciais: "JC", nome: "João Cardoso" },
+        Manobrista: { iniciais: "RS", nome: "Rafael Souza" }
+      };
+
+      const pedidos = [
+        { id: "AT-2026-000041", placa: "BRA2E19", modelo: "Hatch prata", vaga: "A-03", pedidoEm: "19/11/2026 09:12", pedidoOrdem: 5, estado: "aguardando", responsavel: null, buscaEm: null, total: 60, saldo: 60, conferencia: "aprovada" },
+        { id: "AT-2026-000038", placa: "QWE4R56", modelo: "Sedan branco", vaga: "B-07", pedidoEm: "19/11/2026 08:58", pedidoOrdem: 4, estado: "em busca", responsavel: "Rafael Souza", buscaEm: "19/11/2026 09:05", total: 40, saldo: 0, conferencia: "aprovada" },
+        { id: "AT-2026-000035", placa: "JKL7M89", modelo: "SUV cinza", vaga: "A-01", pedidoEm: "19/11/2026 08:40", pedidoOrdem: 3, estado: "aguardando", responsavel: null, buscaEm: null, total: 80, saldo: 80, conferencia: "divergente" },
+        { id: "AT-2026-000031", placa: "TUV1W23", modelo: "Compacto azul", vaga: "C-02", pedidoEm: "19/11/2026 08:21", pedidoOrdem: 2, estado: "em busca", responsavel: "Rafael Souza", buscaEm: "19/11/2026 08:34", total: 20, saldo: 20, conferencia: "aprovada" },
+        { id: "AT-2026-000027", placa: "XYZ9A01", modelo: "Picape vermelha", vaga: "B-02", pedidoEm: "19/11/2026 08:05", pedidoOrdem: 1, estado: "aguardando", responsavel: null, buscaEm: null, total: 20, saldo: 0, conferencia: "aprovada" },
+        { id: "AT-2026-000024", placa: "DEF3G45", modelo: "Hatch preto", vaga: "C-05", pedidoEm: "19/11/2026 07:48", pedidoOrdem: 0, estado: "aguardando", responsavel: null, buscaEm: null, total: 40, saldo: 40, conferencia: "aprovada" }
+      ];
+
+      // Dados extras fictícios para demonstrar a paginação de 20 itens.
+      const modelosExtras = ["Hatch preto", "Sedan prata", "SUV branco", "Compacto cinza", "Picape azul"];
+      for (let i = 0; i < 18; i += 1) {
+        const ordem = -i - 1;
+        const emBusca = i % 3 === 0;
+        const numero = String(200 - i).padStart(6, "0");
+        pedidos.push({
+          id: `AT-2026-${numero}`,
+          placa: `GER${String(i).padStart(4, "0")}`,
+          modelo: modelosExtras[i % modelosExtras.length],
+          vaga: `D-${String(i + 1).padStart(2, "0")}`,
+          pedidoEm: `19/11/2026 07:${String(40 - i).padStart(2, "0")}`,
+          pedidoOrdem: ordem,
+          estado: emBusca ? "em busca" : "aguardando",
+          responsavel: emBusca ? "Rafael Souza" : null,
+          buscaEm: emBusca ? `19/11/2026 08:${String(10 + i).padStart(2, "0")}` : null,
+          total: 20 * (1 + (i % 3)),
+          saldo: emBusca ? 0 : 20 * (1 + (i % 3)),
+          conferencia: "aprovada"
+        });
+      }
+
+      const state = { perfil: "Administrador", pagina: 1, tamanho: 20, filtro: "todos", carregando: false, abaOculta: false };
+      const $ = (id) => document.getElementById(id);
+
+      function moeda(valor) {
+        return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      }
+
+      function perfilAtual() { return state.perfil; }
+      function podeVerCaixa() { return perfilAtual() !== "Manobrista"; }
+
+      function aplicarPerfil() {
+        const dados = perfis[state.perfil];
+        $("avatar").textContent = dados.iniciais;
+        $("session-name").textContent = dados.nome;
+        $("session-role").textContent = state.perfil + " · sessão verificada";
+        $("profile-badge").textContent = state.perfil;
+        $("page-actions").hidden = !podeVerCaixa();
+        $("nav-cashier").hidden = !podeVerCaixa();
+        state.pagina = 1;
+        render();
+      }
+
+      function pedidosFiltrados() {
+        return pedidos
+          .filter((p) => state.filtro === "todos" || p.estado === state.filtro)
+          .sort((a, b) => b.pedidoOrdem - a.pedidoOrdem);
+      }
+
+      function totalPaginas(total) { return Math.max(1, Math.ceil(total / state.tamanho)); }
+
+      function render() {
+        const filtrados = pedidosFiltrados();
+        const paginas = totalPaginas(filtrados.length);
+        state.pagina = Math.min(state.pagina, paginas);
+        const inicio = (state.pagina - 1) * state.tamanho;
+        const pagina = filtrados.slice(inicio, inicio + state.tamanho);
+        const financeiro = podeVerCaixa();
+
+        $("table-head").innerHTML = [
+          "<th scope=\"col\">Atendimento</th>",
+          "<th scope=\"col\">Veículo e vaga</th>",
+          "<th scope=\"col\">Pedido</th>",
+          "<th scope=\"col\">Estado</th>",
+          "<th scope=\"col\">Busca</th>",
+          financeiro ? "<th scope=\"col\" style=\"text-align:right\">Total</th>" : "",
+          financeiro ? "<th scope=\"col\" style=\"text-align:right\">Saldo</th>" : "",
+          "<th scope=\"col\">Ações</th>"
+        ].join("");
+
+        $("queue-body").innerHTML = pagina.map((p) => {
+          const buscando = p.estado === "em busca";
+          const inicioBusca = p.responsavel
+            ? `<strong style="font-size:0.78rem">${p.responsavel}</strong><span class="hint" style="display:block">${p.buscaEm}</span>`
+            : `<span class="hint">Ainda não iniciada</span>`;
+          const acoes = [
+            buscando
+              ? `<span class="hint">Em busca</span>`
+              : `<button class="btn btn-sm" type="button" data-buscar="${p.id}" aria-label="Iniciar busca do atendimento ${p.id}">Iniciar busca</button>`,
+            financeiro ? `<a class="btn btn-sm btn-ghost" href="caixa.html" aria-label="Abrir caixa do atendimento ${p.id}">Caixa</a>` : ""
+          ].join("");
+          return `
+            <tr>
+              <td><code>${p.id}</code></td>
+              <td class="vehicle"><strong>${p.placa}</strong><span>${p.modelo} · vaga ${p.vaga}</span></td>
+              <td><span>${p.pedidoEm}</span><span class="hint" style="display:block">horário do servidor</span></td>
+              <td><span class="badge ${buscando ? "searching" : "waiting"}">${buscando ? "Em busca" : "Aguardando"}</span></td>
+              <td>${inicioBusca}</td>
+              ${financeiro ? `<td class="money">${moeda(p.total)}</td><td class="money">${moeda(p.saldo)}</td>` : ""}
+              <td><div class="row-actions">${acoes}</div></td>
+            </tr>`;
+        }).join("");
+
+        $("empty-state").hidden = pagina.length !== 0;
+        $("queue-context").textContent = `Visão de ${state.perfil} · página ${state.pagina}`;
+        $("page-info").textContent = `Página ${state.pagina} de ${paginas} · ${filtrados.length} pedidos`;
+        $("prev-page").disabled = state.pagina <= 1;
+        $("next-page").disabled = state.pagina >= paginas;
+        $("metric-waiting").textContent = pagina.filter((p) => p.estado === "aguardando").length;
+        $("metric-searching").textContent = pagina.filter((p) => p.estado === "em busca").length;
+        $("last-refresh").textContent = "Atualizado agora";
+        $("polling-status").textContent = state.abaOculta
+          ? "Polling pausado · aba oculta"
+          : "Polling ativo · sem sobreposição";
+      }
+
+      function aviso(texto, tipo) {
+        const toast = $("toast");
+        toast.textContent = texto;
+        toast.dataset.kind = tipo || "";
+        setTimeout(() => { toast.textContent = ""; toast.dataset.kind = ""; }, 6500);
+      }
+
+      function iniciarBusca(id) {
+        const pedido = pedidos.find((p) => p.id === id);
+        if (!pedido || pedido.estado !== "aguardando") {
+          aviso("O pedido não está mais aguardando. A fila foi atualizada.", "danger");
+          render();
+          return;
+        }
+        if ($("next-outcome").value === "conflict") {
+          pedido.estado = "em busca";
+          pedido.responsavel = "Rafael Souza";
+          pedido.buscaEm = "19/11/2026 09:18";
+          render();
+          aviso("Conflito: outro funcionário iniciou a busca. O estado atual foi recarregado.", "danger");
+          return;
+        }
+        pedido.estado = "em busca";
+        pedido.responsavel = perfis[state.perfil].nome;
+        pedido.buscaEm = "19/11/2026 09:20";
+        render();
+        aviso("Busca iniciada. Responsável e horário são do servidor.", "ok");
+      }
+
+      function atualizar() {
+        if (state.carregando) return;
+        if (state.abaOculta) {
+          aviso("Polling pausado enquanto a aba está oculta.", "");
+          return;
+        }
+        state.carregando = true;
+        $("loading-line").hidden = false;
+        $("refresh-now").disabled = true;
+        setTimeout(() => {
+          state.carregando = false;
+          $("loading-line").hidden = true;
+          $("refresh-now").disabled = false;
+          render();
+        }, 650);
+      }
+
+      $("profile-switch").addEventListener("change", (evento) => {
+        state.perfil = evento.target.value;
+        aplicarPerfil();
+      });
+      $("state-filter").addEventListener("change", (evento) => {
+        state.filtro = evento.target.value;
+        state.pagina = 1;
+        render();
+      });
+      $("page-size").addEventListener("change", (evento) => {
+        state.tamanho = Number(evento.target.value);
+        state.pagina = 1;
+        render();
+      });
+      $("prev-page").addEventListener("click", () => { state.pagina -= 1; render(); });
+      $("next-page").addEventListener("click", () => { state.pagina += 1; render(); });
+      $("refresh-now").addEventListener("click", atualizar);
+      $("hidden-tab").addEventListener("change", (evento) => {
+        state.abaOculta = evento.target.checked;
+        render();
+        if (!state.abaOculta) atualizar();
+      });
+      $("queue-body").addEventListener("click", (evento) => {
+        const botao = evento.target.closest("[data-buscar]");
+        if (botao) iniciarBusca(botao.dataset.buscar);
+      });
+      $("logout").addEventListener("click", () => aviso("Logout do protótipo: a sessão seria revogada no servidor e a memória limpa.", ""));
+
+      setInterval(() => { if (!state.abaOculta) atualizar(); }, 30000);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") atualizar();
+      });
+
+      aplicarPerfil();
+    </script>
+  </body>
+</html>

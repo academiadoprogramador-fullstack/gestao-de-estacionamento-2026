@@ -1,0 +1,940 @@
+<!doctype html>
+<!--
+  Protótipo de alta fidelidade — Caixa do atendimento (Fase 3)
+  Source: proposal.md (What Changes — caixa, desconto, estorno, autorizações),
+          specs/cobranca-atendimento/spec.md, specs/pagamentos-caixa/spec.md,
+          specs/autorizacoes-retirada/spec.md, specs/consulta-atendimentos/spec.md
+  Covered:
+    - Composição auditável do saldo -> cobrado, pago líquido, saldo e total original
+    - Acerto integral do saldo / valor parcial / excedente / cobrança zerada -> formulário e recusas
+    - Acerto após estorno / entrega excepcional (fixture) -> cenários e novo pagamento integral
+    - Estorno integral e único / estorno parcial / original preservado -> seleção de pagamento e histórico
+    - Desconto administrativo limitado / até zero / saldo já pago / perfil sem permissão -> formulário admin
+    - Concorrência e atomicidade -> próxima resposta com conflito de revisão e estado recarregado sem efeito parcial
+    - Autorizações separadas: concessão, vigência por revisão, revogação, substituição e obsolescência
+    - Justificativa protegida e projeções por perfil -> leitura auditada só admin, sem justificativa ao caixa
+    - Histórico de retirada e caixa por perfil -> eventos operacionais e financeiros filtrados
+    - Ausência de entrega antecipada -> nenhum comando de entrega, vistoria ou liberação de vaga
+    - Tentativa incerta no caixa -> painel pendente/incerto, repetição com mesma chave/conteúdo
+    - Confirmação explícita da operação -> diálogo persistente com resumo e ação de concluir
+  Not specified (presentational only):
+    - Navegação do shell, seletor de perfil e controles "Cenários do protótipo"
+    - Fixture "entregue com saldo" para o contrato pós-entrega da Fase 4, sem ação de entrega
+  Open questions: none
+  Dados 100% fictícios. Sem acesso a rede, backend ou armazenamento. Recarregar restaura os dados.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo — Caixa do atendimento</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617; --surface: #0f172a; --surface-2: #111c33; --raised: #1e293b;
+        --border: #1e293b; --border-strong: #334155; --text: #e2e8f0; --muted: #94a3b8;
+        --accent: #38bdf8; --accent-soft: rgba(56,189,248,.12);
+        --ok: #34d399; --ok-soft: rgba(52,211,153,.12);
+        --warn: #fbbf24; --warn-soft: rgba(251,191,36,.12);
+        --danger: #fb7185; --danger-soft: rgba(251,113,133,.12);
+        --radius: 14px;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); line-height: 1.5; }
+      h1, h2, h3, p, dl, dd, dt, ul { margin: 0; }
+      a { color: var(--accent); }
+      .skip-link { position: absolute; left: -999px; top: 0; z-index: 30; padding: .5rem 1rem; background: var(--accent); color: var(--bg); font-weight: 700; }
+      .skip-link:focus { left: 0; }
+      .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+      .prototype-banner { padding: .5rem 1rem; background: color-mix(in srgb, var(--warn) 14%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); color: var(--warn); font-size: .8125rem; }
+      .shell-header { position: sticky; top: 0; z-index: 20; background: rgba(2,6,23,.92); border-bottom: 1px solid var(--border); backdrop-filter: blur(8px); }
+      .shell-inner { width: min(88rem, 100% - 2rem); margin-inline: auto; display: flex; align-items: center; gap: 1.25rem; padding-block: .7rem; flex-wrap: wrap; }
+      .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; }
+      .brand svg { color: var(--accent); }
+      .brand small { display: block; color: var(--muted); font-size: .68rem; font-weight: 500; }
+      .nav { display: flex; gap: .25rem; list-style: none; padding: 0; flex-wrap: wrap; }
+      .nav a { display: inline-flex; padding: .35rem .6rem; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: .8125rem; font-weight: 600; }
+      .nav a:hover { color: var(--text); background: var(--surface-2); }
+      .nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+      .session { margin-left: auto; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+      .avatar { width: 2rem; height: 2rem; border-radius: 999px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: .72rem; font-weight: 700; }
+      .session strong { display: block; font-size: .8rem; }
+      .session span { display: block; font-size: .66rem; color: var(--muted); }
+      select, input, textarea { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 9px; padding: .45rem .6rem; }
+      select:focus-visible, input:focus-visible, textarea:focus-visible { border-color: var(--accent); }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .45rem .8rem; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; text-decoration: none; }
+      .btn:hover { border-color: var(--accent); }
+      .btn:disabled { opacity: .55; cursor: not-allowed; }
+      .btn-primary { background: var(--accent); border-color: var(--accent); color: #04121f; }
+      .btn-danger { border-color: color-mix(in srgb, var(--danger) 60%, transparent); color: var(--danger); background: var(--danger-soft); }
+      .btn-ghost { background: transparent; }
+      .btn-sm { padding: .28rem .55rem; font-size: .75rem; }
+      main { width: min(88rem, 100% - 2rem); margin-inline: auto; padding-block: 1.75rem 4rem; }
+      .page-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+      .eyebrow { color: var(--accent); font-size: .7rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { font-size: clamp(1.6rem, 3.5vw, 2.1rem); line-height: 1.15; margin-top: .2rem; }
+      .subtitle { color: var(--muted); max-width: 58rem; margin-top: .35rem; font-size: .9rem; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+      .card-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 1rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+      .card-head h2 { font-size: .95rem; }
+      .card-head p { color: var(--muted); font-size: .75rem; margin-top: .15rem; }
+      .card-body { padding: 1rem; display: grid; gap: 1rem; }
+      .layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.7fr) minmax(18rem, .9fr); align-items: start; }
+      .stack { display: grid; gap: 1rem; }
+      .alert { display: flex; gap: .65rem; align-items: start; padding: .75rem .9rem; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-2); font-size: .82rem; }
+      .alert p { color: var(--text); }
+      .alert.info { border-color: color-mix(in srgb, var(--accent) 38%, transparent); background: var(--accent-soft); }
+      .alert.warn { border-color: color-mix(in srgb, var(--warn) 42%, transparent); background: var(--warn-soft); }
+      .alert.danger { border-color: color-mix(in srgb, var(--danger) 42%, transparent); background: var(--danger-soft); }
+      .alert.ok { border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: var(--ok-soft); }
+      .alert svg { flex: none; margin-top: .1rem; }
+      .summary-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+      .metric { padding: .75rem .85rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+      .metric dt { color: var(--muted); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; }
+      .metric dd { font-size: 1.05rem; font-weight: 700; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+      .metric small { display: block; color: var(--muted); font-size: .68rem; font-weight: 500; margin-top: .1rem; }
+      .metric.highlight { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--accent-soft); }
+      .field { display: grid; gap: .3rem; }
+      .field label { color: var(--muted); font-size: .74rem; font-weight: 600; }
+      .hint { color: var(--muted); font-size: .7rem; }
+      .required { color: var(--danger); }
+      .form-row { display: flex; gap: .65rem; flex-wrap: wrap; align-items: end; }
+      .form-row .field { flex: 1; min-width: 9rem; }
+      .error { color: var(--danger); font-size: .72rem; }
+      input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--danger); }
+      .summary { padding: .85rem 1rem; border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent); background: var(--danger-soft); border-radius: 10px; font-size: .82rem; }
+      .summary h2 { font-size: .9rem; margin-bottom: .35rem; }
+      .summary ul { padding-left: 1.2rem; }
+      .badge { display: inline-flex; align-items: center; padding: .15rem .5rem; border-radius: 999px; font-size: .7rem; font-weight: 700; white-space: nowrap; }
+      .badge.ok { background: var(--ok-soft); color: var(--ok); }
+      .badge.warn { background: var(--warn-soft); color: var(--warn); }
+      .badge.danger { background: var(--danger-soft); color: var(--danger); }
+      .badge.neutral { background: var(--surface-2); color: var(--muted); }
+      .badge.info { background: var(--accent-soft); color: var(--accent); }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+      th { text-align: left; color: var(--muted); font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; padding: .5rem .65rem; border-bottom: 1px solid var(--border); white-space: nowrap; }
+      td { padding: .6rem .65rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+      td.money, th.money { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .empty { padding: 1.4rem .8rem; text-align: center; color: var(--muted); font-size: .8rem; }
+      .timeline { list-style: none; padding: 0; display: grid; gap: .65rem; }
+      .timeline li { display: grid; grid-template-columns: 7.2rem 1fr; gap: .65rem; font-size: .8rem; }
+      .timeline time { color: var(--muted); font-variant-numeric: tabular-nums; }
+      .timeline strong { display: block; }
+      .timeline span { color: var(--muted); font-size: .72rem; }
+      .auth-box { display: grid; gap: .65rem; padding: .9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+      .auth-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+      .auth-head h3 { font-size: .88rem; }
+      details { border: 1px solid var(--border); border-radius: 9px; padding: .55rem .7rem; }
+      summary { cursor: pointer; font-size: .8rem; font-weight: 600; }
+      details[open] summary { margin-bottom: .65rem; }
+      .scenario-grid { display: grid; gap: .75rem; }
+      .receipt { padding: .75rem .9rem; border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent); border-radius: 10px; background: var(--ok-soft); font-size: .82rem; }
+      .pending-panel { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; padding: 1rem; background: rgba(2,6,23,.78); backdrop-filter: blur(3px); }
+      .pending-panel[hidden] { display: none; }
+      .pending-card { width: min(31rem, 100%); padding: 1.4rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); display: grid; gap: .9rem; }
+      .spinner { width: 1.4rem; height: 1.4rem; border-radius: 999px; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: spin .9s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .spinner { animation: none; border-top-color: var(--accent); } }
+      .denied { display: grid; justify-items: start; gap: .8rem; padding: 2.4rem; }
+      .denied svg { color: var(--danger); }
+      .toast { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(27rem, calc(100vw - 2rem)); padding: .85rem 1rem; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); box-shadow: 0 18px 40px rgba(2,6,23,.55); font-size: .82rem; }
+      .toast:empty { display: none; }
+      dialog { width: min(36rem, calc(100vw - 1.5rem)); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 0; }
+      dialog::backdrop { background: rgba(2,6,23,.72); backdrop-filter: blur(2px); }
+      .dialog-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; padding: 1rem 1.15rem; border-bottom: 1px solid var(--border); }
+      .dialog-head h2 { font-size: 1.05rem; }
+      .dialog-body { padding: 1.15rem; display: grid; gap: .8rem; }
+      .dialog-foot { display: flex; justify-content: end; gap: .6rem; padding: .85rem 1.15rem; border-top: 1px solid var(--border); background: var(--surface-2); }
+      @media (max-width: 70rem) { .layout { grid-template-columns: 1fr; } .nav { order: 3; } .session { width: 100%; margin-left: 0; } }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para o conteúdo</a>
+    <p class="prototype-banner" role="note">Protótipo de alta fidelidade — dados fictícios, sem backend. Recarregar restaura os dados.</p>
+
+    <header class="shell-header">
+      <div class="shell-inner">
+        <div class="brand">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" /><path d="M9 17V7h4a3 3 0 0 1 0 6H9" /></svg>
+          <span>Gestão de Estacionamento<small>Unidade Centro</small></span>
+        </div>
+        <nav aria-label="Navegação principal">
+          <ul class="nav">
+            <li><a href="#dashboard">Área de trabalho</a></li>
+            <li><a href="#spaces">Vagas</a></li>
+            <li><a href="#rates">Tarifa diária</a></li>
+            <li><a href="#attendances">Atendimentos</a></li>
+            <li><a href="#check-in">Check-in</a></li>
+            <li><a href="fila-retiradas.html">Fila de retiradas</a></li>
+            <li id="nav-cashier"><a href="caixa.html" aria-current="page">Caixa</a></li>
+          </ul>
+        </nav>
+        <div class="session">
+          <div class="avatar" aria-hidden="true" id="avatar">MD</div>
+          <div><strong id="session-name">Marina Duarte</strong><span id="session-role">Administrador · sessão verificada</span></div>
+          <label class="visually-hidden" for="profile-switch">Visualizar como perfil</label>
+          <select id="profile-switch" style="width: auto">
+            <option value="Administrador">Administrador</option>
+            <option value="Caixa">Caixa</option>
+            <option value="Manobrista">Manobrista</option>
+          </select>
+          <button class="btn btn-ghost" id="logout" type="button">Sair</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Caixa e cobrança</p>
+          <h1>Caixa do atendimento</h1>
+          <p class="subtitle">
+            Acerto integral do saldo, descontos e estornos preservados como lançamentos, com autorizações
+            separadas para a entrega futura. Esta tela não entrega veículo, não registra vistoria e não libera vaga.
+          </p>
+        </div>
+        <a class="btn" href="fila-retiradas.html">Voltar à fila</a>
+      </div>
+
+      <div id="allowed">
+        <div id="context-banner" class="alert warn" hidden style="margin-bottom:1rem">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+          <p id="context-banner-text"></p>
+        </div>
+
+        <div class="layout">
+          <div class="stack">
+            <section class="card" aria-labelledby="balance-title">
+              <div class="card-head">
+                <div>
+                  <h2 id="balance-title">Resumo financeiro</h2>
+                  <p id="balance-context">Atendimento AT-2026-000041 · pedido aguardando busca</p>
+                </div>
+                <span class="badge info" id="revision-badge">Revisão 1</span>
+              </div>
+              <div class="card-body">
+                <dl class="summary-grid" id="balance-grid"></dl>
+                <p class="hint" id="balance-formula">cobrado = total original − descontos · pago líquido = pagamentos − estornos · saldo = cobrado − pago líquido</p>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="payment-title" id="payment-card">
+              <div class="card-head">
+                <div>
+                  <h2 id="payment-title">Acerto integral</h2>
+                  <p>Exatamente o saldo exigível positivo, em dinheiro, cartão ou Pix.</p>
+                </div>
+                <span class="badge neutral" id="payment-status">Aguardando</span>
+              </div>
+              <div class="card-body">
+                <div id="payment-summary" class="summary" tabindex="-1" role="alert" hidden></div>
+                <div id="payment-blocked" class="alert info" hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+                  <p id="payment-blocked-text"></p>
+                </div>
+                <form id="payment-form" style="display:grid; gap:.8rem">
+                  <div class="form-row">
+                    <div class="field">
+                      <label for="payment-amount">Valor do acerto <span class="required" aria-hidden="true">*</span></label>
+                      <input id="payment-amount" inputmode="decimal" autocomplete="off" aria-describedby="payment-amount-hint" />
+                    </div>
+                    <div class="field">
+                      <label for="payment-method">Forma <span class="required" aria-hidden="true">*</span></label>
+                      <select id="payment-method">
+                        <option value="">Selecione</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Cartão">Cartão</option>
+                        <option value="Pix">Pix</option>
+                      </select>
+                    </div>
+                    <button class="btn btn-primary" type="submit" id="pay-button">Registrar pagamento</button>
+                  </div>
+                  <p class="hint" id="payment-amount-hint">O valor deve ser exatamente igual ao saldo; parcial, excedente, crédito e troco são recusados.</p>
+                  <p class="hint">Idempotency-Key: <span id="payment-key">—</span> · gerada em memória</p>
+                </form>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="ledger-title">
+              <div class="card-head">
+                <div>
+                  <h2 id="ledger-title">Lançamentos financeiros</h2>
+                  <p>Append-only: pagamentos, descontos e estornos preservados.</p>
+                </div>
+                <span class="badge neutral" id="ledger-count">0 lançamentos</span>
+              </div>
+              <div class="table-wrap">
+                <table id="ledger-table">
+                  <thead><tr><th scope="col">Tipo</th><th scope="col">Valor</th><th scope="col">Forma / vínculo</th><th scope="col">Autor</th><th scope="col">Horário</th><th scope="col">Justificativa</th></tr></thead>
+                  <tbody id="ledger-body"></tbody>
+                </table>
+                <div class="empty" id="ledger-empty">Nenhum lançamento financeiro. O saldo é igual ao total fixado no pedido.</div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="admin-title" id="admin-card">
+              <div class="card-head">
+                <div>
+                  <h2 id="admin-title">Administração financeira</h2>
+                  <p>Desconto e estorno exigem Administrador, justificativa e registro append-only.</p>
+                </div>
+                <span class="badge warn">Somente Administrador</span>
+              </div>
+              <div class="card-body">
+                <div id="admin-summary" class="summary" tabindex="-1" role="alert" hidden></div>
+                <section aria-labelledby="discount-title" style="display:grid; gap:.65rem">
+                  <h3 id="discount-title" style="font-size:.88rem">Conceder desconto</h3>
+                  <div id="discount-blocked" class="alert info" hidden>
+                    <p id="discount-blocked-text"></p>
+                  </div>
+                  <form id="discount-form" style="display:grid; gap:.7rem">
+                    <div class="form-row">
+                      <div class="field">
+                        <label for="discount-amount">Valor do desconto <span class="required" aria-hidden="true">*</span></label>
+                        <input id="discount-amount" inputmode="decimal" autocomplete="off" aria-describedby="discount-hint" />
+                        <span class="hint" id="discount-hint">Valor positivo com duas casas; a soma não pode exceder o total original.</span>
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label for="discount-justification">Justificativa <span class="required" aria-hidden="true">*</span></label>
+                      <textarea id="discount-justification" rows="2" maxlength="500" aria-describedby="discount-just-hint"></textarea>
+                      <span class="hint" id="discount-just-hint">Cifrada; leitura explícita e auditada somente pelo Administrador.</span>
+                    </div>
+                    <div><button class="btn" type="submit" id="discount-button">Conceder desconto</button></div>
+                  </form>
+                </section>
+
+                <section aria-labelledby="refund-title" style="display:grid; gap:.65rem; border-top:1px solid var(--border); padding-top:1rem">
+                  <h3 id="refund-title" style="font-size:.88rem">Estornar pagamento</h3>
+                  <div id="refund-blocked" class="alert info" hidden><p id="refund-blocked-text"></p></div>
+                  <form id="refund-form" style="display:grid; gap:.7rem">
+                    <div class="form-row">
+                      <div class="field">
+                        <label for="refund-payment">Pagamento ainda não estornado</label>
+                        <select id="refund-payment"></select>
+                      </div>
+                      <div class="field">
+                        <label for="refund-amount">Valor do estorno</label>
+                        <input id="refund-amount" readonly aria-describedby="refund-amount-hint" />
+                      </div>
+                    </div>
+                    <p class="hint" id="refund-amount-hint">Sempre integral; estorno parcial não é aceito.</p>
+                    <div class="field">
+                      <label for="refund-justification">Justificativa <span class="required" aria-hidden="true">*</span></label>
+                      <textarea id="refund-justification" rows="2" maxlength="500"></textarea>
+                    </div>
+                    <div><button class="btn btn-danger" type="submit" id="refund-button">Estornar integralmente</button></div>
+                  </form>
+                </section>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="history-title">
+              <div class="card-head">
+                <div>
+                  <h2 id="history-title">Histórico do atendimento</h2>
+                  <p>Eventos filtrados por perfil; justificativas não aparecem fora do Administrador.</p>
+                </div>
+              </div>
+              <div class="card-body"><ol class="timeline" id="history-list"></ol></div>
+            </section>
+          </div>
+
+          <aside class="stack" aria-label="Contexto, autorizações e cenários">
+            <section class="card" aria-labelledby="context-title">
+              <div class="card-head"><h2 id="context-title" style="font-size:.92rem">Contexto operacional</h2></div>
+              <div class="card-body">
+                <dl class="summary-grid" style="grid-template-columns:1fr 1fr" id="context-grid"></dl>
+                <div class="alert info">
+                  <p>Entrega, vistoria de saída, consumo de autorização e liberação da vaga pertencem à Fase 4. Nenhum botão desta tela altera a ocupação.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="auth-title">
+              <div class="card-head">
+                <div><h2 id="auth-title" style="font-size:.92rem">Autorizações de exceção</h2><p>Tipos independentes, vinculados à versão vigente.</p></div>
+              </div>
+              <div class="card-body" id="auth-container"></div>
+            </section>
+
+            <section class="card" aria-labelledby="controls-title">
+              <div class="card-head"><h2 id="controls-title" style="font-size:.92rem">Cenários do protótipo</h2></div>
+              <div class="card-body">
+                <div class="scenario-grid">
+                  <div class="field">
+                    <label for="scenario">Estado do atendimento</label>
+                    <select id="scenario">
+                      <option value="base">Base — saldo R$ 60,00, conferência aprovada</option>
+                      <option value="pago">Pago — saldo zerado por Pix</option>
+                      <option value="estornado">Estornado — saldo reaberto</option>
+                      <option value="divergente">Conferência divergente — sem autorização</option>
+                      <option value="zerado">Cobrança zerada por desconto</option>
+                      <option value="entregue-saldo">Entregue com saldo — fixture da Fase 4</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="next-outcome">Próxima resposta do caixa</label>
+                    <select id="next-outcome">
+                      <option value="success">Sucesso</option>
+                      <option value="conflict">Conflito de revisão (409)</option>
+                      <option value="lost">Rede perdida — resultado desconhecido</option>
+                    </select>
+                  </div>
+                </div>
+                <p class="hint" style="margin-top:.7rem">A fixture "entregue com saldo" existe apenas para o contrato de acerto pós-entrega; não há ação de entrega.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+
+      <section id="denied" class="card denied" hidden aria-labelledby="denied-title">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        <h1 id="denied-title" style="font-size:1.5rem">Acesso negado</h1>
+        <p class="subtitle">O caixa é restrito a Caixa e Administrador. O Manobrista consulta a fila e inicia a busca, mas não acessa finanças, conferência ou autorizações.</p>
+        <button class="btn" type="button" id="back-to-admin">Voltar à visualização de Administrador</button>
+      </section>
+    </main>
+
+    <div class="pending-panel" id="pending-panel" hidden role="dialog" aria-modal="true" aria-labelledby="pending-title">
+      <div class="pending-card">
+        <div style="display:flex; align-items:center; gap:.75rem">
+          <span class="spinner" aria-hidden="true"></span>
+          <h2 id="pending-title" style="font-size:1.05rem">Registrando operação…</h2>
+        </div>
+        <p class="hint" id="pending-message">Comando pendente. A navegação interna e a saída ficam bloqueadas até o resultado ser conhecido.</p>
+        <div class="alert warn" id="pending-warning">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/></svg>
+          <p>Não recarregue o navegador. A tentativa existe apenas em memória e será perdida se a página fechar.</p>
+        </div>
+        <div id="pending-actions" hidden style="display:flex; gap:.6rem; flex-wrap:wrap">
+          <button class="btn btn-primary" type="button" id="retry-same">Repetir mesma operação</button>
+          <button class="btn btn-ghost" type="button" id="discard-attempt">Descartar tentativa</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pending-panel" id="confirm-panel" hidden role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="pending-card">
+        <div style="display:flex; align-items:center; gap:.75rem">
+          <span aria-hidden="true" style="width:.7rem; height:.7rem; border-radius:999px; background:var(--ok); display:inline-block"></span>
+          <h2 id="confirm-title" style="font-size:1.05rem">Operação confirmada</h2>
+        </div>
+        <p class="hint" id="confirm-message"></p>
+        <p id="confirm-detail" style="padding:.7rem .85rem; border:1px solid var(--border-strong); border-radius:9px; background:var(--surface-2); font-size:.82rem"></p>
+        <div style="display:flex; justify-content:flex-end">
+          <button class="btn btn-primary" type="button" id="confirm-close">Concluir</button>
+        </div>
+      </div>
+    </div>
+
+    <dialog id="justification-dialog" aria-labelledby="justification-title">
+      <div class="dialog-head">
+        <div><h2 id="justification-title">Justificativa administrativa</h2><p class="hint">Leitura explícita e auditada.</p></div>
+        <button class="btn btn-ghost" type="button" id="close-justification">Fechar</button>
+      </div>
+      <div class="dialog-body">
+        <p class="hint" id="justification-meta"></p>
+        <p id="justification-text" style="padding:.75rem .9rem; border:1px solid var(--border-strong); border-radius:9px; background:var(--surface-2)"></p>
+        <p class="hint">Dado sintético. A auditoria registra ator, alvo e horário, nunca o texto.</p>
+      </div>
+      <div class="dialog-foot"><button class="btn" type="button" id="close-justification-2">Entendi</button></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      "use strict";
+
+      const perfis = {
+        Administrador: { iniciais: "MD", nome: "Marina Duarte" },
+        Caixa: { iniciais: "JC", nome: "João Cardoso" },
+        Manobrista: { iniciais: "RS", nome: "Rafael Souza" }
+      };
+
+      const state = { perfil: "Administrador", cenario: "base", atendimento: null, operacaoPendente: null };
+      const $ = (id) => document.getElementById(id);
+
+      function moeda(valor) { return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+      function agora() { return "19/11/2026 09:20"; }
+      function novoId(prefixo) { return prefixo + "-" + Math.random().toString(36).slice(2, 8).toUpperCase(); }
+      function chaveIdempotencia() {
+        const hex = () => Math.floor(Math.random() * 16).toString(16);
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => (c === "x" ? hex() : ((Math.random() * 4 | 8).toString(16))));
+      }
+
+      function criarAtendimento(cenario) {
+        const base = {
+          id: "AT-2026-000041", placa: "BRA2E19", modelo: "Hatch prata", vaga: "A-03",
+          entrada: "19/11/2026 07:10", pedidoEm: "19/11/2026 09:12", buscaEm: null,
+          estado: "aguardando", conferencia: "aprovada", entregue: false,
+          totalOriginal: 60, descontos: [], pagamentos: [], estornos: [], autorizacoes: [], revisao: 1,
+          eventos: [
+            { tipo: "Entrada registrada", detalhe: "Vistoria textual e vaga A-03", ator: "João Cardoso", em: "19/11/2026 07:10" },
+            { tipo: "Pedido de retirada", detalhe: "Conferência aprovada · 2 diárias · R$ 60,00", ator: "João Cardoso", em: "19/11/2026 09:12" },
+            { tipo: "Cálculo fixado", detalhe: "2 diárias × R$ 20,00 = R$ 60,00", ator: "Servidor", em: "19/11/2026 09:12" }
+          ]
+        };
+        if (cenario === "pago" || cenario === "estornado") {
+          base.revisao = 2;
+          base.pagamentos.push({ id: "PAG-001", valor: 60, forma: "Pix", ator: "João Cardoso", em: "19/11/2026 09:18", estornado: false });
+          base.eventos.push({ tipo: "Pagamento integral", detalhe: "Pix · R$ 60,00", ator: "João Cardoso", em: "19/11/2026 09:18" });
+        }
+        if (cenario === "estornado") {
+          base.revisao = 3;
+          base.pagamentos[0].estornado = true;
+          base.estornos.push({ id: "EST-001", pagamentoId: "PAG-001", valor: 60, justificativa: "Cliente desistiu da retirada e solicitou o estorno integral antes da entrega.", ator: "Marina Duarte", em: "19/11/2026 09:22" });
+          base.eventos.push({ tipo: "Estorno integral", detalhe: "PAG-001 · R$ 60,00", ator: "Marina Duarte", em: "19/11/2026 09:22" });
+        }
+        if (cenario === "divergente") {
+          base.conferencia = "divergente";
+          base.eventos[1].detalhe = "Conferência divergente · 2 diárias · R$ 60,00";
+        }
+        if (cenario === "zerado") {
+          base.revisao = 2;
+          base.descontos.push({ id: "DES-001", valor: 60, justificativa: "Cortesia administrativa aprovada para o atendimento demonstrativo.", ator: "Marina Duarte", em: "19/11/2026 09:15" });
+          base.eventos.push({ tipo: "Desconto concedido", detalhe: "R$ 60,00 · cobrança zerada", ator: "Marina Duarte", em: "19/11/2026 09:15" });
+        }
+        if (cenario === "entregue-saldo") {
+          base.entregue = true;
+          base.estado = "entregue";
+          base.buscaEm = "19/11/2026 09:14";
+          base.eventos.push({ tipo: "Entrega excepcional (fixture)", detalhe: "Saldo pendente de R$ 60,00 · vaga liberada pela Fase 4", ator: "Marina Duarte", em: "19/11/2026 09:30" });
+        }
+        return base;
+      }
+
+      function calcular(a) {
+        const descontos = a.descontos.reduce((s, d) => s + d.valor, 0);
+        const pagamentos = a.pagamentos.reduce((s, p) => s + p.valor, 0);
+        const estornos = a.estornos.reduce((s, e) => s + e.valor, 0);
+        const cobrado = a.totalOriginal - descontos;
+        const pagoLiquido = pagamentos - estornos;
+        return { descontos, pagamentos, estornos, cobrado, pagoLiquido, saldo: cobrado - pagoLiquido };
+      }
+
+      function statusAutorizacao(auth, a) {
+        if (auth.status === "revogada") return "revogada";
+        if (auth.status === "substituida") return "substituida";
+        if (auth.tipo === "financeira" && auth.revisao !== a.revisao) return "obsoleta";
+        return "vigente";
+      }
+
+      function autorizacaoAtual(tipo) {
+        const lista = state.atendimento.autorizacoes.filter((x) => x.tipo === tipo);
+        return lista.length ? lista[lista.length - 1] : null;
+      }
+
+      function rotuloStatus(status) {
+        return { vigente: "Vigente", revogada: "Revogada", substituida: "Substituída", obsoleta: "Obsoleta", nao_concedida: "Não concedida" }[status] || status;
+      }
+
+      function classeStatus(status) {
+        if (status === "vigente") return "ok";
+        if (status === "nao_concedida") return "neutral";
+        if (status === "obsoleta") return "warn";
+        return "danger";
+      }
+
+      function atualizarChaves() {
+        $("payment-key").textContent = chaveIdempotencia();
+      }
+
+      function render() {
+        const a = state.atendimento;
+        const c = calcular(a);
+        $("revision-badge").textContent = `Revisão ${a.revisao}`;
+        $("balance-context").textContent = `Atendimento ${a.id} · ${a.entregue ? "entregue (fixture Fase 4)" : a.estado === "em busca" ? "em busca" : "aguardando busca"}`;
+        $("balance-grid").innerHTML = `
+          <div class="metric"><dt>Cobrado</dt><dd>${moeda(c.cobrado)}</dd><small>total original − descontos</small></div>
+          <div class="metric"><dt>Pago líquido</dt><dd>${moeda(c.pagoLiquido)}</dd><small>pagamentos − estornos</small></div>
+          <div class="metric highlight"><dt>Saldo exigível</dt><dd>${moeda(c.saldo)}</dd><small>${c.saldo === 0 ? "nada a pagar" : "acerto integral"}</small></div>
+          <div class="metric"><dt>Total original</dt><dd>${moeda(a.totalOriginal)}</dd><small>snapshot imutável</small></div>`;
+        $("balance-formula").textContent = `cobrado ${moeda(c.cobrado)} = ${moeda(a.totalOriginal)} − ${moeda(c.descontos)} · pago líquido ${moeda(c.pagoLiquido)} = ${moeda(c.pagamentos)} − ${moeda(c.estornos)} · saldo ${moeda(c.saldo)}`;
+
+        const financeiro = state.perfil !== "Manobrista";
+        $("admin-card").hidden = state.perfil !== "Administrador";
+        $("context-grid").innerHTML = `
+          <div class="metric"><dt>Atendimento</dt><dd style="font-size:.8rem;font-family:ui-monospace,monospace">${a.id}</dd><small>${a.placa} · ${a.modelo}</small></div>
+          <div class="metric"><dt>Vaga</dt><dd>${a.vaga}</dd><small>ocupação aberta</small></div>
+          <div class="metric"><dt>Entrada</dt><dd style="font-size:.85rem">${a.entrada}</dd><small>horário do servidor</small></div>
+          <div class="metric"><dt>Pedido</dt><dd style="font-size:.85rem">${a.pedidoEm}</dd><small>cálculo fixado</small></div>
+          <div class="metric"><dt>Conferência</dt><dd style="font-size:.85rem">${a.conferencia === "divergente" ? "Divergente" : "Aprovada"}</dd><small>${a.conferencia === "divergente" ? "bloqueia entrega normal" : "titular presente"}</small></div>
+          <div class="metric"><dt>Estado</dt><dd style="font-size:.85rem">${a.entregue ? "Entregue (fixture)" : a.estado === "em busca" ? "Em busca" : "Aguardando"}</dd><small>${a.entregue ? "sem ação de entrega nesta tela" : "fila de retiradas"}</small></div>`;
+
+        $("context-banner").hidden = !(a.conferencia === "divergente" || a.entregue);
+        $("context-banner-text").textContent = a.entregue
+          ? "Atendimento entregue com saldo: fixture sintética da Fase 4. O acerto integral do saldo é permitido, sem reabrir atendimento, pedido, ocupação ou vaga."
+          : "Conferência divergente: a entrega normal fica bloqueada até autorização documental vigente. O pedido e o cálculo permanecem preservados.";
+
+        renderPagamento(a, c);
+        renderLancamentos(a);
+        renderAdmin(a, c);
+        renderAutorizacoes(a);
+        renderHistorico(a);
+        $("ledger-count").textContent = `${a.descontos.length + a.pagamentos.length + a.estornos.length} lançamentos`;
+      }
+
+      function renderPagamento(a, c) {
+        const bloqueado = c.saldo <= 0;
+        $("payment-status").textContent = bloqueado ? "Sem saldo" : "Aguardando acerto";
+        $("payment-status").className = "badge " + (bloqueado ? "ok" : "warn");
+        $("payment-blocked").hidden = !bloqueado;
+        $("payment-blocked-text").textContent = bloqueado
+          ? (c.cobrado === 0 ? "Cobrança zerada por desconto: nenhum pagamento fictício é exigido." : "Saldo já quitado: novo pagamento só é admitido após estorno integral ou entrega excepcional com saldo.")
+          : "";
+        $("payment-form").querySelectorAll("input, select, button").forEach((el) => { el.disabled = bloqueado; });
+        $("payment-amount").value = bloqueado ? "" : c.saldo.toFixed(2).replace(".", ",");
+        $("payment-amount").setAttribute("aria-describedby", "payment-amount-hint");
+      }
+
+      function renderLancamentos(a) {
+        const linhas = [
+          ...a.descontos.map((d) => ({ ...d, tipo: "Desconto", extra: "lançamento administrativo", justificativa: d.justificativa })),
+          ...a.pagamentos.map((p) => ({ ...p, tipo: "Pagamento", extra: p.forma, justificativa: null })),
+          ...a.estornos.map((e) => ({ ...e, tipo: "Estorno", extra: "vínculo " + e.pagamentoId, justificativa: e.justificativa }))
+        ].sort((x, y) => (x.em < y.em ? 1 : -1));
+        $("ledger-body").innerHTML = linhas.map((l) => `
+          <tr>
+            <td><span class="badge ${l.tipo === "Pagamento" ? "ok" : l.tipo === "Estorno" ? "danger" : "info"}">${l.tipo}</span></td>
+            <td class="money">${moeda(l.valor)}</td>
+            <td>${l.extra}</td>
+            <td>${l.ator}</td>
+            <td>${l.em}</td>
+            <td>${l.justificativa && state.perfil === "Administrador" ? `<button class="btn btn-sm btn-ghost" type="button" data-justificativa="${l.id}">Ler justificativa</button>` : l.justificativa ? `<span class="hint">Protegida</span>` : "—"}</td>
+          </tr>`).join("");
+        $("ledger-empty").hidden = linhas.length !== 0;
+        $("ledger-table").hidden = linhas.length === 0;
+      }
+
+      function renderAdmin(a, c) {
+        if (state.perfil !== "Administrador") return;
+        const bloqueioDesconto = c.pagoLiquido > 0 || c.saldo <= 0;
+        $("discount-blocked").hidden = !bloqueioDesconto;
+        $("discount-blocked-text").textContent = c.pagoLiquido > 0
+          ? "Desconto bloqueado: existe pagamento líquido maior que zero. Um estorno integral pode reabrir a possibilidade."
+          : c.saldo <= 0 ? "Não há valor descontável: a cobrança já está zerada." : "";
+        $("discount-form").querySelectorAll("input, textarea, button").forEach((el) => { el.disabled = bloqueioDesconto; });
+
+        const disponiveis = a.pagamentos.filter((p) => !p.estornado);
+        $("refund-payment").innerHTML = disponiveis.length
+          ? disponiveis.map((p) => `<option value="${p.id}">${p.id} · ${moeda(p.valor)} · ${p.forma} · ${p.em}</option>`).join("")
+          : `<option value="">Nenhum pagamento estornável</option>`;
+        $("refund-blocked").hidden = disponiveis.length !== 0;
+        $("refund-blocked-text").textContent = disponiveis.length ? "" : "Nenhum pagamento ainda não estornado. Estorno parcial ou de pagamento inexistente não é aceito.";
+        $("refund-form").querySelectorAll("select, textarea, button").forEach((el) => { el.disabled = disponiveis.length === 0; });
+        const selecionado = a.pagamentos.find((p) => p.id === $("refund-payment").value);
+        $("refund-amount").value = selecionado ? moeda(selecionado.valor) : "—";
+      }
+
+      function renderAutorizacoes(a) {
+        const tipos = [
+          { id: "documental", titulo: "Documental", descricao: "Divergência entre documento apresentado e dados da entrada." },
+          { id: "financeira", titulo: "Financeira", descricao: "Saldo pendente na entrega excepcional." }
+        ];
+        $("auth-container").innerHTML = tipos.map((tipo) => {
+          const atual = autorizacaoAtual(tipo.id);
+          const status = atual ? statusAutorizacao(atual, a) : "nao_concedida";
+          const admin = state.perfil === "Administrador";
+          return `
+            <div class="auth-box">
+              <div class="auth-head">
+                <div><h3>${tipo.titulo}</h3><p class="hint">${tipo.descricao}</p></div>
+                <span class="badge ${classeStatus(status)}">${rotuloStatus(status)}</span>
+              </div>
+              ${atual ? `<p class="hint">${tipo.id === "financeira" ? `Vinculada à revisão ${atual.revisao} da razão · atual ${a.revisao}` : "Vinculada à conferência do pedido"} · concedida por ${atual.ator} em ${atual.em}</p>` : `<p class="hint">Nenhuma concessão registrada.</p>`}
+              ${admin && atual ? `<div><button class="btn btn-sm btn-ghost" type="button" data-auth-just="${atual.id}">Ler justificativa</button></div>` : ""}
+              ${admin ? `
+                <details>
+                  <summary>${atual ? "Substituir" : "Conceder"} autorização ${tipo.titulo.toLowerCase()}</summary>
+                  <form data-grant="${tipo.id}" style="display:grid; gap:.55rem">
+                    <label class="hint" for="just-${tipo.id}">Justificativa obrigatória</label>
+                    <textarea id="just-${tipo.id}" rows="2" maxlength="500"></textarea>
+                    <button class="btn btn-sm" type="submit">${atual ? "Substituir" : "Conceder"}</button>
+                  </form>
+                </details>
+                ${atual && status === "vigente" ? `
+                  <details>
+                    <summary>Revogar autorização vigente</summary>
+                    <form data-revoke="${tipo.id}" style="display:grid; gap:.55rem">
+                      <label class="hint" for="rev-${tipo.id}">Justificativa da revogação</label>
+                      <textarea id="rev-${tipo.id}" rows="2" maxlength="500"></textarea>
+                      <button class="btn btn-sm btn-danger" type="submit">Revogar</button>
+                    </form>
+                  </details>` : ""}
+              ` : `<p class="hint">Concessão e revogação são exclusivas do Administrador. O caixa vê apenas a vigência.</p>`}
+            </div>`;
+        }).join("");
+
+        if (state.perfil === "Administrador") {
+          $("auth-container").querySelectorAll("[data-auth-just]").forEach((botao) => botao.addEventListener("click", () => {
+            const auth = a.autorizacoes.find((x) => x.id === botao.dataset.authJust);
+            if (!auth) return;
+            $("justification-meta").textContent = `${auth.id} · ${auth.ator} · ${auth.em} · leitura registrada`;
+            $("justification-text").textContent = auth.justificativa;
+            $("justification-dialog").showModal();
+            $("close-justification").focus();
+          }));
+          $("auth-container").querySelectorAll("[data-grant]").forEach((form) => form.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const tipo = form.dataset.grant;
+            const texto = form.querySelector("textarea").value.trim();
+            if (!texto) { aviso("Informe a justificativa da autorização."); return; }
+            executar("Concedendo autorização…", () => {
+              const anterior = autorizacaoAtual(tipo);
+              if (anterior && statusAutorizacao(anterior, a) === "vigente") anterior.status = "substituida";
+              a.autorizacoes.push({ id: novoId("AUT"), tipo, status: "vigente", revisao: tipo === "financeira" ? a.revisao : 1, justificativa: texto, ator: perfis[state.perfil].nome, em: agora() });
+              a.eventos.push({ tipo: `Autorização ${tipo} concedida`, detalhe: texto, ator: perfis[state.perfil].nome, em: agora() });
+              form.reset();
+            }, "Autorização registrada. A entrega futura avaliará a vigência; nada foi consumido.");
+          }));
+          $("auth-container").querySelectorAll("[data-revoke]").forEach((form) => form.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const tipo = form.dataset.revoke;
+            const texto = form.querySelector("textarea").value.trim();
+            if (!texto) { aviso("Informe a justificativa da revogação."); return; }
+            executar("Revogando autorização…", () => {
+              const atual = autorizacaoAtual(tipo);
+              if (atual) { atual.status = "revogada"; atual.revogacao = texto; atual.revogadoEm = agora(); atual.revogadoPor = perfis[state.perfil].nome; }
+              a.eventos.push({ tipo: `Autorização ${tipo} revogada`, detalhe: texto, ator: perfis[state.perfil].nome, em: agora() });
+              form.reset();
+            }, "Autorização revogada. A concessão e a revogação permanecem no histórico.");
+          }));
+        }
+      }
+
+      function renderHistorico(a) {
+        const eventos = a.eventos.slice().sort((x, y) => (x.em < y.em ? 1 : -1));
+        $("history-list").innerHTML = eventos.map((e) => {
+          const financeiro = /Pagamento|Desconto|Estorno|Autorização|Entrega/.test(e.tipo);
+          const mostrar = !financeiro || state.perfil !== "Manobrista";
+          if (!mostrar) return "";
+          const protegido = /justificativa|Desconto|Estorno|Autorização/.test(e.tipo);
+          const detalhe = protegido ? "Justificativa protegida; leitura explícita e auditada." : e.detalhe;
+          return `<li><time>${e.em}</time><div><strong>${e.tipo}</strong><span>${detalhe} · ${e.ator}</span></div></li>`;
+        }).join("");
+      }
+
+      function mostrarConfirmacao(mensagem) {
+        const a = state.atendimento;
+        const c = calcular(a);
+        $("confirm-message").textContent = mensagem;
+        $("confirm-detail").textContent = `Saldo atual: ${moeda(c.saldo)} · revisão ${a.revisao}.`;
+        $("confirm-panel").hidden = false;
+        $("confirm-close").focus();
+      }
+
+      function executar(titulo, aplicar, sucesso) {
+        $("pending-panel").hidden = false;
+        $("pending-title").textContent = titulo;
+        $("pending-message").textContent = "Comando pendente. A navegação interna e a saída ficam bloqueadas até o resultado ser conhecido.";
+        $("pending-warning").hidden = false;
+        $("pending-actions").hidden = true;
+        state.operacaoPendente = { aplicar, sucesso };
+        const resultado = $("next-outcome").value;
+        setTimeout(() => {
+          if (resultado === "lost") {
+            $("pending-title").textContent = "Resultado incerto";
+            $("pending-message").textContent = "A resposta se perdeu. Repita a mesma operação com a mesma chave e o mesmo conteúdo.";
+            $("pending-actions").hidden = false;
+            return;
+          }
+          $("pending-panel").hidden = true;
+          if (resultado === "conflict") {
+            simularConflito();
+            state.operacaoPendente = null;
+            atualizarChaves();
+            render();
+            aviso("Conflito de revisão (409): a razão foi alterada por outra operação. Saldo e autorizações recarregados.");
+            return;
+          }
+          aplicar();
+          state.operacaoPendente = null;
+          atualizarChaves();
+          render();
+          aviso(sucesso);
+          mostrarConfirmacao(sucesso);
+        }, 900);
+      }
+
+      function simularConflito() {
+        const a = state.atendimento;
+        const c = calcular(a);
+        if (c.saldo > 0) {
+          a.pagamentos.push({ id: novoId("PAG"), valor: c.saldo, forma: "Cartão", ator: "João Cardoso", em: agora(), estornado: false });
+          a.revisao += 1;
+          a.eventos.push({ tipo: "Pagamento integral (outro operador)", detalhe: `Cartão · ${moeda(c.saldo)}`, ator: "João Cardoso", em: agora() });
+        }
+      }
+
+      function repetir() {
+        if (!state.operacaoPendente) return;
+        $("pending-title").textContent = "Repetindo a mesma operação…";
+        $("pending-message").textContent = "Mesma chave e mesmo conteúdo. Nenhuma nova tentativa é gerada.";
+        $("pending-actions").hidden = true;
+        $("pending-warning").hidden = false;
+        const operacao = state.operacaoPendente;
+        setTimeout(() => {
+          $("pending-panel").hidden = true;
+          operacao.aplicar();
+          state.operacaoPendente = null;
+          atualizarChaves();
+          render();
+          aviso(operacao.sucesso);
+          mostrarConfirmacao(operacao.sucesso);
+        }, 850);
+      }
+
+      function validarPagamento() {
+        $("payment-summary").hidden = true;
+        const a = state.atendimento;
+        const c = calcular(a);
+        const valor = Number($("payment-amount").value.replace(".", "").replace(",", "."));
+        const forma = $("payment-method").value;
+        const erros = [];
+        if (!Number.isFinite(valor) || valor <= 0) erros.push("Informe um valor positivo com duas casas decimais.");
+        else if (Math.abs(valor - c.saldo) > 0.004) erros.push(`O acerto deve ser integral: exatamente ${moeda(c.saldo)}.`);
+        if (!forma) erros.push("Selecione a forma: dinheiro, cartão ou Pix.");
+        if (erros.length) {
+          $("payment-summary").innerHTML = `<h2>Pagamento não enviado</h2><ul>${erros.map((e) => `<li>${e}</li>`).join("")}</ul>`;
+          $("payment-summary").hidden = false;
+          $("payment-summary").focus();
+          $("payment-amount").setAttribute("aria-invalid", "true");
+          return null;
+        }
+        $("payment-amount").removeAttribute("aria-invalid");
+        return { valor, forma };
+      }
+
+      function validarDesconto() {
+        $("admin-summary").hidden = true;
+        const a = state.atendimento;
+        const c = calcular(a);
+        const valor = Number($("discount-amount").value.replace(".", "").replace(",", "."));
+        const justificativa = $("discount-justification").value.trim();
+        const erros = [];
+        if (c.pagoLiquido > 0) erros.push("Desconto bloqueado enquanto existir pagamento líquido maior que zero.");
+        if (!Number.isFinite(valor) || valor <= 0) erros.push("O desconto deve ser um valor monetário positivo.");
+        else if (valor > c.cobrado + 0.004) erros.push(`O desconto não pode exceder o valor descontável de ${moeda(c.cobrado)}.`);
+        if (!justificativa) erros.push("Informe a justificativa obrigatória.");
+        if (erros.length) {
+          $("admin-summary").innerHTML = `<h2>Desconto não enviado</h2><ul>${erros.map((e) => `<li>${e}</li>`).join("")}</ul>`;
+          $("admin-summary").hidden = false;
+          $("admin-summary").focus();
+          return null;
+        }
+        return { valor, justificativa };
+      }
+
+      $("payment-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const dados = validarPagamento();
+        if (!dados) return;
+        executar("Registrando pagamento…", () => {
+          const a = state.atendimento;
+          a.pagamentos.push({ id: novoId("PAG"), valor: dados.valor, forma: dados.forma, ator: perfis[state.perfil].nome, em: agora(), estornado: false });
+          a.revisao += 1;
+          a.eventos.push({ tipo: "Pagamento integral", detalhe: `${dados.forma} · ${moeda(dados.valor)}`, ator: perfis[state.perfil].nome, em: agora() });
+          $("payment-form").reset();
+        }, "Pagamento integral confirmado. O saldo foi recarregado do servidor.");
+      });
+
+      $("discount-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const dados = validarDesconto();
+        if (!dados) return;
+        executar("Concedendo desconto…", () => {
+          const a = state.atendimento;
+          a.descontos.push({ id: novoId("DES"), valor: dados.valor, justificativa: dados.justificativa, ator: perfis[state.perfil].nome, em: agora() });
+          a.revisao += 1;
+          a.eventos.push({ tipo: "Desconto concedido", detalhe: `${moeda(dados.valor)} · justificativa protegida`, ator: perfis[state.perfil].nome, em: agora() });
+          $("discount-form").reset();
+        }, "Desconto registrado. O lançamento é append-only e o saldo foi recalculado.");
+      });
+
+      $("refund-payment").addEventListener("change", () => {
+        const pagamento = state.atendimento.pagamentos.find((p) => p.id === $("refund-payment").value);
+        $("refund-amount").value = pagamento ? moeda(pagamento.valor) : "—";
+      });
+
+      $("refund-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        $("admin-summary").hidden = true;
+        const pagamento = state.atendimento.pagamentos.find((p) => p.id === $("refund-payment").value);
+        const justificativa = $("refund-justification").value.trim();
+        if (!pagamento || pagamento.estornado || !justificativa) {
+          $("admin-summary").innerHTML = `<h2>Estorno não enviado</h2><ul>${!pagamento || pagamento.estornado ? "<li>Selecione um pagamento ainda não estornado.</li>" : ""}${!justificativa ? "<li>Informe a justificativa obrigatória.</li>" : ""}</ul>`;
+          $("admin-summary").hidden = false;
+          $("admin-summary").focus();
+          return;
+        }
+        executar("Registrando estorno…", () => {
+          const a = state.atendimento;
+          pagamento.estornado = true;
+          a.estornos.push({ id: novoId("EST"), pagamentoId: pagamento.id, valor: pagamento.valor, justificativa, ator: perfis[state.perfil].nome, em: agora() });
+          a.revisao += 1;
+          a.eventos.push({ tipo: "Estorno integral", detalhe: `${pagamento.id} · ${moeda(pagamento.valor)}`, ator: perfis[state.perfil].nome, em: agora() });
+          $("refund-form").reset();
+        }, "Estorno integral confirmado. O saldo foi reaberto e o pagamento original permanece.");
+      });
+
+      $("ledger-body").addEventListener("click", (e) => {
+        const botao = e.target.closest("[data-justificativa]");
+        if (!botao) return;
+        const a = state.atendimento;
+        const item = [...a.descontos, ...a.estornos].find((x) => x.id === botao.dataset.justificativa);
+        if (!item) return;
+        $("justification-meta").textContent = `${botao.dataset.justificativa} · ${item.ator} · ${item.em} · leitura registrada`;
+        $("justification-text").textContent = item.justificativa;
+        $("justification-dialog").showModal();
+        $("close-justification").focus();
+      });
+
+      $("confirm-close").addEventListener("click", () => { $("confirm-panel").hidden = true; });
+      $("close-justification").addEventListener("click", () => $("justification-dialog").close());
+      $("close-justification-2").addEventListener("click", () => $("justification-dialog").close());
+      $("retry-same").addEventListener("click", repetir);
+      $("discard-attempt").addEventListener("click", () => { state.operacaoPendente = null; $("pending-panel").hidden = true; atualizarChaves(); aviso("Tentativa descartada; o resultado no servidor permanece desconhecido."); });
+      $("logout").addEventListener("click", () => aviso("Logout do protótipo: a sessão seria revogada no servidor."));
+
+      $("profile-switch").addEventListener("change", (e) => { state.perfil = e.target.value; aplicarPerfil(); });
+      $("back-to-admin").addEventListener("click", () => { state.perfil = "Administrador"; $("profile-switch").value = "Administrador"; aplicarPerfil(); });
+      $("scenario").addEventListener("change", (e) => {
+        $("confirm-panel").hidden = true;
+        state.cenario = e.target.value;
+        state.atendimento = criarAtendimento(state.cenario);
+        atualizarChaves();
+        render();
+        aviso("Cenário do protótipo aplicado. Nenhum dado foi persistido.");
+      });
+
+      function aplicarPerfil() {
+        const dados = perfis[state.perfil];
+        $("avatar").textContent = dados.iniciais;
+        $("session-name").textContent = dados.nome;
+        $("session-role").textContent = state.perfil + " · sessão verificada";
+        const permitido = state.perfil !== "Manobrista";
+        $("allowed").hidden = !permitido;
+        $("denied").hidden = permitido;
+        $("nav-cashier").hidden = !permitido;
+        render();
+      }
+
+      function aviso(texto) {
+        const toast = $("toast");
+        toast.textContent = texto;
+        setTimeout(() => { toast.textContent = ""; }, 7000);
+      }
+
+      state.atendimento = criarAtendimento("base");
+      atualizarChaves();
+      aplicarPerfil();
+    </script>
+  </body>
+</html>

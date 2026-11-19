@@ -43,6 +43,41 @@ describe('Funcionarios', () => {
     http.expectNone((requisicao) => requisicao.url.includes('/api/v1/employees'));
   });
 
+  it('limpa a validação após criar um funcionário com sucesso', async () => {
+    http = configurar(true);
+    const fixture = TestBed.createComponent(Funcionarios);
+    const componente = fixture.componentInstance;
+    fixture.detectChanges();
+    http.expectOne((requisicao) => requisicao.url.includes('/api/v1/employees')).flush(paginaVazia);
+    await aguardarAtualizacao(fixture);
+
+    componente.formulario.nome().value.set('Funcionário Válido');
+    componente.formulario.email().value.set('funcionario@example.test');
+    componente.formulario.senhaInicial().value.set('SenhaTeste1');
+    componente.perfisSelecionados.set(['Caixa']);
+
+    const criacao = componente.criar(new Event('submit', { cancelable: true }));
+    const requisicao = http.expectOne((pedido) => pedido.method === 'POST');
+    requisicao.flush({
+      id: '11111111-1111-1111-1111-111111111111',
+      nome: 'Funcionário Válido',
+      email: 'funcionario@example.test',
+      ativo: true,
+      perfis: ['Caixa'],
+      versaoAcesso: 1,
+      tokenConcorrencia: 'AAAA',
+    });
+    await aguardarAtualizacao(fixture);
+    http.expectOne((pedido) => pedido.url.includes('/api/v1/employees')).flush(paginaVazia);
+    await criacao;
+    await aguardarAtualizacao(fixture);
+
+    expect(componente.sucesso()).toContain('Funcionário Funcionário Válido criado');
+    expect(componente.resumoVisivel()).toBe(false);
+    expect(componente.formulario.nome().touched()).toBe(false);
+    expect(componente.formulario.nome().value()).toBe('');
+  });
+
   it('não chama a API com dados inválidos ou sem perfis e foca o resumo', async () => {
     http = configurar(true);
     const fixture = TestBed.createComponent(Funcionarios);

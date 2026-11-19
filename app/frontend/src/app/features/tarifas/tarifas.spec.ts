@@ -126,5 +126,7 @@ describe('Tarifas', () => {
 
     expect(componente.corrente()?.versao).toBe(1);
     expect(componente.sucesso()).toContain('Versão 1 publicada');
+    expect(componente.resumoVisivel()).toBe(false);
+    expect(componente.formulario.valor().touched()).toBe(false);
   });
 });

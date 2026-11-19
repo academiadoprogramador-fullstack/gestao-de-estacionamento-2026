@@ -77,6 +77,34 @@ describe('Vagas', () => {
     expect(campo.getAttribute('aria-describedby')).toBe('erro-codigo-vaga');
   });
 
+  it('limpa a validação após cadastrar uma vaga com sucesso', async () => {
+    const configuracao = configurar(true);
+    http = configuracao.http;
+
+    const fixture = TestBed.createComponent(Vagas);
+    const componente = fixture.componentInstance;
+    fixture.detectChanges();
+    http.expectOne((requisicao) => requisicao.url.includes('/api/v1/spaces')).flush(paginaVazia);
+    await aguardarAtualizacao(fixture);
+
+    componente.formulario.codigo().value.set('A-01');
+    const cadastro = componente.cadastrar(new Event('submit', { cancelable: true }));
+    const requisicao = http.expectOne((pedido) => pedido.method === 'POST');
+    requisicao.flush({
+      id: '11111111-1111-1111-1111-111111111111',
+      codigo: 'A-01',
+      situacao: 'livre',
+      tokenConcorrencia: 'AAAA',
+    });
+    await cadastro;
+    await aguardarAtualizacao(fixture);
+
+    expect(componente.sucesso()).toContain('Vaga A-01 cadastrada');
+    expect(componente.resumoVisivel()).toBe(false);
+    expect(componente.formulario.codigo().touched()).toBe(false);
+    expect(componente.formulario.codigo().value()).toBe('');
+  });
+
   it('preserva filtros e página quando uma atualização falha', async () => {
     const configuracao = configurar(true);
     http = configuracao.http;

@@ -83,6 +83,9 @@ describe('CheckIn', () => {
     expect(componente.resultado()?.identificador).toBe('AT-2026-000001');
     expect(componente.formulario.documento().value()).toBe('');
     expect(componente.formulario.vistoria().value()).toBe('');
+    expect(componente.formulario.documento().touched()).toBe(false);
+    expect(componente.formulario.vagaId().touched()).toBe(false);
+    expect(componente.resumoVisivel()).toBe(false);
     expect(componente.coordenador.fase()).toBe('sucesso');
   });
 });

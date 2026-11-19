@@ -1,0 +1,285 @@
+<main class="mx-auto w-full max-w-6xl px-4 py-8 text-slate-100">
+  <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="flex items-center gap-2 text-xs font-semibold tracking-widest text-sky-400 uppercase">
+        <svg lucideClipboardList class="h-4 w-4" aria-hidden="true"></svg>
+        Operação de retirada
+      </p>
+      <h1 class="mt-1 text-2xl font-semibold text-white">Fila de retiradas</h1>
+      <p class="mt-1 max-w-3xl text-sm text-slate-400">
+        Pedidos calculados e aguardando busca. O manobrista acompanha a operação sem finanças,
+        conferência ou autorizações; a entrega e a liberação da vaga pertencem à Fase 4.
+      </p>
+    </div>
+
+    @if (ehOperador()) {
+      <div class="flex flex-wrap gap-2">
+        <a
+          routerLink="/withdrawals/new"
+          class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        >
+          Registrar pedido
+        </a>
+        <a
+          routerLink="/attendances"
+          class="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+        >
+          Abrir caixa
+        </a>
+      </div>
+    }
+  </header>
+
+  <div
+    class="mb-4 flex items-start gap-2 rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100"
+    role="note"
+  >
+    <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
+    <p>
+      Esta fase registra pedido, busca, cobrança e caixa. Não há comando de entrega: o pedido não
+      passa a <strong>entregue</strong>, a vaga continua ocupada e autorizações não são consumidas.
+    </p>
+  </div>
+
+  <dl class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Resumo da fila">
+    <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <dt class="text-xs font-semibold tracking-widest text-slate-400 uppercase">Aguardando</dt>
+      <dd class="mt-1 text-2xl font-semibold text-white">{{ contar('aguardando') }}</dd>
+      <small class="text-xs text-slate-400">Na página atual, ainda sem busca</small>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <dt class="text-xs font-semibold tracking-widest text-slate-400 uppercase">Em busca</dt>
+      <dd class="mt-1 text-2xl font-semibold text-white">{{ contar('em busca') }}</dd>
+      <small class="text-xs text-slate-400">Na página atual, com responsável e horário</small>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <dt class="text-xs font-semibold tracking-widest text-slate-400 uppercase">Atualização</dt>
+      <dd class="mt-1 text-base font-semibold text-white">{{ intervaloSegundos }} s</dd>
+      <small class="text-xs text-slate-400" aria-live="polite">
+        @if (atualizando()) {
+          Consultando fila…
+        } @else {
+          Polling ativo · sem sobreposição
+        }
+      </small>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <dt class="text-xs font-semibold tracking-widest text-slate-400 uppercase">
+        Entregues nesta fase
+      </dt>
+      <dd class="mt-1 text-base font-semibold text-white">Fase 4</dd>
+      <small class="text-xs text-slate-400">Estado e liberação de vaga não são produzidos</small>
+    </div>
+  </dl>
+
+  <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-fila">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+      <div>
+        <h2 id="titulo-fila" class="text-sm font-semibold tracking-wide text-slate-300 uppercase">
+          Pedidos na fila
+        </h2>
+        <p class="text-xs text-slate-400">
+          Visão de {{ sessao.estado()?.funcionario?.perfis?.[0] ?? '—' }} · página {{ pagina() }}
+        </p>
+      </div>
+      <span class="rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-300">
+        {{ sessao.estado()?.funcionario?.perfis?.[0] ?? '—' }}
+      </span>
+    </div>
+
+    <div class="flex flex-wrap items-end gap-3 border-b border-slate-800 p-4" role="search" aria-label="Filtros da fila">
+      <div>
+        <label for="filtro-estado" class="mb-1 block text-xs font-semibold text-slate-400">
+          Estado
+        </label>
+        <select
+          id="filtro-estado"
+          [value]="filtro()"
+          (change)="alterarFiltro($any($event.target).value)"
+          class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        >
+          <option value="">Todos</option>
+          <option value="aguardando">Aguardando</option>
+          <option value="em busca">Em busca</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="tamanho-pagina" class="mb-1 block text-xs font-semibold text-slate-400">
+          Itens por página
+        </label>
+        <select
+          id="tamanho-pagina"
+          [value]="tamanhoPagina()"
+          (change)="alterarTamanho($any($event.target).value)"
+          class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        >
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+
+      <button
+        type="button"
+        (click)="atualizarAgora()"
+        [disabled]="atualizando()"
+        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+      >
+        <svg lucideRefreshCw class="h-4 w-4" aria-hidden="true"></svg>
+        Atualizar agora
+      </button>
+
+      @if (atualizando()) {
+        <span class="inline-flex items-center gap-1.5 text-xs text-slate-400" role="status">
+          <svg lucideLoaderCircle class="h-3.5 w-3.5 animate-spin" aria-hidden="true"></svg>
+          Consultando fila…
+        </span>
+      }
+
+      <span class="ml-auto text-xs text-slate-500">Atualizado {{ ultimaAtualizacao() }}</span>
+    </div>
+
+    @if (erro(); as mensagem) {
+      <p class="m-4 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100" role="alert">
+        {{ mensagem }} Os filtros e a página atuais foram preservados.
+      </p>
+    }
+
+    @if (conflito(); as mensagem) {
+      <p class="m-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100" role="alert">
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (aviso(); as mensagem) {
+      <p class="m-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100" role="status">
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (carregandoInicial()) {
+      <p class="flex items-center gap-2 p-4 text-sm text-slate-300" role="status">
+        <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+        Carregando a fila…
+      </p>
+    } @else if (itens().length === 0) {
+      <div class="grid justify-items-center gap-1 px-4 py-10 text-center text-sm text-slate-400" role="status">
+        <strong class="text-slate-200">Nenhum pedido neste estado</strong>
+        <span>Altere o filtro ou aguarde a próxima atualização. Nenhum dado foi inventado.</span>
+      </div>
+    } @else {
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse text-sm">
+          <caption class="px-4 py-2 text-left text-xs text-slate-400">
+            Pedidos de retirada da unidade, ordenados por horário do pedido.
+          </caption>
+          <thead>
+            <tr class="text-left text-xs tracking-wider text-slate-400 uppercase">
+              <th scope="col" class="border-b border-slate-800 px-4 py-2">Atendimento</th>
+              <th scope="col" class="border-b border-slate-800 px-4 py-2">Veículo e vaga</th>
+              <th scope="col" class="border-b border-slate-800 px-4 py-2">Pedido</th>
+              <th scope="col" class="border-b border-slate-800 px-4 py-2">Estado</th>
+              <th scope="col" class="border-b border-slate-800 px-4 py-2">Busca</th>
+              @if (ehOperador()) {
+                <th scope="col" class="border-b border-slate-800 px-4 py-2 text-right">Total</th>
+                <th scope="col" class="border-b border-slate-800 px-4 py-2 text-right">Saldo</th>
+              }
+              <th scope="col" class="border-b border-slate-800 px-4 py-2">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of itens(); track item.id) {
+              <tr class="hover:bg-slate-800/40">
+                <td class="border-b border-slate-800/70 px-4 py-3 font-mono text-xs text-sky-300">
+                  {{ item.identificador }}
+                </td>
+                <td class="border-b border-slate-800/70 px-4 py-3">
+                  <span class="block font-mono text-slate-100">{{ item.placa }}</span>
+                  <span class="text-xs text-slate-400">{{ item.modelo }} · vaga {{ item.vagaCodigo || '—' }}</span>
+                </td>
+                <td class="border-b border-slate-800/70 px-4 py-3">
+                  <span class="block">{{ formatarDataHora(item.solicitadoEmUtc) }}</span>
+                  <span class="text-xs text-slate-500">horário do servidor</span>
+                </td>
+                <td class="border-b border-slate-800/70 px-4 py-3">
+                  @if (item.estado === 'em busca') {
+                    <span class="rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-300">Em busca</span>
+                  } @else {
+                    <span class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300">Aguardando</span>
+                  }
+                </td>
+                <td class="border-b border-slate-800/70 px-4 py-3">
+                  @if (item.responsavelBusca) {
+                    <span class="block text-sm">{{ item.responsavelBusca }}</span>
+                    <span class="text-xs text-slate-400">{{ formatarDataHora(item.buscaIniciadaEmUtc) }}</span>
+                  } @else {
+                    <span class="text-xs text-slate-400">Ainda não iniciada</span>
+                  }
+                </td>
+                @if (ehOperador()) {
+                  <td class="border-b border-slate-800/70 px-4 py-3 text-right tabular-nums">
+                    {{ formatarValor(item.totalOriginal) }}
+                  </td>
+                  <td class="border-b border-slate-800/70 px-4 py-3 text-right tabular-nums">
+                    {{ formatarValor(item.saldo) }}
+                  </td>
+                }
+                <td class="border-b border-slate-800/70 px-4 py-3">
+                  <div class="flex flex-wrap gap-2">
+                    @if (item.estado === 'aguardando') {
+                      <button
+                        type="button"
+                        (click)="iniciarBusca(item)"
+                        [disabled]="buscando() !== null"
+                        [attr.aria-label]="'Iniciar busca do atendimento ' + item.identificador"
+                        class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                      >
+                        {{ buscando() === item.id ? 'Iniciando…' : 'Iniciar busca' }}
+                      </button>
+                    } @else {
+                      <span class="text-xs text-slate-400">Em busca</span>
+                    }
+                    @if (ehOperador()) {
+                      <a
+                        [routerLink]="['/cashier', item.atendimentoId]"
+                        [attr.aria-label]="'Abrir caixa do atendimento ' + item.identificador"
+                        class="rounded-md px-2 py-1 text-xs text-sky-300 transition hover:bg-sky-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                      >
+                        Caixa
+                      </a>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    <nav class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm" aria-label="Paginação de retiradas">
+      <p class="text-xs text-slate-400">
+        Página {{ pagina() }} de {{ totalPaginas() }} · {{ total() }} pedido(s)
+      </p>
+      <div class="flex gap-2">
+        <button
+          type="button"
+          (click)="irParaPagina(pagina() - 1)"
+          [disabled]="pagina() <= 1"
+          class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 disabled:opacity-50"
+        >
+          Anterior
+        </button>
+        <button
+          type="button"
+          (click)="irParaPagina(pagina() + 1)"
+          [disabled]="pagina() >= totalPaginas()"
+          class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 disabled:opacity-50"
+        >
+          Próxima
+        </button>
+      </div>
+    </nav>
+  </section>
+</main>

@@ -37,6 +37,14 @@
             <svg lucideClipboardList class="h-4 w-4" aria-hidden="true"></svg>
             Atendimentos
           </a>
+          <a
+            routerLink="/withdrawals"
+            routerLinkActive="text-sky-300"
+            class="flex items-center gap-1.5 rounded-md px-2 py-1 text-slate-300 transition hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            <svg lucideClipboardList class="h-4 w-4" aria-hidden="true"></svg>
+            Fila de retiradas
+          </a>
           @if (sessao.possuiPerfil(['Administrador', 'Caixa'])) {
             <a
               routerLink="/check-in"
@@ -81,7 +89,7 @@
           </button>
           @if (comando.bloqueado()) {
             <span id="comando-pendente-logout" class="sr-only">
-              A saída está bloqueada enquanto existe uma tentativa de check-in pendente ou incerta.
+              A saída está bloqueada enquanto existe uma tentativa de comando pendente ou incerta.
             </span>
           }
         </div>

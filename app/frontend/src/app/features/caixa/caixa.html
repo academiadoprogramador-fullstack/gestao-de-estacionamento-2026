@@ -1,0 +1,852 @@
+<main class="mx-auto w-full max-w-6xl px-4 py-8 text-slate-100">
+  <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="text-xs font-semibold tracking-widest text-sky-400 uppercase">Caixa e cobrança</p>
+      <h1 class="mt-1 text-2xl font-semibold text-white">Caixa do atendimento</h1>
+      <p class="mt-1 max-w-3xl text-sm text-slate-400">
+        Acerto integral do saldo, descontos e estornos preservados como lançamentos, com autorizações
+        separadas para a entrega futura. Esta tela não entrega veículo, não registra vistoria e não
+        libera vaga.
+      </p>
+    </div>
+    <a
+      routerLink="/withdrawals"
+      class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+    >
+      Voltar à fila
+    </a>
+  </header>
+
+  @if (acessoNegado()) {
+    <section class="rounded-xl border border-rose-500/40 bg-rose-500/10 p-8" aria-labelledby="titulo-negado-caixa">
+      <h2 id="titulo-negado-caixa" class="text-xl font-semibold text-rose-100">Acesso negado</h2>
+      <p class="mt-2 max-w-2xl text-sm text-rose-100">
+        O caixa é restrito a Caixa e Administrador. O Manobrista consulta a fila e inicia a busca, mas
+        não acessa finanças, conferência ou autorizações.
+      </p>
+      <a
+        routerLink="/withdrawals"
+        class="mt-4 inline-block rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      >
+        Voltar à fila
+      </a>
+    </section>
+  } @else {
+    @if (erro(); as mensagem) {
+      <p class="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100" role="alert">
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (conflito(); as mensagem) {
+      <p class="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100" role="alert">
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (aviso(); as mensagem) {
+      <p class="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100" role="status">
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (erroJustificativa(); as mensagem) {
+      <p class="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100" role="alert">
+        {{ mensagem }}
+      </p>
+    }
+
+    @if (carregando()) {
+      <p class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300" role="status">
+        <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+        Carregando o caixa…
+      </p>
+    } @else if (pedido(); as atual) {
+      @if (atual.conferencia === 'divergente' || atendimento()?.estado === 'entregue') {
+        <div class="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100" role="note">
+          <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
+          @if (atendimento()?.estado === 'entregue') {
+            <p>
+              Atendimento entregue com saldo: fixture sintética da Fase 4. O acerto integral do saldo é
+              permitido, sem reabrir atendimento, pedido, ocupação ou vaga.
+            </p>
+          } @else {
+            <p>
+              Conferência divergente: a entrega normal fica bloqueada até autorização documental
+              vigente. O pedido e o cálculo permanecem preservados.
+            </p>
+          }
+        </div>
+      }
+
+      <div class="grid gap-6 lg:grid-cols-[1.7fr_0.9fr]">
+        <div class="grid gap-6">
+          <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-saldo">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+              <div>
+                <h2 id="titulo-saldo" class="text-sm font-semibold tracking-wide text-slate-300 uppercase">
+                  Resumo financeiro
+                </h2>
+                <p class="text-xs text-slate-400">
+                  Atendimento {{ atendimento()?.identificador }} ·
+                  {{ atendimento()?.estado === 'entregue' ? 'entregue (fixture Fase 4)' : atendimento()?.estado === 'em busca' ? 'em busca' : 'aguardando busca' }}
+                </p>
+              </div>
+              <span class="rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-300">
+                Revisão {{ atual.revisaoRazao }}
+              </span>
+            </div>
+            <div class="grid gap-3 p-4">
+              <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Cobrado</dt>
+                  <dd class="text-lg font-semibold text-white">{{ formatarValor(atual.cobrado) }}</dd>
+                  <small class="text-xs text-slate-400">total original − descontos</small>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Pago líquido</dt>
+                  <dd class="text-lg font-semibold text-white">{{ formatarValor(atual.pagoLiquido) }}</dd>
+                  <small class="text-xs text-slate-400">pagamentos − estornos</small>
+                </div>
+                <div class="rounded-lg border border-sky-500/50 bg-sky-500/10 p-3">
+                  <dt class="text-xs tracking-wider text-sky-200 uppercase">Saldo exigível</dt>
+                  <dd class="text-lg font-semibold text-white">{{ formatarValor(atual.saldo) }}</dd>
+                  <small class="text-xs text-sky-100">{{ atual.saldo === 0 ? 'nada a pagar' : 'acerto integral' }}</small>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Total original</dt>
+                  <dd class="text-lg font-semibold text-white">{{ formatarValor(atual.totalOriginal) }}</dd>
+                  <small class="text-xs text-slate-400">snapshot imutável</small>
+                </div>
+              </dl>
+              <p class="text-xs text-slate-400">
+                cobrado {{ formatarValor(atual.cobrado) }} = {{ formatarValor(atual.totalOriginal) }} −
+                {{ formatarValor(atual.descontos) }} · pago líquido
+                {{ formatarValor(atual.pagoLiquido) }} = {{ formatarValor(atual.pagamentos) }} −
+                {{ formatarValor(atual.estornos) }} · saldo {{ formatarValor(atual.saldo) }}
+              </p>
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-acerto">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+              <div>
+                <h2 id="titulo-acerto" class="text-sm font-semibold tracking-wide text-slate-300 uppercase">
+                  Acerto integral
+                </h2>
+                <p class="text-xs text-slate-400">
+                  Exatamente o saldo exigível positivo, em dinheiro, cartão ou Pix.
+                </p>
+              </div>
+              <span class="rounded-full px-2 py-0.5 text-xs font-semibold" [class]="pagamentoBloqueado() ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'">
+                {{ pagamentoBloqueado() ? 'Sem saldo' : 'Aguardando acerto' }}
+              </span>
+            </div>
+            <div class="grid gap-3 p-4">
+              @if (errosPagamento().length > 0) {
+                <div
+                  #resumoPagamento
+                  tabindex="-1"
+                  role="alert"
+                  class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                >
+                  <p class="font-medium">Pagamento não enviado</p>
+                  <ul class="mt-1 list-disc pl-5">
+                    @for (mensagem of errosPagamento(); track mensagem) {
+                      <li>{{ mensagem }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              @if (pagamentoBloqueado()) {
+                <div class="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100" role="note">
+                  @if (atual.cobrado === 0) {
+                    Cobrança zerada por desconto: nenhum pagamento fictício é exigido.
+                  } @else {
+                    Saldo já quitado: novo pagamento só é admitido após estorno integral ou entrega
+                    excepcional com saldo.
+                  }
+                </div>
+              }
+
+              <form (submit)="submeterPagamento($event)" class="grid gap-3">
+                <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_auto] sm:items-start">
+                  <div class="grid gap-1">
+                    <label for="valor-pagamento" class="block text-xs font-semibold text-slate-400">
+                      Valor do acerto <span class="text-rose-300" aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      id="valor-pagamento"
+                      type="text"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      [value]="valorPagamento()"
+                      (input)="valorPagamento.set($any($event.target).value)"
+                      [disabled]="pagamentoBloqueado()"
+                      [attr.aria-invalid]="errosPagamento().length > 0 ? 'true' : 'false'"
+                      aria-describedby="dica-pagamento"
+                      class="h-9 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                    />
+                  </div>
+
+                  <div class="grid gap-1">
+                    <label for="forma-pagamento" class="block text-xs font-semibold text-slate-400">
+                      Forma <span class="text-rose-300" aria-hidden="true">*</span>
+                    </label>
+                    <select
+                      id="forma-pagamento"
+                      [value]="formaPagamento()"
+                      (change)="formaPagamento.set($any($event.target).value)"
+                      [disabled]="pagamentoBloqueado()"
+                      class="h-9 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                    >
+                      <option value="">Selecione</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="cartao">Cartão</option>
+                      <option value="pix">Pix</option>
+                    </select>
+                  </div>
+
+                  <div class="grid gap-1">
+                    <span class="hidden text-xs font-semibold text-slate-400 sm:block" aria-hidden="true">&nbsp;</span>
+                    <button
+                      type="submit"
+                      [disabled]="pagamentoBloqueado() || processando() || coordenador.bloqueado()"
+                      class="h-9 w-full rounded-lg bg-sky-500 px-4 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    >
+                      Registrar pagamento
+                    </button>
+                  </div>
+                </div>
+                <p id="dica-pagamento" class="text-xs text-slate-400">
+                  O valor deve ser exatamente igual ao saldo; parcial, excedente, crédito e troco são
+                  recusados.
+                </p>
+                <p class="text-xs text-slate-500">Idempotency-Key gerada em memória.</p>
+              </form>
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-lancamentos">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+              <div>
+                <h2 id="titulo-lancamentos" class="text-sm font-semibold tracking-wide text-slate-300 uppercase">
+                  Lançamentos financeiros
+                </h2>
+                <p class="text-xs text-slate-400">Append-only: pagamentos, descontos e estornos preservados.</p>
+              </div>
+              <span class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                {{ atual.lancamentos.length }} lançamento(s)
+              </span>
+            </div>
+
+            @if (atual.lancamentos.length === 0) {
+              <p class="p-4 text-sm text-slate-400" role="status">
+                Nenhum lançamento financeiro. O saldo é igual ao total fixado no pedido.
+              </p>
+            } @else {
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-sm">
+                  <caption class="sr-only">Lançamentos financeiros append-only do atendimento</caption>
+                  <thead>
+                    <tr class="text-left text-xs tracking-wider text-slate-400 uppercase">
+                      <th scope="col" class="border-b border-slate-800 px-4 py-2">Tipo</th>
+                      <th scope="col" class="border-b border-slate-800 px-4 py-2 text-right">Valor</th>
+                      <th scope="col" class="border-b border-slate-800 px-4 py-2">Forma / vínculo</th>
+                      <th scope="col" class="border-b border-slate-800 px-4 py-2">Autor</th>
+                      <th scope="col" class="border-b border-slate-800 px-4 py-2">Horário</th>
+                      <th scope="col" class="border-b border-slate-800 px-4 py-2">Justificativa</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (lancamento of atual.lancamentos; track lancamento.id) {
+                      <tr>
+                        <td class="border-b border-slate-800/70 px-4 py-2">
+                          <span
+                            class="rounded-full px-2 py-0.5 text-xs font-semibold"
+                            [class]="lancamento.tipo === 'pagamento' ? 'bg-emerald-500/10 text-emerald-300' : lancamento.tipo === 'estorno' ? 'bg-rose-500/10 text-rose-300' : 'bg-sky-500/10 text-sky-300'"
+                          >
+                            {{ rotuloTipoLancamento(lancamento.tipo) }}
+                          </span>
+                        </td>
+                        <td class="border-b border-slate-800/70 px-4 py-2 text-right tabular-nums">
+                          {{ formatarValor(lancamento.valor) }}
+                        </td>
+                        <td class="border-b border-slate-800/70 px-4 py-2 text-xs text-slate-300">
+                          @if (lancamento.tipo === 'pagamento') {
+                            {{ rotuloForma(lancamento.formaPagamento) }}
+                          } @else if (lancamento.tipo === 'estorno') {
+                            vínculo {{ lancamento.pagamentoOriginalId }}
+                          } @else {
+                            lançamento administrativo
+                          }
+                        </td>
+                        <td class="border-b border-slate-800/70 px-4 py-2">{{ lancamento.ator }}</td>
+                        <td class="border-b border-slate-800/70 px-4 py-2 text-xs">
+                          {{ formatarDataHora(lancamento.ocorridoEmUtc) }}
+                        </td>
+                        <td class="border-b border-slate-800/70 px-4 py-2">
+                          @if (!lancamento.temJustificativa) {
+                            —
+                          } @else if (ehAdministrador()) {
+                            <button
+                              type="button"
+                              (click)="lerJustificativaLancamento(lancamento)"
+                              class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                            >
+                              Ler justificativa
+                            </button>
+                          } @else {
+                            <span class="text-xs text-slate-400">Protegida</span>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </section>
+
+          @if (ehAdministrador()) {
+            <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-administracao">
+              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+                <div>
+                  <h2 id="titulo-administracao" class="text-sm font-semibold tracking-wide text-slate-300 uppercase">
+                    Administração financeira
+                  </h2>
+                  <p class="text-xs text-slate-400">
+                    Desconto e estorno exigem Administrador, justificativa e registro append-only.
+                  </p>
+                </div>
+                <span class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300">
+                  Somente Administrador
+                </span>
+              </div>
+
+              <div class="grid gap-5 p-4">
+                @if (errosDesconto().length > 0) {
+                  <div
+                    #resumoDesconto
+                    tabindex="-1"
+                    role="alert"
+                    class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                  >
+                    <p class="font-medium">Desconto não enviado</p>
+                    <ul class="mt-1 list-disc pl-5">
+                      @for (mensagem of errosDesconto(); track mensagem) {
+                        <li>{{ mensagem }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+
+                <section aria-labelledby="titulo-desconto" class="grid gap-2">
+                  <h3 id="titulo-desconto" class="text-sm font-semibold text-slate-100">Conceder desconto</h3>
+
+                  @if (descontoBloqueado()) {
+                    <div class="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100" role="note">
+                      @if (atual.pagoLiquido > 0) {
+                        Desconto bloqueado: existe pagamento líquido maior que zero. Um estorno integral
+                        pode reabrir a possibilidade.
+                      } @else {
+                        Não há valor descontável: a cobrança já está zerada.
+                      }
+                    </div>
+                  }
+
+                  <form (submit)="submeterDesconto($event)" class="grid gap-2">
+                    <div>
+                      <label for="valor-desconto" class="mb-1 block text-xs font-semibold text-slate-400">
+                        Valor do desconto <span class="text-rose-300" aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        id="valor-desconto"
+                        type="text"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        [value]="valorDesconto()"
+                        (input)="valorDesconto.set($any($event.target).value)"
+                        [disabled]="descontoBloqueado()"
+                        [attr.aria-invalid]="errosDesconto().length > 0 ? 'true' : 'false'"
+                        aria-describedby="dica-desconto"
+                        class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                      />
+                      <span id="dica-desconto" class="text-xs text-slate-400">
+                        Valor positivo com duas casas; a soma não pode exceder o total original.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label for="justificativa-desconto" class="mb-1 block text-xs font-semibold text-slate-400">
+                        Justificativa <span class="text-rose-300" aria-hidden="true">*</span>
+                      </label>
+                      <textarea
+                        id="justificativa-desconto"
+                        rows="2"
+                        maxlength="500"
+                        [value]="justificativaDesconto()"
+                        (input)="justificativaDesconto.set($any($event.target).value)"
+                        [disabled]="descontoBloqueado()"
+                        aria-describedby="dica-justificativa-desconto"
+                        class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                      ></textarea>
+                      <span id="dica-justificativa-desconto" class="text-xs text-slate-400">
+                        Cifrada; leitura explícita e auditada somente pelo Administrador.
+                      </span>
+                    </div>
+
+                    <div>
+                      <button
+                        type="submit"
+                        [disabled]="descontoBloqueado() || processando() || coordenador.bloqueado()"
+                        class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                      >
+                        Conceder desconto
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                <section aria-labelledby="titulo-estorno" class="grid gap-2 border-t border-slate-800 pt-4">
+                  <h3 id="titulo-estorno" class="text-sm font-semibold text-slate-100">Estornar pagamento</h3>
+
+                  @if (errosEstorno().length > 0) {
+                    <div
+                      #resumoEstorno
+                      tabindex="-1"
+                      role="alert"
+                      class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                    >
+                      <p class="font-medium">Estorno não enviado</p>
+                      <ul class="mt-1 list-disc pl-5">
+                        @for (mensagem of errosEstorno(); track mensagem) {
+                          <li>{{ mensagem }}</li>
+                        }
+                      </ul>
+                    </div>
+                  }
+
+                  @if (pagamentosEstornaveis().length === 0) {
+                    <div class="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100" role="note">
+                      Nenhum pagamento ainda não estornado. Estorno parcial ou de pagamento inexistente
+                      não é aceito.
+                    </div>
+                  }
+
+                  <form (submit)="submeterEstorno($event)" class="grid gap-2">
+                    <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,10rem)] sm:items-start">
+                      <div class="grid gap-1">
+                        <label for="pagamento-estorno" class="block text-xs font-semibold text-slate-400">
+                          Pagamento ainda não estornado
+                        </label>
+                        <select
+                          id="pagamento-estorno"
+                          [value]="pagamentoEstorno()"
+                          (change)="pagamentoEstorno.set($any($event.target).value)"
+                          [disabled]="pagamentosEstornaveis().length === 0"
+                          class="h-9 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                        >
+                          @if (pagamentosEstornaveis().length === 0) {
+                            <option value="">Nenhum pagamento estornável</option>
+                          } @else {
+                            @for (pagamento of pagamentosEstornaveis(); track pagamento.id) {
+                              <option [value]="pagamento.id">
+                                {{ formatarValor(pagamento.valor) }} · {{ rotuloForma(pagamento.formaPagamento) }} ·
+                                {{ formatarDataHora(pagamento.ocorridoEmUtc) }}
+                              </option>
+                            }
+                          }
+                        </select>
+                      </div>
+
+                      <div class="grid gap-1">
+                        <label for="valor-estorno" class="block text-xs font-semibold text-slate-400">
+                          Valor do estorno
+                        </label>
+                        <input
+                          id="valor-estorno"
+                          type="text"
+                          readonly
+                          aria-describedby="dica-estorno"
+                          [value]="valorEstornoSelecionado()"
+                          class="h-9 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-slate-400"
+                        />
+                      </div>
+                    </div>
+                    <p id="dica-estorno" class="text-xs text-slate-400">
+                      Sempre integral; estorno parcial não é aceito.
+                    </p>
+
+                    <div>
+                      <label for="justificativa-estorno" class="mb-1 block text-xs font-semibold text-slate-400">
+                        Justificativa <span class="text-rose-300" aria-hidden="true">*</span>
+                      </label>
+                      <textarea
+                        id="justificativa-estorno"
+                        rows="2"
+                        maxlength="500"
+                        [value]="justificativaEstorno()"
+                        (input)="justificativaEstorno.set($any($event.target).value)"
+                        [disabled]="pagamentosEstornaveis().length === 0"
+                        class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                      ></textarea>
+                    </div>
+
+                    <div>
+                      <button
+                        type="submit"
+                        [disabled]="pagamentosEstornaveis().length === 0 || processando() || coordenador.bloqueado()"
+                        class="rounded-lg border border-rose-500/60 bg-rose-500/10 px-3 py-1.5 text-sm text-rose-200 transition hover:bg-rose-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-60"
+                      >
+                        Estornar integralmente
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            </section>
+          }
+
+          <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-historico-caixa">
+            <div class="border-b border-slate-800 px-4 py-3">
+              <h2 id="titulo-historico-caixa" class="text-sm font-semibold tracking-wide text-slate-300 uppercase">
+                Histórico do atendimento
+              </h2>
+              <p class="text-xs text-slate-400">
+                Eventos filtrados por perfil; justificativas não aparecem fora do Administrador.
+              </p>
+            </div>
+            <div class="p-4">
+              @if (historico().length === 0) {
+                <p class="text-sm text-slate-400" role="status">Sem eventos visíveis para o seu perfil.</p>
+              } @else {
+                <ol class="grid gap-2 text-sm">
+                  @for (evento of historico(); track evento.ocorridoEmUtc + evento.tipo) {
+                    <li class="grid gap-1 rounded-md border border-slate-800 px-3 py-2 sm:grid-cols-[8rem_1fr]">
+                      <time class="text-xs text-slate-400">{{ formatarDataHora(evento.ocorridoEmUtc) }}</time>
+                      <div>
+                        <strong class="block text-slate-100">{{ evento.tipo }}</strong>
+                        <span class="text-xs text-slate-400">Ator opaco {{ evento.atorOpaco }}</span>
+                      </div>
+                    </li>
+                  }
+                </ol>
+              }
+            </div>
+          </section>
+        </div>
+
+        <aside class="grid content-start gap-6" aria-label="Contexto e autorizações">
+          <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-contexto-caixa">
+            <div class="border-b border-slate-800 px-4 py-3">
+              <h2 id="titulo-contexto-caixa" class="text-sm font-semibold text-slate-100">Contexto operacional</h2>
+            </div>
+            <div class="grid gap-2 p-4">
+              <dl class="grid grid-cols-2 gap-2">
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Atendimento</dt>
+                  <dd class="font-mono text-xs text-slate-100">{{ atendimento()?.identificador }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Vaga</dt>
+                  <dd class="font-mono text-sm text-slate-100">{{ atendimento()?.vagaCodigo || '—' }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Pedido</dt>
+                  <dd class="text-xs text-slate-100">{{ formatarDataHora(atual.solicitadoEmUtc) }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Conferência</dt>
+                  <dd class="text-xs text-slate-100">
+                    {{ atual.conferencia === 'divergente' ? 'Divergente' : 'Aprovada' }}
+                  </dd>
+                </div>
+              </dl>
+              <div class="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100">
+                Entrega, vistoria de saída, consumo de autorização e liberação da vaga pertencem à
+                Fase 4. Nenhum botão desta tela altera a ocupação.
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-autorizacoes">
+            <div class="border-b border-slate-800 px-4 py-3">
+              <h2 id="titulo-autorizacoes" class="text-sm font-semibold text-slate-100">
+                Autorizações de exceção
+              </h2>
+              <p class="text-xs text-slate-400">Tipos independentes, vinculados à versão vigente.</p>
+            </div>
+
+            <div class="grid gap-4 p-4">
+              @if (errosAutorizacao(); as mensagem) {
+                <p class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100" role="alert">
+                  {{ mensagem }}
+                </p>
+              }
+
+              @for (tipo of ['documental', 'financeira']; track tipo) {
+                @if (autorizacao(tipo); as auth) {
+                  <div class="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 class="text-sm font-semibold text-slate-100">
+                          {{ tipo === 'documental' ? 'Documental' : 'Financeira' }}
+                        </h3>
+                        <p class="text-xs text-slate-400">
+                          {{
+                            tipo === 'documental'
+                              ? 'Divergência entre documento apresentado e dados da entrada.'
+                              : 'Saldo pendente na entrega excepcional.'
+                          }}
+                        </p>
+                      </div>
+                      <span class="rounded-full px-2 py-0.5 text-xs font-semibold" [class]="classeVigencia(auth.vigencia)">
+                        {{ rotuloVigencia(auth.vigencia) }}
+                      </span>
+                    </div>
+
+                    @if (auth.id) {
+                      <p class="text-xs text-slate-400">
+                        @if (tipo === 'financeira') {
+                          Vinculada à revisão {{ auth.revisaoReferencia }} da razão · atual
+                          {{ atual.revisaoRazao }}
+                        } @else {
+                          Vinculada à conferência do pedido
+                        }
+                        · concedida por {{ auth.concedidaPor ?? '—' }} em
+                        {{ formatarDataHora(auth.concedidaEmUtc) }}
+                      </p>
+                    } @else {
+                      <p class="text-xs text-slate-400">Nenhuma concessão registrada.</p>
+                    }
+
+                    @if (ehAdministrador() && auth.id) {
+                      <div>
+                        <button
+                          type="button"
+                          (click)="lerJustificativaAutorizacao(auth)"
+                          class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                        >
+                          Ler justificativa
+                        </button>
+                      </div>
+                    }
+
+                    @if (ehAdministrador()) {
+                      <details class="rounded-md border border-slate-700 p-2">
+                        <summary class="cursor-pointer text-sm font-semibold text-slate-100">
+                          {{ auth.id ? 'Substituir' : 'Conceder' }} autorização
+                          {{ tipo === 'documental' ? 'documental' : 'financeira' }}
+                        </summary>
+                        <form
+                          (submit)="concederAutorizacao($event, tipo, justificativaDocumental)"
+                          class="mt-2 grid gap-2"
+                        >
+                          <label class="text-xs text-slate-400" for="justificativa-{{ tipo }}">
+                            Justificativa obrigatória
+                          </label>
+                          <textarea
+                            #justificativaDocumental
+                            id="justificativa-{{ tipo }}"
+                            rows="2"
+                            maxlength="500"
+                            [value]="justificativaDe(tipo)"
+                            (input)="atualizarJustificativa(tipo, $any($event.target).value)"
+                            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                          ></textarea>
+                          <div>
+                            <button
+                              type="submit"
+                              [disabled]="processando() || coordenador.bloqueado()"
+                              class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                            >
+                              {{ auth.id ? 'Substituir' : 'Conceder' }}
+                            </button>
+                          </div>
+                        </form>
+                      </details>
+
+                      @if (auth.id && auth.vigencia === 'vigente') {
+                        <details class="rounded-md border border-slate-700 p-2">
+                          <summary class="cursor-pointer text-sm font-semibold text-slate-100">
+                            Revogar autorização vigente
+                          </summary>
+                          <form
+                            (submit)="revogarAutorizacao($event, tipo, auth, justificativaRevogacao)"
+                            class="mt-2 grid gap-2"
+                          >
+                            <label class="text-xs text-slate-400" for="revogacao-{{ tipo }}">
+                              Justificativa da revogação
+                            </label>
+                            <textarea
+                              #justificativaRevogacao
+                              id="revogacao-{{ tipo }}"
+                              rows="2"
+                              maxlength="500"
+                              class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                            ></textarea>
+                            <div>
+                              <button
+                                type="submit"
+                                [disabled]="processando() || coordenador.bloqueado()"
+                                class="rounded-md border border-rose-500/60 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 transition hover:bg-rose-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-60"
+                              >
+                                Revogar
+                              </button>
+                            </div>
+                          </form>
+                        </details>
+                      }
+                    } @else {
+                      <p class="text-xs text-slate-400">
+                        Concessão e revogação são exclusivas do Administrador. O caixa vê apenas a
+                        vigência.
+                      </p>
+                    }
+                  </div>
+                }
+              }
+            </div>
+          </section>
+        </aside>
+      </div>
+    }
+  }
+
+  @if (coordenador.bloqueado()) {
+    <div
+      class="fixed inset-0 z-30 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titulo-caixa-pendente"
+    >
+      <div class="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-5">
+        <div class="flex items-center gap-3">
+          @if (coordenador.fase() === 'pendente') {
+            <svg lucideLoaderCircle class="h-5 w-5 animate-spin text-sky-400" aria-hidden="true"></svg>
+          } @else {
+            <svg lucideRotateCcw class="h-5 w-5 text-amber-300" aria-hidden="true"></svg>
+          }
+          <h2 id="titulo-caixa-pendente" class="text-base font-semibold text-white">
+            {{ coordenador.fase() === 'pendente' ? operacaoPendente() : 'Resultado incerto' }}
+          </h2>
+        </div>
+
+        <p class="mt-2 text-sm text-slate-300">
+          @if (coordenador.fase() === 'pendente') {
+            Comando pendente. A navegação interna e a saída ficam bloqueadas até o resultado ser conhecido.
+          } @else {
+            A resposta se perdeu. Repita a mesma operação com a mesma chave e o mesmo conteúdo.
+          }
+        </p>
+
+        <p class="mt-2 text-xs text-amber-200">
+          Não recarregue o navegador. A tentativa existe apenas em memória e será perdida se a página fechar.
+        </p>
+
+        @if (coordenador.fase() === 'incerto') {
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              (click)="repetir()"
+              [disabled]="processando()"
+              class="rounded-lg bg-amber-400 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:opacity-60"
+            >
+              {{ processando() ? 'Repetindo…' : 'Repetir mesma operação' }}
+            </button>
+            <button
+              type="button"
+              (click)="descartarTentativa()"
+              class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              Descartar tentativa
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (confirmacaoAberta()) {
+    <div
+      class="fixed inset-0 z-40 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titulo-confirmacao"
+      (keydown.escape)="fecharConfirmacao()"
+    >
+      <div class="w-full max-w-md rounded-xl border border-emerald-500/50 bg-slate-900 p-5">
+        <div class="flex items-center gap-3">
+          <svg lucideCircleCheck class="h-6 w-6 text-emerald-300" aria-hidden="true"></svg>
+          <h2 id="titulo-confirmacao" class="text-base font-semibold text-white">
+            {{ confirmacaoTitulo() }}
+          </h2>
+        </div>
+        <p class="mt-2 text-sm text-emerald-100">{{ confirmacaoMensagem() }}</p>
+        @if (confirmacaoDetalhe(); as detalhe) {
+          <p class="mt-2 rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-sm text-slate-200">
+            {{ detalhe }}
+          </p>
+        }
+        <div class="mt-4 flex justify-end">
+          <button
+            #botaoConfirmacao
+            type="button"
+            (click)="fecharConfirmacao()"
+            class="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
+          >
+            Concluir
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (justificativaAberta()) {
+    <div
+      class="fixed inset-0 z-30 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titulo-justificativa"
+    >
+      <div class="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900">
+        <div class="flex items-start justify-between gap-3 border-b border-slate-800 p-4">
+          <div>
+            <h2 id="titulo-justificativa" class="text-base font-semibold text-white">
+              Justificativa administrativa
+            </h2>
+            <p class="text-xs text-slate-400">Leitura explícita e auditada.</p>
+          </div>
+          <button
+            #botaoFecharJustificativa
+            type="button"
+            (click)="fecharJustificativa()"
+            class="rounded-md border border-slate-600 px-2 py-1 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            Fechar
+          </button>
+        </div>
+        <div class="grid gap-3 p-4">
+          <p class="text-xs text-slate-400">{{ justificativaMeta() }}</p>
+          <p class="rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 select-all">
+            {{ justificativaTexto() }}
+          </p>
+          <p class="text-xs text-slate-400">
+            Dado sintético. A auditoria registra ator, alvo e horário, nunca o texto.
+          </p>
+        </div>
+        <div class="flex justify-end border-t border-slate-800 bg-slate-950/40 p-3">
+          <button
+            type="button"
+            (click)="fecharJustificativa()"
+            class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            Entendi
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</main>

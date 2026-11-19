@@ -10,6 +10,8 @@ export const ambiente = {
   origemSpa: 'https://localhost:4200',
   /** Intervalo padrão do polling de vagas, configurável por ambiente. */
   intervaloPollingSegundos: 30,
+  /** Intervalo padrão do polling da fila de retiradas. */
+  intervaloPollingRetiradasSegundos: 30,
 } as const;
 
 export function urlApi(caminho: string): string {

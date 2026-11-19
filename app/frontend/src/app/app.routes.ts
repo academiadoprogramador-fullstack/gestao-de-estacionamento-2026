@@ -48,6 +48,28 @@ export const routes: Routes = [
       import('./features/atendimentos/atendimentos').then((modulo) => modulo.Atendimentos),
   },
   {
+    path: 'withdrawals/new',
+    title: 'Registrar pedido de retirada — Gestão de Estacionamento',
+    canActivate: [guardaSessao, guardaPerfil(['Administrador', 'Caixa'])],
+    canDeactivate: [guardaComandoPendente],
+    loadComponent: () =>
+      import('./features/retiradas/pedido-retirada').then((modulo) => modulo.PedidoRetirada),
+  },
+  {
+    path: 'withdrawals',
+    title: 'Fila de retiradas — Gestão de Estacionamento',
+    canActivate: [guardaSessao],
+    loadComponent: () =>
+      import('./features/retiradas/fila-retiradas').then((modulo) => modulo.FilaRetiradas),
+  },
+  {
+    path: 'cashier/:attendanceId',
+    title: 'Caixa do atendimento — Gestão de Estacionamento',
+    canActivate: [guardaSessao, guardaPerfil(['Administrador', 'Caixa'])],
+    canDeactivate: [guardaComandoPendente],
+    loadComponent: () => import('./features/caixa/caixa').then((modulo) => modulo.Caixa),
+  },
+  {
     path: 'administracao',
     title: 'Administração — Gestão de Estacionamento',
     canActivate: [guardaSessao, guardaPerfil(['Administrador'])],

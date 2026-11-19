@@ -1,6 +1,7 @@
 using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Auditoria;
 using Estacionamento.Application.Comum;
+using Estacionamento.Application.Retiradas;
 using Estacionamento.Application.Seguranca;
 using Estacionamento.Application.Tempo;
 using Estacionamento.Domain.Atendimentos;
@@ -20,17 +21,20 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
     private readonly ICriptografiaCampos _criptografia;
     private readonly IAuditoriaNegocio _auditoria;
     private readonly IRelogio _relogio;
+    private readonly IServicoConsultaRetiradas _retiradas;
 
     public ServicoConsultaAtendimentos(
         EstacionamentoDbContext db,
         ICriptografiaCampos criptografia,
         IAuditoriaNegocio auditoria,
-        IRelogio relogio)
+        IRelogio relogio,
+        IServicoConsultaRetiradas retiradas)
     {
         _db = db;
         _criptografia = criptografia;
         _auditoria = auditoria;
         _relogio = relogio;
+        _retiradas = retiradas;
     }
 
     public async Task<Pagina<AtendimentoLista>> BuscarAsync(
@@ -106,6 +110,52 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
         return new Pagina<AtendimentoLista>(itens, pagina, tamanho, total);
     }
 
+    public async Task<Pagina<AtendimentoLista>> ListarAbertosAsync(
+        AtorAtual ator,
+        int pagina,
+        int tamanho,
+        CancellationToken cancellationToken = default)
+    {
+        var consulta =
+            from atendimento in _db.Atendimentos.AsNoTracking()
+            join ocupacao in _db.Ocupacoes.AsNoTracking()
+                on atendimento.Id equals ocupacao.AtendimentoId
+            join vaga in _db.Vagas.AsNoTracking()
+                on ocupacao.VagaId equals vaga.Id
+            join pedido in _db.PedidosRetirada.AsNoTracking()
+                on atendimento.Id equals pedido.AtendimentoId into pedidos
+            from pedido in pedidos.DefaultIfEmpty()
+            where atendimento.Estado != EstadoAtendimento.Entregue &&
+                  ocupacao.FimUtc == null
+            orderby atendimento.EntradaUtc descending, atendimento.IdentificadorPublico descending
+            select new
+            {
+                Atendimento = atendimento,
+                VagaCodigo = vaga.Codigo,
+                PedidoId = pedido == null ? (Guid?)null : pedido.Id,
+                EstadoRetirada = pedido == null ? null : pedido.Estado
+            };
+
+        var total = await consulta.CountAsync(cancellationToken);
+        var itens = await consulta
+            .Skip((pagina - 1) * tamanho)
+            .Take(tamanho)
+            .Select(item => new AtendimentoLista(
+                item.Atendimento.Id,
+                item.Atendimento.IdentificadorPublico ?? string.Empty,
+                item.Atendimento.Placa,
+                item.Atendimento.Modelo,
+                item.Atendimento.Titular,
+                item.Atendimento.Estado,
+                item.VagaCodigo,
+                item.Atendimento.EntradaUtc,
+                item.PedidoId,
+                item.EstadoRetirada))
+            .ToListAsync(cancellationToken);
+
+        return new Pagina<AtendimentoLista>(itens, pagina, tamanho, total);
+    }
+
     public async Task<object> ObterDetalheAsync(
         AtorAtual ator,
         Guid atendimentoId,
@@ -117,13 +167,14 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
                     on atendimento.Id equals ocupacao.AtendimentoId
                 join vaga in _db.Vagas.AsNoTracking()
                     on ocupacao.VagaId equals vaga.Id
-                where atendimento.Id == atendimentoId && ocupacao.FimUtc == null
+                where atendimento.Id == atendimentoId
+                orderby ocupacao.FimUtc == null descending, ocupacao.InicioUtc descending
                 select new
                 {
                     Atendimento = atendimento,
                     VagaCodigo = vaga.Codigo
                 })
-            .SingleOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (dados is null)
         {
@@ -133,6 +184,10 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
         }
 
         var atendimentoAtual = dados.Atendimento;
+        var retirada = await _retiradas.ObterResumoPorAtendimentoAsync(
+            ator,
+            atendimentoAtual.Id,
+            cancellationToken);
 
         if (!ator.EhOperador)
         {
@@ -146,7 +201,8 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
                 atendimentoAtual.Estado,
                 dados.VagaCodigo,
                 atendimentoAtual.EntradaUtc,
-                atendimentoAtual.RowVersion);
+                atendimentoAtual.RowVersion,
+                retirada as ResumoRetiradaOperacional);
         }
 
         var versaoTarifa = await _db.TarifasDiarias
@@ -166,7 +222,8 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
             atendimentoAtual.EntradaUtc,
             atendimentoAtual.RowVersion,
             versaoTarifa,
-            atendimentoAtual.TarifaValorSnapshot);
+            atendimentoAtual.TarifaValorSnapshot,
+            retirada as ResumoRetiradaFinanceiro);
     }
 
     public async Task<Pagina<EventoHistorico>> ListarHistoricoAsync(

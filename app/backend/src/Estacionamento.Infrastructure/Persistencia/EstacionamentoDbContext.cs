@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Estacionamento.Domain.Atendimentos;
 using Estacionamento.Domain.Auditoria;
 using Estacionamento.Domain.Idempotencia;
+using Estacionamento.Domain.Retiradas;
 using Estacionamento.Domain.Tarifas;
 using Estacionamento.Domain.Vagas;
 
@@ -48,6 +49,18 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
     public DbSet<ResultadoIdempotente> ResultadosIdempotentes => Set<ResultadoIdempotente>();
 
     public DbSet<EventoAuditoriaNegocio> EventosAuditoriaNegocio => Set<EventoAuditoriaNegocio>();
+
+    public DbSet<PedidoRetirada> PedidosRetirada => Set<PedidoRetirada>();
+
+    public DbSet<Cobranca> Cobrancas => Set<Cobranca>();
+
+    public DbSet<RazaoAtendimento> RazoesAtendimento => Set<RazaoAtendimento>();
+
+    public DbSet<LancamentoFinanceiro> LancamentosFinanceiros => Set<LancamentoFinanceiro>();
+
+    public DbSet<ConcessaoAutorizacao> ConcessoesAutorizacao => Set<ConcessaoAutorizacao>();
+
+    public DbSet<RevogacaoAutorizacao> RevogacoesAutorizacao => Set<RevogacaoAutorizacao>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -109,6 +122,7 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
         ConfigurarAtendimentos(builder);
         ConfigurarIdempotencia(builder);
         ConfigurarAuditoriaNegocio(builder);
+        ConfigurarRetiradas(builder);
 
         // Sequência usada exclusivamente pelo identificador público do
         // atendimento; não é chave primária nem expõe a chave interna.
@@ -269,6 +283,8 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
             entidade.Property(resultado => resultado.IdentificadorPublico).HasMaxLength(32);
             entidade.Property(resultado => resultado.Estado).HasMaxLength(32);
             entidade.Property(resultado => resultado.Location).HasMaxLength(256);
+            entidade.Property(resultado => resultado.ResultadoJson).HasColumnType("nvarchar(max)");
+            entidade.Property(resultado => resultado.CodigoResposta);
             entidade.HasIndex(resultado => new
             {
                 resultado.AtorId,
@@ -302,6 +318,157 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
         });
     }
 
+    private static void ConfigurarRetiradas(ModelBuilder builder)
+    {
+        builder.Entity<PedidoRetirada>(entidade =>
+        {
+            entidade.ToTable("PedidosRetirada");
+            entidade.HasKey(pedido => pedido.Id);
+            entidade.Property(pedido => pedido.Conferencia).HasMaxLength(16).IsRequired();
+            entidade.Property(pedido => pedido.Estado).HasMaxLength(32).IsRequired();
+            entidade.Property(pedido => pedido.TitularPresente).IsRequired();
+            entidade.Property(pedido => pedido.SolicitadoEmUtc).IsRequired();
+            entidade.Property(pedido => pedido.RowVersion).IsRowVersion();
+            entidade.HasOne<Atendimento>()
+                .WithMany()
+                .HasForeignKey(pedido => pedido.AtendimentoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<UsuarioAplicacao>()
+                .WithMany()
+                .HasForeignKey(pedido => pedido.SolicitadoPorId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<UsuarioAplicacao>()
+                .WithMany()
+                .HasForeignKey(pedido => pedido.BuscaPorId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(pedido => pedido.AtendimentoId).IsUnique();
+            entidade.HasIndex(pedido => new { pedido.Estado, pedido.SolicitadoEmUtc, pedido.Id });
+        });
+
+        builder.Entity<Cobranca>(entidade =>
+        {
+            entidade.ToTable("Cobrancas", tabela =>
+            {
+                tabela.HasCheckConstraint("CK_Cobrancas_DiariasMinimas", "[Diarias] >= 1");
+                tabela.HasCheckConstraint("CK_Cobrancas_TotalNaoNegativo", "[TotalOriginal] >= 0");
+                tabela.HasCheckConstraint("CK_Cobrancas_TarifaNaoNegativa", "[TarifaValorSnapshot] >= 0");
+            });
+            entidade.HasKey(cobranca => cobranca.Id);
+            entidade.Property(cobranca => cobranca.DuracaoTicks).IsRequired();
+            entidade.Property(cobranca => cobranca.Diarias).IsRequired();
+            entidade.Property(cobranca => cobranca.TarifaValorSnapshot).HasColumnType("decimal(18,2)").IsRequired();
+            entidade.Property(cobranca => cobranca.TotalOriginal).HasColumnType("decimal(18,2)").IsRequired();
+            entidade.Property(cobranca => cobranca.CriadaEmUtc).IsRequired();
+            entidade.HasOne<PedidoRetirada>()
+                .WithMany()
+                .HasForeignKey(cobranca => cobranca.PedidoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<TarifaDiaria>()
+                .WithMany()
+                .HasForeignKey(cobranca => cobranca.TarifaVersaoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(cobranca => cobranca.PedidoId).IsUnique();
+        });
+
+        builder.Entity<RazaoAtendimento>(entidade =>
+        {
+            entidade.ToTable("RazoesAtendimento", tabela =>
+                tabela.HasCheckConstraint("CK_RazoesAtendimento_RevisaoPositiva", "[Revisao] >= 1"));
+            entidade.HasKey(razao => razao.Id);
+            entidade.Property(razao => razao.Revisao).IsRequired();
+            entidade.Property(razao => razao.RowVersion).IsRowVersion();
+            entidade.HasOne<Atendimento>()
+                .WithMany()
+                .HasForeignKey(razao => razao.AtendimentoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(razao => razao.AtendimentoId).IsUnique();
+        });
+
+        builder.Entity<LancamentoFinanceiro>(entidade =>
+        {
+            entidade.ToTable("LancamentosFinanceiros", tabela =>
+            {
+                tabela.HasCheckConstraint("CK_LancamentosFinanceiros_ValorPositivo", "[Valor] > 0");
+                tabela.HasCheckConstraint(
+                    "CK_LancamentosFinanceiros_Tipo",
+                    "[Tipo] IN ('desconto', 'pagamento', 'estorno')");
+                tabela.HasCheckConstraint(
+                    "CK_LancamentosFinanceiros_FormaVinculoJustificativa",
+                    "([Tipo] = 'pagamento' AND [FormaPagamento] IS NOT NULL AND [PagamentoOriginalId] IS NULL AND [JustificativaCifrada] IS NULL) OR " +
+                    "([Tipo] = 'estorno' AND [FormaPagamento] IS NULL AND [PagamentoOriginalId] IS NOT NULL AND [JustificativaCifrada] IS NOT NULL) OR " +
+                    "([Tipo] = 'desconto' AND [FormaPagamento] IS NULL AND [PagamentoOriginalId] IS NULL AND [JustificativaCifrada] IS NOT NULL)");
+            });
+            entidade.HasKey(lancamento => lancamento.Id);
+            entidade.Property(lancamento => lancamento.Tipo).HasMaxLength(16).IsRequired();
+            entidade.Property(lancamento => lancamento.Valor).HasColumnType("decimal(18,2)").IsRequired();
+            entidade.Property(lancamento => lancamento.FormaPagamento).HasMaxLength(16);
+            entidade.Property(lancamento => lancamento.JustificativaCifrada).HasColumnType("varbinary(max)");
+            entidade.Property(lancamento => lancamento.OcorridoEmUtc).IsRequired();
+            entidade.HasOne<Atendimento>()
+                .WithMany()
+                .HasForeignKey(lancamento => lancamento.AtendimentoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<LancamentoFinanceiro>()
+                .WithMany()
+                .HasForeignKey(lancamento => lancamento.PagamentoOriginalId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<UsuarioAplicacao>()
+                .WithMany()
+                .HasForeignKey(lancamento => lancamento.AtorId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(lancamento => new { lancamento.AtendimentoId, lancamento.OcorridoEmUtc });
+            entidade.HasIndex(lancamento => lancamento.PagamentoOriginalId)
+                .IsUnique()
+                .HasFilter("[Tipo] = 'estorno'");
+        });
+
+        builder.Entity<ConcessaoAutorizacao>(entidade =>
+        {
+            entidade.ToTable("ConcessoesAutorizacao", tabela =>
+            {
+                tabela.HasCheckConstraint(
+                    "CK_ConcessoesAutorizacao_Tipo",
+                    "[Tipo] IN ('documental', 'financeira')");
+                tabela.HasCheckConstraint(
+                    "CK_ConcessoesAutorizacao_RevisaoPositiva",
+                    "[RevisaoReferencia] >= 1");
+            });
+            entidade.HasKey(concessao => concessao.Id);
+            entidade.Property(concessao => concessao.Tipo).HasMaxLength(16).IsRequired();
+            entidade.Property(concessao => concessao.RevisaoReferencia).IsRequired();
+            entidade.Property(concessao => concessao.JustificativaCifrada).HasColumnType("varbinary(max)").IsRequired();
+            entidade.Property(concessao => concessao.ConcedidaEmUtc).IsRequired();
+            entidade.HasOne<PedidoRetirada>()
+                .WithMany()
+                .HasForeignKey(concessao => concessao.PedidoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<UsuarioAplicacao>()
+                .WithMany()
+                .HasForeignKey(concessao => concessao.ConcedidaPorId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(concessao => new { concessao.PedidoId, concessao.Tipo, concessao.ConcedidaEmUtc });
+        });
+
+        builder.Entity<RevogacaoAutorizacao>(entidade =>
+        {
+            entidade.ToTable("RevogacoesAutorizacao");
+            entidade.HasKey(revogacao => revogacao.Id);
+            entidade.Property(revogacao => revogacao.JustificativaCifrada).HasColumnType("varbinary(max)").IsRequired();
+            entidade.Property(revogacao => revogacao.RevogadaEmUtc).IsRequired();
+            entidade.HasOne<ConcessaoAutorizacao>()
+                .WithMany()
+                .HasForeignKey(revogacao => revogacao.ConcessaoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<UsuarioAplicacao>()
+                .WithMany()
+                .HasForeignKey(revogacao => revogacao.RevogadaPorId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(revogacao => revogacao.ConcessaoId).IsUnique();
+        });
+    }
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ImpedirAlteracaoDeHistorico();
@@ -315,8 +482,11 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
     }
 
     /// <summary>
-    /// Auditoria, eventos de atendimento e resultados idempotentes são
-    /// append-only durante a operação normal.
+    /// Auditoria, eventos de atendimento, resultados idempotentes e lançamentos
+    /// financeiros são append-only durante a operação normal. Cobrança e
+    /// autorizações também não podem ser editadas nem excluídas; apenas
+    /// <see cref="PedidoRetirada"/> e <see cref="RazaoAtendimento"/> evoluem sob
+    /// versão.
     /// </summary>
     private void ImpedirAlteracaoDeHistorico()
     {
@@ -329,6 +499,18 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
             .Concat(ChangeTracker.Entries<EventoAtendimento>()
                 .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
                 .Select(_ => "EventosAtendimento"))
+            .Concat(ChangeTracker.Entries<Cobranca>()
+                .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
+                .Select(_ => "Cobrancas"))
+            .Concat(ChangeTracker.Entries<LancamentoFinanceiro>()
+                .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
+                .Select(_ => "LancamentosFinanceiros"))
+            .Concat(ChangeTracker.Entries<ConcessaoAutorizacao>()
+                .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
+                .Select(_ => "ConcessoesAutorizacao"))
+            .Concat(ChangeTracker.Entries<RevogacaoAutorizacao>()
+                .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
+                .Select(_ => "RevogacoesAutorizacao"))
             .ToList();
 
         if (alteracoesProibidas.Count > 0)

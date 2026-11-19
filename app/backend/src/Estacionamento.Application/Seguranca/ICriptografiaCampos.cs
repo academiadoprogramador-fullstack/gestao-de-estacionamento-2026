@@ -12,6 +12,22 @@ public interface ICriptografiaCampos
 
     /// <summary>Decifra o envelope somente com o propósito e registro corretos.</summary>
     string Decifrar(string proposito, Guid atendimentoId, byte[] envelope);
+
+    /// <summary>
+    /// Cifra o texto vinculando o envelope ao atendimento e ao identificador
+    /// opaco do registro. Impede a troca de justificativas entre lançamentos e
+    /// concessões do mesmo atendimento.
+    /// </summary>
+    byte[] CifrarComRegistro(string proposito, Guid atendimentoId, Guid registroId, string texto);
+
+    /// <summary>
+    /// Decifra somente com o propósito, o atendimento e o registro corretos.
+    /// </summary>
+    string DecifrarComRegistro(
+        string proposito,
+        Guid atendimentoId,
+        Guid registroId,
+        byte[] envelope);
 }
 
 /// <summary>

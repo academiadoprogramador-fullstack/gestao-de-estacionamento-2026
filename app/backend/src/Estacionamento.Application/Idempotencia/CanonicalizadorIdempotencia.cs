@@ -1,6 +1,7 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Estacionamento.Domain.Atendimentos;
+using Estacionamento.Domain.Idempotencia;
 
 namespace Estacionamento.Application.Idempotencia;
 
@@ -8,7 +9,7 @@ namespace Estacionamento.Application.Idempotencia;
 /// Representação canônica determinística do conteúdo de comandos idempotentes.
 /// A serialização é ordenada, com comprimento explícito por campo, para evitar
 /// ambiguidade; o resultado é o SHA-256 binário de 32 bytes. Nenhum corpo de
-/// requisição, segredo ou conteúdo sensível é persistido.
+/// requisição, segredo ou conteúdo sensível é persistido no resultado.
 /// </summary>
 public static class CanonicalizadorIdempotencia
 {
@@ -60,10 +61,128 @@ public static class CanonicalizadorIdempotencia
 
         return CalcularHash(
             VersaoAtual,
-            Domain.Idempotencia.ResultadoIdempotente.OperacaoRegistrarEntrada,
+            ResultadoIdempotente.OperacaoRegistrarEntrada,
             atorId,
             campos);
     }
+
+    /// <summary>Hash do pedido de retirada (atendimento, presença e conferência).</summary>
+    public static byte[] CalcularHashSolicitacaoRetiradaV1(
+        Guid atorId,
+        Guid atendimentoId,
+        bool titularPresente,
+        string conferencia) =>
+        CalcularHash(
+            VersaoAtual,
+            ResultadoIdempotente.OperacaoSolicitarRetirada,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.atendimento", atendimentoId.ToString("N")),
+                new KeyValuePair<string, string>("conferencia", conferencia),
+                new KeyValuePair<string, string>("titularPresente", titularPresente ? "true" : "false")
+            });
+
+    /// <summary>Hash da concessão de autorização documental ou financeira.</summary>
+    public static byte[] CalcularHashConcessaoAutorizacaoV1(
+        Guid atorId,
+        Guid pedidoId,
+        string tipo,
+        byte[] versaoEsperada,
+        string justificativa) =>
+        CalcularHash(
+            VersaoAtual,
+            ResultadoIdempotente.OperacaoConcederAutorizacao,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.pedido", pedidoId.ToString("N")),
+                new KeyValuePair<string, string>("justificativa", justificativa),
+                new KeyValuePair<string, string>("tipo", tipo),
+                new KeyValuePair<string, string>("versaoEsperada", Converter(versaoEsperada))
+            });
+
+    /// <summary>Hash da revogação de autorização.</summary>
+    public static byte[] CalcularHashRevogacaoAutorizacaoV1(
+        Guid atorId,
+        Guid pedidoId,
+        Guid autorizacaoId,
+        string justificativa) =>
+        CalcularHash(
+            VersaoAtual,
+            ResultadoIdempotente.OperacaoRevogarAutorizacao,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.pedido", pedidoId.ToString("N")),
+                new KeyValuePair<string, string>("autorizacao", autorizacaoId.ToString("N")),
+                new KeyValuePair<string, string>("justificativa", justificativa)
+            });
+
+    /// <summary>Hash do acerto integral.</summary>
+    public static byte[] CalcularHashPagamentoV1(
+        Guid atorId,
+        Guid pedidoId,
+        decimal valor,
+        string forma,
+        int revisaoEsperada) =>
+        CalcularHash(
+            VersaoAtual,
+            ResultadoIdempotente.OperacaoPagamento,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.pedido", pedidoId.ToString("N")),
+                new KeyValuePair<string, string>("forma", forma),
+                new KeyValuePair<string, string>("revisaoEsperada", revisaoEsperada.ToString(CultureInfo.InvariantCulture)),
+                new KeyValuePair<string, string>("valor", FormatarValor(valor))
+            });
+
+    /// <summary>Hash do desconto administrativo.</summary>
+    public static byte[] CalcularHashDescontoV1(
+        Guid atorId,
+        Guid pedidoId,
+        decimal valor,
+        string justificativa,
+        int revisaoEsperada) =>
+        CalcularHash(
+            VersaoAtual,
+            ResultadoIdempotente.OperacaoDesconto,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.pedido", pedidoId.ToString("N")),
+                new KeyValuePair<string, string>("justificativa", justificativa),
+                new KeyValuePair<string, string>("revisaoEsperada", revisaoEsperada.ToString(CultureInfo.InvariantCulture)),
+                new KeyValuePair<string, string>("valor", FormatarValor(valor))
+            });
+
+    /// <summary>Hash do estorno integral.</summary>
+    public static byte[] CalcularHashEstornoV1(
+        Guid atorId,
+        Guid pedidoId,
+        Guid pagamentoId,
+        decimal valor,
+        string justificativa,
+        int revisaoEsperada) =>
+        CalcularHash(
+            VersaoAtual,
+            ResultadoIdempotente.OperacaoEstorno,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.pedido", pedidoId.ToString("N")),
+                new KeyValuePair<string, string>("justificativa", justificativa),
+                new KeyValuePair<string, string>("pagamento", pagamentoId.ToString("N")),
+                new KeyValuePair<string, string>("revisaoEsperada", revisaoEsperada.ToString(CultureInfo.InvariantCulture)),
+                new KeyValuePair<string, string>("valor", FormatarValor(valor))
+            });
+
+    private static string FormatarValor(decimal valor) =>
+        valor.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static string Converter(byte[] valor) =>
+        valor.Length == 0 ? string.Empty : Convert.ToBase64String(valor);
 
     private static void Adicionar(StringBuilder construtor, string nome, string valor)
     {
@@ -71,7 +190,7 @@ public static class CanonicalizadorIdempotencia
         construtor
             .Append(nome)
             .Append(':')
-            .Append(bytes.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Append(bytes.ToString(CultureInfo.InvariantCulture))
             .Append(':')
             .Append(valor)
             .Append('\n');

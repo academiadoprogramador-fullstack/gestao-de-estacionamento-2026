@@ -247,6 +247,9 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                     b.Property<Guid>("Chave")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("CodigoResposta")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset>("CriadoEmUtc")
                         .HasColumnType("datetimeoffset");
 
@@ -274,6 +277,9 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("ResultadoJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("VagaId")
                         .HasColumnType("uniqueidentifier");
 
@@ -290,6 +296,256 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                         .IsUnique();
 
                     b.ToTable("ResultadosIdempotentes", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.Cobranca", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CriadaEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("Diarias")
+                        .HasColumnType("int");
+
+                    b.Property<long>("DuracaoTicks")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("PedidoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("TarifaValorSnapshot")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("TarifaVersaoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("TotalOriginal")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PedidoId")
+                        .IsUnique();
+
+                    b.HasIndex("TarifaVersaoId");
+
+                    b.ToTable("Cobrancas", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Cobrancas_DiariasMinimas", "[Diarias] >= 1");
+
+                            t.HasCheckConstraint("CK_Cobrancas_TarifaNaoNegativa", "[TarifaValorSnapshot] >= 0");
+
+                            t.HasCheckConstraint("CK_Cobrancas_TotalNaoNegativo", "[TotalOriginal] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.ConcessaoAutorizacao", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ConcedidaEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ConcedidaPorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("JustificativaCifrada")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<Guid>("PedidoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RevisaoReferencia")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConcedidaPorId");
+
+                    b.HasIndex("PedidoId", "Tipo", "ConcedidaEmUtc");
+
+                    b.ToTable("ConcessoesAutorizacao", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ConcessoesAutorizacao_RevisaoPositiva", "[RevisaoReferencia] >= 1");
+
+                            t.HasCheckConstraint("CK_ConcessoesAutorizacao_Tipo", "[Tipo] IN ('documental', 'financeira')");
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.LancamentoFinanceiro", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FormaPagamento")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<byte[]>("JustificativaCifrada")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<DateTimeOffset>("OcorridoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("PagamentoOriginalId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<decimal>("Valor")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtorId");
+
+                    b.HasIndex("PagamentoOriginalId")
+                        .IsUnique()
+                        .HasFilter("[Tipo] = 'estorno'");
+
+                    b.HasIndex("AtendimentoId", "OcorridoEmUtc");
+
+                    b.ToTable("LancamentosFinanceiros", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LancamentosFinanceiros_FormaVinculoJustificativa", "([Tipo] = 'pagamento' AND [FormaPagamento] IS NOT NULL AND [PagamentoOriginalId] IS NULL AND [JustificativaCifrada] IS NULL) OR ([Tipo] = 'estorno' AND [FormaPagamento] IS NULL AND [PagamentoOriginalId] IS NOT NULL AND [JustificativaCifrada] IS NOT NULL) OR ([Tipo] = 'desconto' AND [FormaPagamento] IS NULL AND [PagamentoOriginalId] IS NULL AND [JustificativaCifrada] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_LancamentosFinanceiros_Tipo", "[Tipo] IN ('desconto', 'pagamento', 'estorno')");
+
+                            t.HasCheckConstraint("CK_LancamentosFinanceiros_ValorPositivo", "[Valor] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.PedidoRetirada", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("BuscaIniciadaEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("BuscaPorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Conferencia")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset>("SolicitadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("SolicitadoPorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("TitularPresente")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId")
+                        .IsUnique();
+
+                    b.HasIndex("BuscaPorId");
+
+                    b.HasIndex("SolicitadoPorId");
+
+                    b.HasIndex("Estado", "SolicitadoEmUtc", "Id");
+
+                    b.ToTable("PedidosRetirada", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.RazaoAtendimento", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Revisao")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId")
+                        .IsUnique();
+
+                    b.ToTable("RazoesAtendimento", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RazoesAtendimento_RevisaoPositiva", "[Revisao] >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.RevogacaoAutorizacao", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ConcessaoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("JustificativaCifrada")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<DateTimeOffset>("RevogadaEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("RevogadaPorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConcessaoId")
+                        .IsUnique();
+
+                    b.HasIndex("RevogadaPorId");
+
+                    b.ToTable("RevogacoesAutorizacao", (string)null);
                 });
 
             modelBuilder.Entity("Estacionamento.Domain.Tarifas.ConfiguracaoTarifa", b =>
@@ -800,6 +1056,100 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                         .WithMany()
                         .HasForeignKey("VagaId")
                         .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.Cobranca", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Retiradas.PedidoRetirada", null)
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Tarifas.TarifaDiaria", null)
+                        .WithMany()
+                        .HasForeignKey("TarifaVersaoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.ConcessaoAutorizacao", b =>
+                {
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("ConcedidaPorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Retiradas.PedidoRetirada", null)
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.LancamentoFinanceiro", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("AtorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Retiradas.LancamentoFinanceiro", null)
+                        .WithMany()
+                        .HasForeignKey("PagamentoOriginalId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.PedidoRetirada", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("BuscaPorId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("SolicitadoPorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.RazaoAtendimento", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Retiradas.RevogacaoAutorizacao", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Retiradas.ConcessaoAutorizacao", null)
+                        .WithMany()
+                        .HasForeignKey("ConcessaoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("RevogadaPorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Estacionamento.Domain.Tarifas.ConfiguracaoTarifa", b =>

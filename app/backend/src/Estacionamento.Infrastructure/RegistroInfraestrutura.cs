@@ -1,9 +1,11 @@
 using Estacionamento.Application.Auditoria;
 using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Autenticacao;
+using Estacionamento.Application.Caixa;
 using Estacionamento.Application.Configuracao;
 using Estacionamento.Application.Funcionarios;
 using Estacionamento.Application.Provisionamento;
+using Estacionamento.Application.Retiradas;
 using Estacionamento.Application.Seguranca;
 using Estacionamento.Application.Tarifas;
 using Estacionamento.Application.Tempo;
@@ -87,6 +89,10 @@ public static class RegistroInfraestrutura
         services.AddScoped<IServicoTarifas, ServicoTarifas>();
         services.AddScoped<IServicoAtendimentos, ServicoAtendimentos>();
         services.AddScoped<IServicoConsultaAtendimentos, ServicoConsultaAtendimentos>();
+        services.AddScoped<IServicoConsultaRetiradas, ServicoConsultaRetiradas>();
+        services.AddScoped<IServicoRetiradas, ServicoRetiradas>();
+        services.AddScoped<IServicoCaixa, ServicoCaixa>();
+        services.AddScoped<IServicoAutorizacoes, ServicoAutorizacoes>();
 
         services.AddSingleton<IValidateOptions<AutenticacaoJwtOptions>, AutenticacaoJwtOptionsValidator>();
         services.AddSingleton<IValidateOptions<ProtecaoDadosOptions>, ProtecaoDadosOptionsValidator>();

@@ -14,8 +14,9 @@ namespace Estacionamento.Infrastructure.Seguranca;
 /// <c>[versão:1][tamanhoKid:1][kid UTF-8][nonce:12][tag:16][ciphertext]</c>.
 ///
 /// O AAD é determinístico e reconstruído no servidor com versão do formato,
-/// <c>kid</c>, ambiente, aplicação, propósito e identificador do atendimento;
-/// ele nunca inclui valores mutáveis nem contexto fornecido pelo cliente.
+/// <c>kid</c>, ambiente, aplicação, propósito, identificador do atendimento e,
+/// quando aplicável, o identificador opaco do registro; ele nunca inclui
+/// valores mutáveis nem contexto fornecido pelo cliente.
 /// </summary>
 public sealed class CriptografiaCamposAesGcm : ICriptografiaCampos
 {
@@ -35,7 +36,31 @@ public sealed class CriptografiaCamposAesGcm : ICriptografiaCampos
         _contexto = contexto;
     }
 
-    public byte[] Cifrar(string proposito, Guid atendimentoId, string texto)
+    public byte[] Cifrar(string proposito, Guid atendimentoId, string texto) =>
+        CifrarCore(proposito, atendimentoId, null, texto);
+
+    public string Decifrar(string proposito, Guid atendimentoId, byte[] envelope) =>
+        DecifrarCore(proposito, atendimentoId, null, envelope);
+
+    public byte[] CifrarComRegistro(
+        string proposito,
+        Guid atendimentoId,
+        Guid registroId,
+        string texto) =>
+        CifrarCore(proposito, atendimentoId, registroId, texto);
+
+    public string DecifrarComRegistro(
+        string proposito,
+        Guid atendimentoId,
+        Guid registroId,
+        byte[] envelope) =>
+        DecifrarCore(proposito, atendimentoId, registroId, envelope);
+
+    private byte[] CifrarCore(
+        string proposito,
+        Guid atendimentoId,
+        Guid? registroId,
+        string texto)
     {
         var kid = _options.VersaoAtiva;
         if (string.IsNullOrWhiteSpace(kid) ||
@@ -55,7 +80,7 @@ public sealed class CriptografiaCamposAesGcm : ICriptografiaCampos
         var nonce = RandomNumberGenerator.GetBytes(TamanhoNonce);
         var tag = new byte[TamanhoTag];
         var ciphertext = new byte[textoBytes.Length];
-        var aad = ConstruirAad(VersaoFormato, kid, proposito, atendimentoId);
+        var aad = ConstruirAad(VersaoFormato, kid, proposito, atendimentoId, registroId);
 
         try
         {
@@ -82,7 +107,11 @@ public sealed class CriptografiaCamposAesGcm : ICriptografiaCampos
         return envelope;
     }
 
-    public string Decifrar(string proposito, Guid atendimentoId, byte[] envelope)
+    private string DecifrarCore(
+        string proposito,
+        Guid atendimentoId,
+        Guid? registroId,
+        byte[] envelope)
     {
         if (envelope.Length < DeslocamentoConteudo + TamanhoNonce + TamanhoTag)
         {
@@ -115,7 +144,7 @@ public sealed class CriptografiaCamposAesGcm : ICriptografiaCampos
         posicao += TamanhoTag;
         var ciphertext = envelope.AsSpan(posicao);
         var texto = new byte[ciphertext.Length];
-        var aad = ConstruirAad(VersaoFormato, kid, proposito, atendimentoId);
+        var aad = ConstruirAad(VersaoFormato, kid, proposito, atendimentoId, registroId);
 
         try
         {
@@ -138,8 +167,18 @@ public sealed class CriptografiaCamposAesGcm : ICriptografiaCampos
         byte versaoFormato,
         string kid,
         string proposito,
-        Guid atendimentoId) =>
-        Encoding.UTF8.GetBytes(
+        Guid atendimentoId,
+        Guid? registroId)
+    {
+        var baseAad =
             $"v{versaoFormato}|kid:{kid}|ambiente:{_contexto.NomeAmbiente}|app:{_contexto.NomeAplicacao}" +
-            $"|proposito:{proposito}|atendimento:{atendimentoId:N}");
+            $"|proposito:{proposito}|atendimento:{atendimentoId:N}";
+
+        if (registroId is not null)
+        {
+            baseAad += $"|registro:{registroId.Value:N}";
+        }
+
+        return Encoding.UTF8.GetBytes(baseAad);
+    }
 }

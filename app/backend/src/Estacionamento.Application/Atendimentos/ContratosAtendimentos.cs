@@ -38,7 +38,10 @@ public interface IServicoAtendimentos
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>Item de busca, sem documento, vistoria ou dados financeiros.</summary>
+/// <summary>
+/// Item de busca ou de lista de abertos, sem documento, vistoria, conferência
+/// ou dados financeiros. A situação da retirada é operacional.
+/// </summary>
 public sealed record AtendimentoLista(
     Guid Id,
     string Identificador,
@@ -47,7 +50,39 @@ public sealed record AtendimentoLista(
     string Titular,
     string Estado,
     string VagaCodigo,
-    DateTimeOffset EntradaUtc);
+    DateTimeOffset EntradaUtc,
+    Guid? PedidoId = null,
+    string? EstadoRetirada = null);
+
+/// <summary>
+/// Resumo operacional da retirada exibido no detalhe do atendimento, sem
+/// finanças ou conferência.
+/// </summary>
+public sealed record ResumoRetiradaOperacional(
+    Guid PedidoId,
+    string Estado,
+    DateTimeOffset SolicitadoEmUtc,
+    DateTimeOffset? BuscaIniciadaEmUtc,
+    string? BuscaPor);
+
+/// <summary>
+/// Resumo financeiro da retirada, restrito a Caixa/Administrador.
+/// </summary>
+public sealed record ResumoRetiradaFinanceiro(
+    Guid PedidoId,
+    string Estado,
+    DateTimeOffset SolicitadoEmUtc,
+    DateTimeOffset? BuscaIniciadaEmUtc,
+    string? BuscaPor,
+    string Conferencia,
+    int Diarias,
+    decimal TotalOriginal,
+    decimal Cobrado,
+    decimal PagoLiquido,
+    decimal Saldo,
+    int RevisaoRazao,
+    string AutorizacaoDocumental,
+    string AutorizacaoFinanceira);
 
 /// <summary>Detalhe operacional entregue a todos os perfis.</summary>
 public sealed record AtendimentoDetalheOperacional(
@@ -59,7 +94,8 @@ public sealed record AtendimentoDetalheOperacional(
     string Estado,
     string VagaCodigo,
     DateTimeOffset EntradaUtc,
-    byte[] VersaoAtendimento);
+    byte[] VersaoAtendimento,
+    ResumoRetiradaOperacional? Retirada = null);
 
 /// <summary>
 /// Detalhe administrativo/operador. O DTO do Manobrista é outro tipo e não
@@ -76,7 +112,8 @@ public sealed record AtendimentoDetalheAdministrativo(
     DateTimeOffset EntradaUtc,
     byte[] VersaoAtendimento,
     int TarifaVersao,
-    decimal TarifaValorSnapshot);
+    decimal TarifaValorSnapshot,
+    ResumoRetiradaFinanceiro? Retirada = null);
 
 /// <summary>Evento do histórico, sem conteúdo sensível.</summary>
 public sealed record EventoHistorico(
@@ -94,6 +131,12 @@ public interface IServicoConsultaAtendimentos
         AtorAtual ator,
         string? placa,
         string? identificador,
+        int pagina,
+        int tamanho,
+        CancellationToken cancellationToken = default);
+
+    Task<Pagina<AtendimentoLista>> ListarAbertosAsync(
+        AtorAtual ator,
         int pagina,
         int tamanho,
         CancellationToken cancellationToken = default);

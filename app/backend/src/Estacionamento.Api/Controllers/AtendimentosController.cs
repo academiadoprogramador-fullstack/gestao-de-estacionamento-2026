@@ -2,6 +2,7 @@ using Estacionamento.Api.Autenticacao;
 using Estacionamento.Api.Infra;
 using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Comum;
+using Estacionamento.Application.Retiradas;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,23 +10,26 @@ namespace Estacionamento.Api.Controllers;
 
 /// <summary>
 /// Check-in transacional e consulta de atendimentos. Listagens e detalhe comum
-/// nunca incluem documento ou vistoria; leituras sensíveis são explícitas.
+/// nunca incluem documento ou vistoria; leituras sensíveis são explícitas. O
+/// pedido de retirada vive no caminho do atendimento e não aceita documento,
+/// foto ou dados de terceiro.
 /// </summary>
 [ApiController]
 [Route("api/v1/attendances")]
 public sealed class AtendimentosController : ControllerBase
 {
-    private const string CabecalhoIdempotencia = "Idempotency-Key";
-
     private readonly IServicoAtendimentos _atendimentos;
     private readonly IServicoConsultaAtendimentos _consulta;
+    private readonly IServicoRetiradas _retiradas;
 
     public AtendimentosController(
         IServicoAtendimentos atendimentos,
-        IServicoConsultaAtendimentos consulta)
+        IServicoConsultaAtendimentos consulta,
+        IServicoRetiradas retiradas)
     {
         _atendimentos = atendimentos;
         _consulta = consulta;
+        _retiradas = retiradas;
     }
 
     [HttpPost]
@@ -34,14 +38,7 @@ public sealed class AtendimentosController : ControllerBase
         [FromBody] RegistrarEntradaRequisicao requisicao,
         CancellationToken cancellationToken)
     {
-        if (!Request.Headers.TryGetValue(CabecalhoIdempotencia, out var valores) ||
-            !Guid.TryParse(valores.ToString(), out var chave) ||
-            chave == Guid.Empty)
-        {
-            throw ExcecaoAplicacao.Validacao(
-                "idempotency_key_invalida",
-                "O cabeçalho Idempotency-Key é obrigatório no formato UUID.");
-        }
+        var chave = ParametrosHttp.LerChaveIdempotencia(Request);
 
         var resultado = await _atendimentos.RegistrarEntradaAsync(
             AtorHttp.Obter(User),
@@ -59,16 +56,56 @@ public sealed class AtendimentosController : ControllerBase
         return Created(resultado.Location, resultado);
     }
 
+    [HttpPost("{id:guid}/withdrawal")]
+    [Authorize(Policy = PoliticasAutorizacao.Operador)]
+    public async Task<IActionResult> RegistrarPedidoRetirada(
+        Guid id,
+        [FromBody] RequisicaoRegistrarPedidoRetirada requisicao,
+        CancellationToken cancellationToken)
+    {
+        var chave = ParametrosHttp.LerChaveIdempotencia(Request);
+
+        var resultado = await _retiradas.RegistrarPedidoAsync(
+            AtorHttp.Obter(User),
+            id,
+            requisicao,
+            chave,
+            CorrelacaoHttp.Obter(HttpContext),
+            cancellationToken);
+
+        return Created(resultado.Location, resultado);
+    }
+
     [HttpGet]
     [Authorize(Policy = PoliticasAutorizacao.Funcionario)]
     public async Task<IActionResult> Buscar(
         [FromQuery] string? plate,
         [FromQuery] string? identifier,
+        [FromQuery] string? status,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
         var (pagina, tamanho) = ParametrosHttp.LerPaginacao(page, pageSize);
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var filtroAbertos = status.Equals("aberto", StringComparison.Ordinal);
+            var temBuscaExata = !string.IsNullOrWhiteSpace(plate) || !string.IsNullOrWhiteSpace(identifier);
+
+            if (!filtroAbertos || temBuscaExata)
+            {
+                throw ExcecaoAplicacao.Validacao(
+                    "filtro_invalido",
+                    "Use status=aberto isoladamente ou informe exatamente um filtro de placa/identificador.");
+            }
+
+            return Ok(await _consulta.ListarAbertosAsync(
+                AtorHttp.Obter(User),
+                pagina,
+                tamanho,
+                cancellationToken));
+        }
 
         var resultado = await _consulta.BuscarAsync(
             AtorHttp.Obter(User),

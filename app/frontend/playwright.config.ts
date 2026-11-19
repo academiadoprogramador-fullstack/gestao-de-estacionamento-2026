@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 const apiUrl = process.env['E2E_API_URL'] ?? 'https://localhost:4300';
 const spaUrl = process.env['E2E_SPA_URL'] ?? 'https://localhost:4200';
+const spaPort = new URL(spaUrl).port || '4200';
 
 const credenciaisDisponiveis =
   Boolean(process.env['E2E_CONEXAO']) &&
@@ -71,7 +72,7 @@ export default defineConfig({
         },
         {
           name: 'spa',
-          command: 'npm start -- --port 4200 --host localhost --ssl',
+          command: `npm start -- --port ${spaPort} --host localhost --ssl`,
           url: spaUrl,
           timeout: 180_000,
           reuseExistingServer: false,

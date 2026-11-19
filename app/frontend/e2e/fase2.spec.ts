@@ -304,8 +304,14 @@ test.describe.serial('Fase 2 — preparação, entrada e consulta', () => {
     await page.getByRole('banner').getByRole('button', { name: 'Sair' }).click();
     await entrar(page, caixa.email, caixa.senha);
     await page.getByRole('link', { name: 'Atendimentos' }).click();
+    await expect(page.getByRole('heading', { name: 'Atendimentos em aberto' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: new RegExp(identificadorPrimeiro) }),
+    ).toBeVisible();
+
     await page.locator('#termo-busca').fill(placa);
     await page.getByRole('button', { name: 'Buscar', exact: true }).click();
+    await expect(page.getByText('Resultados da busca')).toBeVisible();
     await expect(
       page.getByRole('button', { name: new RegExp(identificadorPrimeiro) }),
     ).toBeVisible();

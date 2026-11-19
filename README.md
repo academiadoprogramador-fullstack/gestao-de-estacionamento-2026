@@ -312,6 +312,17 @@ Falhas de banco, configuração, migration ou provisionamento interrompem a inic
 
 Pare a infraestrutura preservando seus volumes. Não remova dados para resolver erros de senha ou migration; a limpeza do ambiente de desenvolvimento exige ação explícita.
 
+### Fase 3 — retirada e caixa
+
+A Fase 3 acrescenta `/withdrawals` (fila, três perfis), `/withdrawals/new` (Caixa/Administrador, com lista de atendimentos em aberto) e `/cashier/:attendanceId` (Caixa/Administrador). O polling da fila usa **30 s** por padrão, configurável em `intervaloPollingRetiradasSegundos` de `app/frontend/src/environments/environment.ts`; a API mantém a paginação padrão de 20 e máxima de 100.
+
+A tela de atendimentos e a tela de pedido listam os atendimentos ainda em aberto com situação da retirada, sem exigir identificador; `GET /api/v1/attendances?status=aberto&page=&pageSize=` entrega essa projeção aos três perfis, e a busca exata por placa/identificador continua como filtro opcional.
+
+- O pedido exige titular presente, conferência aprovada/divergente e `Idempotency-Key`; não há rota de entrega, vistoria de saída, consumo de autorização ou liberação de vaga nesta fase.
+- O caixa aceita acerto integral em dinheiro, cartão ou Pix; desconto e estorno são exclusivos do Administrador e exigem justificativa cifrada, lida somente por endpoint explícito e auditado.
+- O detalhe e o histórico do atendimento incluem a retirada, mas o Manobrista continua sem finanças, conferência, autorizações, justificativas, documento completo ou vistoria.
+- A migração `20261119160017_Fase3RetiradaCaixa` é aditiva e não altera dados das fases anteriores. Limitações e evidências estão em [Fase 3 — retirada e caixa](docs/fases/fase-3.md).
+
 ## Documentação
 
 - [Requisitos do produto — PRD](docs/prd.md): escopo, jornadas, regras de negócio e critérios de aceite.
@@ -319,6 +330,7 @@ Pare a infraestrutura preservando seus volumes. Não remova dados para resolver 
 - [Sessão, autenticação e CORS](docs/sessao-autenticacao.md): contratos HTTP, claims, erros, rotação de chaves e bootstrap.
 - [Fase 1 — fundação e infraestrutura local](docs/fases/fase-1.md): implementação, bootstrap, autenticação, sessão, evidências e limitações.
 - [Fase 2 — preparação e entrada](docs/fases/fase-2.md): escopo, endpoints, verificações, acessibilidade e limitações.
+- [Fase 3 — retirada e caixa](docs/fases/fase-3.md): pedido, fila, cobrança, autorizações, verificações e limitações.
 - [Entrevista de levantamento](docs/entrevista.md): contexto inicial **fictício** que motivou o projeto.
 
 ## Tecnologias

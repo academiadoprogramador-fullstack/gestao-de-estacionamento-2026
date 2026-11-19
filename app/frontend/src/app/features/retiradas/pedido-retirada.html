@@ -1,0 +1,735 @@
+<main class="mx-auto w-full max-w-6xl px-4 py-8 text-slate-100">
+  <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="text-xs font-semibold tracking-widest text-sky-400 uppercase">Operação de retirada</p>
+      <h1 class="mt-1 text-2xl font-semibold text-white">Registrar pedido de retirada</h1>
+      <p class="mt-1 max-w-3xl text-sm text-slate-400">
+        Confira presencialmente o titular, registre a conferência e fixe o valor no instante do
+        pedido. Horário, operador, diárias e total são do servidor e não mudam depois.
+      </p>
+    </div>
+    <a
+      routerLink="/withdrawals"
+      class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+    >
+      Voltar à fila
+    </a>
+  </header>
+
+  @if (acessoNegado()) {
+    <section
+      class="rounded-xl border border-rose-500/40 bg-rose-500/10 p-8"
+      aria-labelledby="titulo-negado"
+    >
+      <h2 id="titulo-negado" class="text-xl font-semibold text-rose-100">Acesso negado</h2>
+      <p class="mt-2 max-w-2xl text-sm text-rose-100">
+        O pedido de retirada é restrito a Caixa e Administrador. O Manobrista pode consultar a fila e
+        iniciar a busca, mas não registrar pedido.
+      </p>
+      <a
+        routerLink="/withdrawals"
+        class="mt-4 inline-block rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      >
+        Voltar à fila
+      </a>
+    </section>
+  } @else {
+    <div class="grid gap-6 lg:grid-cols-[1.65fr_0.85fr]">
+      <div class="grid gap-6">
+        <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-busca-atendimento">
+          <div class="border-b border-slate-800 px-4 py-3">
+            <h2 id="titulo-busca-atendimento" class="text-sm font-semibold tracking-wide text-slate-300 uppercase">
+              Atendimentos em aberto
+            </h2>
+            <p class="text-xs text-slate-400">
+              Selecione o veículo na lista ou use a busca exata por placa/identificador como filtro
+              opcional.
+            </p>
+          </div>
+          <div class="grid gap-4 p-4">
+            <form (submit)="buscar($event)" novalidate class="grid gap-3">
+              <fieldset>
+                <legend class="mb-2 text-xs font-semibold text-slate-400">Critério (exatamente um)</legend>
+                <div class="flex flex-wrap gap-4 text-sm">
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="criterio-pedido"
+                      value="plate"
+                      [checked]="criterio() === 'plate'"
+                      (change)="selecionarCriterio('plate')"
+                      class="h-4 w-4 text-sky-500 focus-visible:ring-2 focus-visible:ring-sky-400"
+                    />
+                    Placa
+                  </label>
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="criterio-pedido"
+                      value="identifier"
+                      [checked]="criterio() === 'identifier'"
+                      (change)="selecionarCriterio('identifier')"
+                      class="h-4 w-4 text-sky-500 focus-visible:ring-2 focus-visible:ring-sky-400"
+                    />
+                    Identificador
+                  </label>
+                </div>
+              </fieldset>
+
+              <div class="flex flex-wrap items-end gap-3">
+                <div class="flex-1">
+                  <label for="termo-atendimento" class="mb-1 block text-sm text-slate-200">
+                    {{ criterio() === 'plate' ? 'Placa' : 'Identificador' }}
+                  </label>
+                  <input
+                    id="termo-atendimento"
+                    type="text"
+                    [value]="termo()"
+                    (input)="termo.set($any($event.target).value)"
+                    [attr.placeholder]="criterio() === 'plate' ? 'ABC1D23' : 'AT-2026-000001'"
+                    class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  [disabled]="buscandoAtendimentos()"
+                  class="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:opacity-60"
+                >
+                  <svg lucideSearch class="h-4 w-4" aria-hidden="true"></svg>
+                  Buscar
+                </button>
+              </div>
+            </form>
+
+            @if (erroBusca(); as mensagem) {
+              <p class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100" role="alert">
+                {{ mensagem }}
+              </p>
+            }
+
+            @if (buscandoAtendimentos()) {
+              <p class="flex items-center gap-2 text-sm text-slate-300" role="status">
+                <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+                Consultando atendimentos…
+              </p>
+            }
+
+            @if (buscou()) {
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-xs font-semibold tracking-wide text-slate-300 uppercase">
+                  Resultados da busca
+                </h3>
+                <button
+                  type="button"
+                  (click)="limparFiltro()"
+                  class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                >
+                  Limpar filtro
+                </button>
+              </div>
+
+              @if (resultados().length === 0 && !buscandoAtendimentos() && !erroBusca()) {
+                <p class="text-sm text-slate-400" role="status">
+                  Nenhum atendimento encontrado para o filtro informado.
+                </p>
+              } @else if (resultados().length > 0) {
+                <ul class="divide-y divide-slate-800/70 rounded-lg border border-slate-800" aria-label="Atendimentos encontrados">
+                  @for (item of resultados(); track item.id) {
+                    <li class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                      <div>
+                        <span class="font-mono text-xs text-sky-300">{{ item.identificador }}</span>
+                        <span class="ml-2 text-sm text-slate-100">{{ item.placa }} · {{ item.modelo }}</span>
+                        <span class="ml-2 text-xs text-slate-400">vaga {{ item.vagaCodigo || '—' }}</span>
+                        <span class="block text-xs text-slate-400">
+                          {{ item.titular }} · entrada {{ formatarDataHora(item.entradaUtc) }}
+                        </span>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          (click)="selecionar(item)"
+                          class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                        >
+                          Ver detalhe
+                        </button>
+                        @if (pedidoDoItem(item)) {
+                          <a
+                            [routerLink]="['/cashier', item.id]"
+                            class="rounded-md px-2 py-1 text-xs text-sky-300 transition hover:bg-sky-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                          >
+                            Abrir caixa
+                          </a>
+                        } @else {
+                          <button
+                            type="button"
+                            (click)="selecionar(item)"
+                            class="rounded-md bg-sky-500 px-2 py-1 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                          >
+                            Selecionar
+                          </button>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+            } @else {
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-xs font-semibold tracking-wide text-slate-300 uppercase">
+                  Atendimentos em aberto na unidade
+                </h3>
+                <span class="text-xs text-slate-400">{{ totalAbertos() }} atendimento(s)</span>
+              </div>
+
+              @if (erroAbertos(); as mensagem) {
+                <p class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100" role="alert">
+                  {{ mensagem }}
+                </p>
+              }
+
+              @if (carregandoAbertos()) {
+                <p class="flex items-center gap-2 text-sm text-slate-300" role="status">
+                  <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+                  Carregando atendimentos em aberto…
+                </p>
+              } @else if (abertos().length === 0) {
+                <p class="text-sm text-slate-400" role="status">
+                  Nenhum atendimento em aberto. Registre uma entrada no check-in para iniciar uma
+                  retirada.
+                </p>
+              } @else {
+                <ul class="divide-y divide-slate-800/70 rounded-lg border border-slate-800" aria-label="Atendimentos em aberto">
+                  @for (item of abertos(); track item.id) {
+                    <li class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                      <div>
+                        <span class="font-mono text-xs text-sky-300">{{ item.identificador }}</span>
+                        <span class="ml-2 text-sm text-slate-100">{{ item.placa }} · {{ item.modelo }}</span>
+                        <span class="ml-2 text-xs text-slate-400">vaga {{ item.vagaCodigo || '—' }}</span>
+                        <span class="block text-xs text-slate-400">
+                          {{ item.titular }} · entrada {{ formatarDataHora(item.entradaUtc) }}
+                        </span>
+                        @if (estadoRetiradaDoItem(item); as estado) {
+                          <span class="mt-1 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300">
+                            Retirada: {{ estado }}
+                          </span>
+                        } @else {
+                          <span class="mt-1 inline-flex rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                            Sem pedido
+                          </span>
+                        }
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          (click)="selecionarDaLista(item)"
+                          [attr.aria-label]="'Ver detalhe do atendimento ' + item.identificador"
+                          class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                        >
+                          Ver detalhe
+                        </button>
+                        @if (pedidoDoItem(item)) {
+                          <a
+                            [routerLink]="['/cashier', item.id]"
+                            [attr.aria-label]="'Abrir caixa do atendimento ' + item.identificador"
+                            class="rounded-md px-2 py-1 text-xs text-sky-300 transition hover:bg-sky-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                          >
+                            Abrir caixa
+                          </a>
+                        } @else {
+                          <button
+                            type="button"
+                            (click)="selecionarDaLista(item)"
+                            [attr.aria-label]="'Selecionar atendimento ' + item.identificador + ' para retirada'"
+                            class="rounded-md bg-sky-500 px-2 py-1 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                          >
+                            Selecionar
+                          </button>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ul>
+
+                <nav class="flex items-center justify-between gap-2 text-xs" aria-label="Paginação de atendimentos em aberto">
+                  <button
+                    type="button"
+                    (click)="alterarPaginaAbertos(paginaAbertos() - 1)"
+                    [disabled]="paginaAbertos() <= 1"
+                    class="rounded-md border border-slate-700 px-2 py-1 text-slate-200 disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <span>Página {{ paginaAbertos() }} de {{ totalPaginasAbertos() }}</span>
+                  <button
+                    type="button"
+                    (click)="alterarPaginaAbertos(paginaAbertos() + 1)"
+                    [disabled]="paginaAbertos() >= totalPaginasAbertos()"
+                    class="rounded-md border border-slate-700 px-2 py-1 text-slate-200 disabled:opacity-50"
+                  >
+                    Próxima
+                  </button>
+                </nav>
+              }
+            }
+
+            @if (carregandoAtendimento()) {
+              <p class="flex items-center gap-2 text-sm text-slate-300" role="status">
+                <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+                Carregando atendimento…
+              </p>
+            }
+
+            @if (atendimento(); as atual) {
+              <dl class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-label="Resumo do atendimento">
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Identificador</dt>
+                  <dd class="font-mono text-sm text-slate-100">{{ atual.identificador }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Veículo</dt>
+                  <dd class="text-sm text-slate-100">{{ atual.placa }} · {{ atual.modelo }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Vaga</dt>
+                  <dd class="font-mono text-sm text-slate-100">{{ atual.vagaCodigo || '—' }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Entrada</dt>
+                  <dd class="text-sm text-slate-100">{{ formatarDataHora(atual.entradaUtc) }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Titular</dt>
+                  <dd class="text-sm text-slate-100">{{ atual.titular }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <dt class="text-xs tracking-wider text-slate-400 uppercase">Estado</dt>
+                  <dd class="text-sm text-slate-100">{{ atual.estado }}</dd>
+                </div>
+              </dl>
+
+              @if (atual.retirada) {
+                <div class="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100" role="alert">
+                  <p>
+                    Este atendimento já possui pedido <strong>{{ atual.retirada.estado }}</strong> com
+                    cobrança fixada. Um segundo pedido no mesmo ciclo é recusado; use o caixa para
+                    acompanhar o pedido original.
+                  </p>
+                </div>
+              }
+            }
+          </div>
+        </section>
+
+        @if (atendimento(); as atual) {
+          @if (!atual.retirada) {
+            <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-conferencia">
+              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+                <div>
+                  <h2 id="titulo-conferencia" class="text-sm font-semibold tracking-wide text-slate-300 uppercase">
+                    Conferência e pedido
+                  </h2>
+                  <p class="text-xs text-slate-400">
+                    Campos com <span class="text-rose-300" aria-hidden="true">*</span> são obrigatórios.
+                  </p>
+                </div>
+                <span class="text-xs text-slate-400">Tentativa apenas em memória</span>
+              </div>
+
+              <div class="grid gap-4 p-4">
+                @if (resumoVisivel() && erros().length > 0) {
+                  <div
+                    #resumoErro
+                    tabindex="-1"
+                    role="alert"
+                    class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                  >
+                    <p class="font-medium">Corrija antes de registrar</p>
+                    <ul class="mt-1 list-disc pl-5">
+                      @for (mensagem of erros(); track mensagem) {
+                        <li>{{ mensagem }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+
+                <form (submit)="submeter($event)" novalidate class="grid gap-4">
+                  <fieldset class="rounded-lg border border-slate-800 p-3" [attr.aria-invalid]="!titularPresente() && resumoVisivel() ? 'true' : 'false'">
+                    <legend class="px-1 text-sm font-semibold text-slate-100">
+                      Conferência presencial do titular
+                    </legend>
+
+                    <label class="flex items-start gap-2 text-sm text-slate-100" for="titular-presente">
+                      <input
+                        id="titular-presente"
+                        type="checkbox"
+                        [checked]="titularPresente()"
+                        (change)="declararPresenca($any($event.target).checked)"
+                        [attr.aria-invalid]="!titularPresente() && resumoVisivel() ? 'true' : 'false'"
+                        aria-describedby="dica-presenca"
+                        class="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-950 text-sky-500 focus-visible:ring-2 focus-visible:ring-sky-400"
+                      />
+                      <span>Declaro que o titular está presente e apresentou documento com foto.</span>
+                    </label>
+                    <p id="dica-presenca" class="mt-1 text-xs text-slate-400">
+                      A conferência é humana, feita contra nome e número registrados na entrada. Não
+                      fotografe o documento nem colete novo número. Retirada por terceiro é recusada.
+                    </p>
+
+                    <div class="mt-3 flex flex-wrap items-end gap-2">
+                      <div class="min-w-60 flex-1">
+                        <label for="documento-registrado" class="mb-1 block text-xs font-semibold text-slate-400">
+                          Documento registrado
+                        </label>
+                        <input
+                          id="documento-registrado"
+                          type="text"
+                          readonly
+                          value="Leitura explícita e auditada"
+                          class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-400"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        (click)="lerDocumento()"
+                        [disabled]="lendoDocumento()"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                      >
+                        <svg lucideFileText class="h-4 w-4" aria-hidden="true"></svg>
+                        {{ lendoDocumento() ? 'Lendo documento…' : 'Ler documento completo' }}
+                      </button>
+                    </div>
+
+                    @if (erroDocumento(); as mensagem) {
+                      <p class="mt-2 text-sm text-rose-300" role="alert">{{ mensagem }}</p>
+                    }
+
+                    <fieldset class="mt-3">
+                      <legend class="text-xs font-semibold text-slate-400">
+                        Resultado da conferência <span class="text-rose-300" aria-hidden="true">*</span>
+                      </legend>
+                      <div class="mt-1 flex flex-wrap gap-4 text-sm">
+                        <label class="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="conferencia"
+                            value="aprovada"
+                            [checked]="conferencia() === 'aprovada'"
+                            (change)="selecionarConferencia('aprovada')"
+                            class="h-4 w-4 text-sky-500 focus-visible:ring-2 focus-visible:ring-sky-400"
+                          />
+                          Aprovada — documento confere
+                        </label>
+                        <label class="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="conferencia"
+                            value="divergente"
+                            [checked]="conferencia() === 'divergente'"
+                            (change)="selecionarConferencia('divergente')"
+                            class="h-4 w-4 text-sky-500 focus-visible:ring-2 focus-visible:ring-sky-400"
+                          />
+                          Divergente — documento não confere
+                        </label>
+                      </div>
+                    </fieldset>
+                    <p class="mt-1 text-xs text-slate-400">
+                      Divergência preserva o pedido e o cálculo, mas bloqueia a entrega normal até
+                      autorização documental do administrador.
+                    </p>
+                  </fieldset>
+
+                  <section aria-labelledby="titulo-previa" class="grid gap-2">
+                    <div>
+                      <h2 id="titulo-previa" class="text-sm font-semibold text-slate-100">
+                        Cobrança fixada no pedido
+                      </h2>
+                      <p class="text-xs text-slate-400">
+                        Calculada pelo servidor no instante do pedido, com a tarifa capturada na entrada.
+                      </p>
+                    </div>
+                    <dl class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                        <dt class="text-xs tracking-wider text-slate-400 uppercase">Instante do pedido</dt>
+                        <dd class="text-sm text-slate-100">Agora · servidor</dd>
+                      </div>
+                      <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                        <dt class="text-xs tracking-wider text-slate-400 uppercase">Tempo decorrido</dt>
+                        <dd class="text-sm text-slate-100">
+                          {{ previa() ? formatarDuracao(previa()!.segundos) : '—' }}
+                        </dd>
+                      </div>
+                      <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                        <dt class="text-xs tracking-wider text-slate-400 uppercase">Diárias iniciadas</dt>
+                        <dd class="text-sm text-slate-100">{{ previa()?.diarias ?? '—' }}</dd>
+                      </div>
+                      <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                        <dt class="text-xs tracking-wider text-slate-400 uppercase">Total previsto</dt>
+                        <dd class="text-sm text-slate-100">{{ formatarValor(previa()?.total) }}</dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-3">
+                    <div>
+                      <p class="font-mono text-xs text-slate-500">Idempotency-Key: gerada em memória</p>
+                      <p class="text-xs text-slate-400">Nunca armazenada no navegador.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        (click)="limpar()"
+                        class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                      >
+                        Limpar
+                      </button>
+                      <button
+                        type="submit"
+                        [disabled]="enviando() || coordenador.bloqueado()"
+                        class="inline-flex items-center gap-2 rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        @if (enviando() || coordenador.fase() === 'pendente') {
+                          <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+                          Registrando…
+                        } @else {
+                          Registrar pedido
+                        }
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </section>
+          }
+        }
+
+        @if (resultado(); as pedido) {
+          <section class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4" aria-labelledby="titulo-recibo">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="titulo-recibo" class="text-lg font-semibold text-emerald-100">Pedido registrado</h2>
+              <span class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-200">
+                Aguardando busca
+              </span>
+            </div>
+
+            <div class="mt-3 grid gap-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs text-emerald-100">Identificador</span>
+                <code class="rounded-lg bg-slate-950/60 px-2 py-1 font-mono text-base text-white select-all">
+                  {{ pedido.identificador }}
+                </code>
+                <button
+                  type="button"
+                  (click)="copiarIdentificador()"
+                  class="rounded-md border border-emerald-400/50 px-2 py-1 text-xs text-emerald-100 transition hover:bg-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                >
+                  Copiar
+                </button>
+              </div>
+
+              <dl class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <dt class="text-xs text-emerald-200">Pedido em</dt>
+                  <dd class="text-sm font-semibold text-white">{{ formatarDataHora(pedido.solicitadoEmUtc) }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-emerald-200">Diárias</dt>
+                  <dd class="text-sm font-semibold text-white">{{ pedido.diarias }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-emerald-200">Total fixado</dt>
+                  <dd class="text-sm font-semibold text-white">{{ formatarValor(pedido.totalOriginal) }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-emerald-200">Estado</dt>
+                  <dd class="text-sm font-semibold text-white">{{ pedido.estado }}</dd>
+                </div>
+              </dl>
+
+              @if (conferenciaRegistrada() === 'divergente') {
+                <div class="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100" role="note">
+                  Entrega normal bloqueada: a conferência divergente exige autorização documental
+                  vigente. O pedido e o cálculo foram preservados.
+                </div>
+              } @else {
+                <p class="text-xs text-emerald-100">
+                  Conferência aprovada. O pedido e o cálculo ficaram preservados.
+                </p>
+              }
+
+              <div class="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100">
+                O valor está fixado e não muda com nova tarifa. A entrega do veículo e a liberação da
+                vaga pertencem à Fase 4.
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <a
+                  [routerLink]="['/cashier', pedido.atendimentoId]"
+                  class="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                >
+                  Ir para o caixa
+                </a>
+                <a
+                  routerLink="/withdrawals"
+                  class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                >
+                  Ver fila
+                </a>
+              </div>
+            </div>
+          </section>
+        }
+
+        @if (recusa(); as mensagem) {
+          <section class="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4" aria-labelledby="titulo-recusa">
+            <h2 id="titulo-recusa" class="text-lg font-semibold text-rose-100">Pedido recusado</h2>
+            <p class="mt-2 text-sm text-rose-100">{{ mensagem }}</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <a
+                routerLink="/withdrawals"
+                class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+              >
+                Ver fila
+              </a>
+            </div>
+          </section>
+        }
+
+        @if (aviso(); as mensagem) {
+          <p class="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100" role="status">
+            {{ mensagem }}
+          </p>
+        }
+      </div>
+
+      <aside class="grid content-start gap-6" aria-label="Contexto e limites">
+        <section class="rounded-xl border border-slate-800 bg-slate-900/70" aria-labelledby="titulo-tarifa">
+          <div class="border-b border-slate-800 px-4 py-3">
+            <h2 id="titulo-tarifa" class="text-sm font-semibold text-slate-100">Tarifa da entrada</h2>
+          </div>
+          <div class="grid gap-2 p-4">
+            <dl class="grid grid-cols-2 gap-2">
+              <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <dt class="text-xs tracking-wider text-slate-400 uppercase">Versão</dt>
+                <dd class="text-sm text-slate-100">{{ atendimento()?.tarifaVersao ?? '—' }}</dd>
+              </div>
+              <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <dt class="text-xs tracking-wider text-slate-400 uppercase">Diária</dt>
+                <dd class="text-sm text-slate-100">{{ formatarValor(atendimento()?.tarifaValorSnapshot) }}</dd>
+              </div>
+            </dl>
+            <p class="text-xs text-slate-400">
+              Publicações posteriores de tarifa não alteram este atendimento.
+            </p>
+          </div>
+        </section>
+
+        <div class="flex items-start gap-2 rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100">
+          <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
+          <p>
+            O pedido não entrega o veículo. Vistoria de saída, entrega, consumo de autorização e
+            liberação da vaga pertencem à Fase 4.
+          </p>
+        </div>
+      </aside>
+    </div>
+  }
+
+  @if (coordenador.bloqueado()) {
+    <div
+      class="fixed inset-0 z-30 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titulo-pendente"
+    >
+      <div class="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-5">
+        <div class="flex items-center gap-3">
+          @if (coordenador.fase() === 'pendente') {
+            <svg lucideLoaderCircle class="h-5 w-5 animate-spin text-sky-400" aria-hidden="true"></svg>
+          } @else {
+            <svg lucideRotateCcw class="h-5 w-5 text-amber-300" aria-hidden="true"></svg>
+          }
+          <h2 id="titulo-pendente" class="text-base font-semibold text-white">
+            {{ coordenador.fase() === 'pendente' ? 'Registrando pedido…' : 'Resultado incerto' }}
+          </h2>
+        </div>
+
+        <p class="mt-2 text-sm text-slate-300">
+          @if (coordenador.fase() === 'pendente') {
+            Comando pendente. A navegação interna e a saída ficam bloqueadas até o resultado ser conhecido.
+          } @else {
+            A resposta se perdeu. Repita o mesmo pedido com a mesma chave e o mesmo conteúdo para saber
+            se ele foi confirmado.
+          }
+        </p>
+
+        <p class="mt-2 text-xs text-amber-200">
+          Não recarregue o navegador. A tentativa existe apenas em memória e será perdida se a página fechar.
+        </p>
+
+        @if (coordenador.fase() === 'incerto') {
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              (click)="repetir()"
+              [disabled]="enviando()"
+              class="inline-flex items-center gap-2 rounded-lg bg-amber-400 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:opacity-60"
+            >
+              {{ enviando() ? 'Repetindo…' : 'Repetir mesmo pedido' }}
+            </button>
+            <button
+              type="button"
+              (click)="descartarTentativa()"
+              class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              Descartar tentativa
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (documentoAberto()) {
+    <div
+      class="fixed inset-0 z-30 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titulo-documento"
+    >
+      <div class="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900">
+        <div class="flex items-start justify-between gap-3 border-b border-slate-800 p-4">
+          <div>
+            <h2 id="titulo-documento" class="text-base font-semibold text-white">Documento do titular</h2>
+            <p class="text-xs text-slate-400">Leitura explícita e auditada antes de retornar o conteúdo.</p>
+          </div>
+          <button
+            #botaoFecharDocumento
+            type="button"
+            (click)="fecharDocumento()"
+            class="rounded-md border border-slate-600 px-2 py-1 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            Fechar
+          </button>
+        </div>
+        <div class="grid gap-3 p-4">
+          <p class="text-xs text-slate-400">A leitura foi registrada na auditoria antes da exibição.</p>
+          <p class="rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-sm text-slate-100 select-all">
+            {{ documento() }}
+          </p>
+          <p class="text-xs text-slate-400">
+            Dado sintético. Não fotografar, copiar para outro sistema ou registrar em log.
+          </p>
+        </div>
+        <div class="flex justify-end gap-2 border-t border-slate-800 bg-slate-950/40 p-3">
+          <button
+            type="button"
+            (click)="fecharDocumento()"
+            class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            Entendi
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</main>

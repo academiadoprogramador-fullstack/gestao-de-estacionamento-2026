@@ -44,6 +44,6 @@ export const guardaComandoPendente: CanDeactivateFn<unknown> = () => {
   }
 
   return window.confirm(
-    'Existe uma tentativa de check-in pendente ou incerta. Saia somente se aceitar perder o resultado desta tentativa.',
+    'Existe uma tentativa de comando pendente ou incerta. Saia somente se aceitar perder o resultado desta tentativa.',
   );
 };

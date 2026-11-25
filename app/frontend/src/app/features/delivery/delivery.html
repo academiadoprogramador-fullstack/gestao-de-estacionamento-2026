@@ -1,0 +1,451 @@
+<main class="mx-auto w-full max-w-5xl px-4 py-8 text-slate-100">
+  <nav class="mb-4" aria-label="Retorno">
+    <a
+      routerLink="/withdrawals"
+      class="text-sm text-sky-300 transition hover:text-sky-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      [attr.aria-disabled]="coordenador.bloqueado() ? 'true' : null"
+    >
+      ← Fila de retiradas
+    </a>
+  </nav>
+
+  <header class="mb-6">
+    <p class="flex items-center gap-2 text-xs font-semibold tracking-widest text-sky-400 uppercase">
+      <svg lucideClipboardCheck class="h-4 w-4" aria-hidden="true"></svg>
+      Operação de retirada
+    </p>
+    <h1 class="mt-1 text-2xl font-semibold text-white">Entrega do veículo</h1>
+    <p class="mt-1 max-w-3xl text-sm text-slate-400">
+      Vistoria de saída imutável, prontidão informativa e confirmação explícita. A consulta de
+      prontidão não reserva a entrega; a confirmação só acontece no servidor.
+    </p>
+  </header>
+
+  @if (atualizando()) {
+    <p class="mb-4 flex items-center gap-2 text-sm text-slate-300" role="status">
+      <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+      Atualizando o estado atual…
+    </p>
+  }
+
+  @if (erro(); as mensagem) {
+    <p
+      class="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+      role="alert"
+    >
+      {{ mensagem }}
+    </p>
+  }
+
+  @if (conflito(); as mensagem) {
+    <div
+      class="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100"
+      role="alert"
+    >
+      <p>{{ mensagem }}</p>
+      <button
+        type="button"
+        (click)="recarregarEstado()"
+        [disabled]="processando()"
+        class="mt-2 rounded-md border border-amber-400/60 px-2 py-1 text-xs font-semibold transition hover:bg-amber-400/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:opacity-60"
+      >
+        Recarregar estado
+      </button>
+    </div>
+  }
+
+  @if (aviso(); as mensagem) {
+    <p
+      class="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100"
+      role="status"
+    >
+      {{ mensagem }}
+    </p>
+  }
+
+  @if (carregando()) {
+    <p
+      class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300"
+      role="status"
+    >
+      <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+      Carregando a operação de entrega…
+    </p>
+  } @else if (pedido(); as atual) {
+    <dl
+      class="mb-6 grid gap-3 rounded-xl border border-slate-800 bg-slate-900/70 p-4 sm:grid-cols-2 lg:grid-cols-4"
+    >
+      <div>
+        <dt class="text-xs tracking-wider text-slate-400 uppercase">Atendimento</dt>
+        <dd class="font-mono text-sm text-sky-300">{{ atual.identificador }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs tracking-wider text-slate-400 uppercase">Veículo</dt>
+        <dd class="font-mono text-sm text-slate-100">{{ atual.placa }} · {{ atual.modelo }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs tracking-wider text-slate-400 uppercase">Vaga</dt>
+        <dd class="font-mono text-sm text-slate-100">
+          {{ atual.entrega?.vagaCodigo || atual.vagaCodigo || '—' }}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs tracking-wider text-slate-400 uppercase">Estado</dt>
+        <dd>
+          <span
+            class="rounded-full px-2 py-0.5 text-xs font-semibold"
+            [class]="
+              entregue() ? 'bg-emerald-500/10 text-emerald-300' : 'bg-sky-500/10 text-sky-300'
+            "
+          >
+            {{ entregue() ? 'Entregue' : atual.estado }}
+          </span>
+        </dd>
+      </div>
+    </dl>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+      <section
+        class="rounded-xl border border-slate-800 bg-slate-900/70"
+        aria-labelledby="titulo-vistoria"
+      >
+        <div class="border-b border-slate-800 px-4 py-3">
+          <h2
+            id="titulo-vistoria"
+            class="text-sm font-semibold tracking-wide text-slate-300 uppercase"
+          >
+            Vistoria de saída
+          </h2>
+          <p class="text-xs text-slate-400" role="status">
+            @if (vistoriaRegistrada()) {
+              Vistoria registrada · registro imutável
+            } @else {
+              Vistoria ainda não registrada
+            }
+          </p>
+        </div>
+
+        <div class="grid gap-3 p-4">
+          @if (errosVistoria().length > 0) {
+            <div
+              #resumoVistoria
+              tabindex="-1"
+              role="alert"
+              class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+            >
+              <p class="font-medium">Vistoria não registrada</p>
+              <ul class="mt-1 list-disc pl-5">
+                @for (mensagem of errosVistoria(); track mensagem) {
+                  <li>{{ mensagem }}</li>
+                }
+              </ul>
+            </div>
+          }
+
+          @if (podeRegistrarVistoria()) {
+            <form (submit)="registrarVistoria($event)" novalidate class="grid gap-2">
+              <label for="observacoes-saida" class="text-sm text-slate-200">
+                Condições do veículo na saída
+                <span class="text-rose-300" aria-hidden="true">*</span>
+              </label>
+              <textarea
+                id="observacoes-saida"
+                rows="4"
+                maxlength="4000"
+                [value]="textoVistoria()"
+                (input)="textoVistoria.set($any($event.target).value)"
+                [disabled]="processando() || coordenador.bloqueado()"
+                [attr.aria-invalid]="errosVistoria().length > 0 ? 'true' : 'false'"
+                aria-describedby="dica-vistoria-saida"
+                class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+              ></textarea>
+              <p id="dica-vistoria-saida" class="text-xs text-slate-400">
+                De 1 a 4.000 caracteres, sem contar espaços nas extremidades. O registro não pode
+                ser editado ou substituído. Leitura explícita e auditada para os três perfis.
+              </p>
+              <div>
+                <button
+                  type="submit"
+                  [disabled]="processando() || coordenador.bloqueado()"
+                  class="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {{ processando() ? 'Registrando…' : 'Registrar vistoria' }}
+                </button>
+              </div>
+            </form>
+          }
+
+          @if (vistoriaRegistrada()) {
+            <div class="grid gap-2">
+              <button
+                #botaoLerVistoria
+                type="button"
+                (click)="lerVistoria()"
+                [disabled]="lendoVistoria()"
+                class="inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+              >
+                <svg lucideEye class="h-4 w-4" aria-hidden="true"></svg>
+                {{ lendoVistoria() ? 'Consultando…' : 'Consultar texto da vistoria' }}
+              </button>
+
+              @if (erroLeitura(); as mensagem) {
+                <p
+                  class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100"
+                  role="alert"
+                >
+                  {{ mensagem }}
+                </p>
+              }
+
+              @if (leituraVistoria(); as leitura) {
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <p class="text-xs text-slate-400">
+                    {{ leitura.ator }} · {{ formatarDataHora(leitura.registradaEmUtc) }} · leitura
+                    registrada na auditoria
+                  </p>
+                  <p class="mt-1 text-sm whitespace-pre-wrap text-slate-100 select-all">
+                    {{ leitura.conteudo }}
+                  </p>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </section>
+
+      @if (ehOperador() && !entregue()) {
+        <section
+          class="rounded-xl border border-slate-800 bg-slate-900/70"
+          aria-labelledby="titulo-prontidao"
+        >
+          <div class="border-b border-slate-800 px-4 py-3">
+            <h2
+              id="titulo-prontidao"
+              class="text-sm font-semibold tracking-wide text-slate-300 uppercase"
+            >
+              Prontidão para entrega
+            </h2>
+            <p class="text-xs text-slate-400" role="status">
+              @if (prontidao(); as pronta) {
+                {{
+                  pronta.pronta
+                    ? 'Pronto para confirmação. A consulta não reserva a entrega.'
+                    : 'Entrega bloqueada. Consulte as condições abaixo.'
+                }}
+              } @else {
+                Consultando prontidão…
+              }
+            </p>
+          </div>
+
+          <div class="grid gap-3 p-4">
+            @if (prontidao(); as pronta) {
+              <ul class="grid gap-2" aria-label="Condições da entrega">
+                @for (condicao of pronta.condicoes; track condicao.codigo) {
+                  <li
+                    class="flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-sm"
+                  >
+                    @if (condicao.atendida) {
+                      <svg
+                        lucideCheck
+                        class="mt-0.5 h-4 w-4 shrink-0 text-emerald-300"
+                        aria-hidden="true"
+                      ></svg>
+                    } @else {
+                      <svg
+                        lucideCircleX
+                        class="mt-0.5 h-4 w-4 shrink-0 text-rose-300"
+                        aria-hidden="true"
+                      ></svg>
+                    }
+                    <span>
+                      <strong class="block text-slate-100">{{ condicao.descricao }}</strong>
+                      <span class="text-xs text-slate-300">{{ condicao.situacao }}</span>
+                    </span>
+                  </li>
+                }
+              </ul>
+
+              <p class="text-xs text-slate-400">
+                Saldo exigível:
+                <strong class="text-slate-100">{{ formatarValor(pronta.saldo) }}</strong>
+                @if (pronta.saldo > 0) {
+                  · a autorização financeira não quita o saldo; o acerto posterior continua
+                  possível.
+                }
+              </p>
+
+              @if (pronta.bloqueios.length > 0) {
+                <p
+                  class="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100"
+                  role="alert"
+                >
+                  Bloqueios: {{ pronta.bloqueios.join(' · ') }}
+                </p>
+              }
+            }
+
+            <button
+              type="button"
+              (click)="abrirConfirmacao()"
+              [disabled]="!pronta() || processando() || coordenador.bloqueado()"
+              class="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Revisar e confirmar entrega
+            </button>
+          </div>
+        </section>
+      }
+
+      @if (entregue()) {
+        <section
+          class="rounded-xl border border-emerald-500/40 bg-emerald-500/10"
+          aria-labelledby="titulo-recibo"
+        >
+          <div class="border-b border-emerald-500/30 px-4 py-3">
+            <h2
+              #tituloRecibo
+              id="titulo-recibo"
+              tabindex="-1"
+              class="text-sm font-semibold tracking-wide text-emerald-100 uppercase focus:outline-none"
+            >
+              Entrega registrada
+            </h2>
+          </div>
+          <div class="grid gap-2 p-4 text-sm text-emerald-50">
+            @if (atual.entrega; as entrega) {
+              <p>
+                Entrega <span class="font-mono">{{ entrega.entregaId }}</span> ·
+                {{ entrega.responsavel }} · {{ formatarDataHora(entrega.entregueEmUtc) }}
+              </p>
+              <p>
+                Vaga <span class="font-mono">{{ entrega.vagaCodigo }}</span> liberada em
+                {{ formatarDataHora(entrega.liberadaEmUtc) }} nessa visita. A disponibilidade atual
+                deve ser consultada separadamente.
+              </p>
+            } @else {
+              <p>Atendimento entregue. Recarregue para obter o recibo atualizado.</p>
+            }
+
+            @if (ehOperador() && atual.saldo > 0) {
+              <p class="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-amber-100">
+                Saldo pendente após a entrega: {{ formatarValor(atual.saldo) }}. O acerto integral
+                posterior não reabre atendimento, pedido, ocupação ou vaga.
+              </p>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  }
+</main>
+
+@if (coordenador.exibirBloqueio()) {
+  <div
+    class="fixed inset-0 z-30 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="titulo-entrega-pendente"
+  >
+    <div class="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-5">
+      <div class="flex items-center gap-3">
+        @if (coordenador.fase() === 'pendente') {
+          <svg
+            lucideLoaderCircle
+            class="h-5 w-5 animate-spin text-sky-400"
+            aria-hidden="true"
+          ></svg>
+        } @else {
+          <svg lucideRotateCcw class="h-5 w-5 text-amber-300" aria-hidden="true"></svg>
+        }
+        <h2 id="titulo-entrega-pendente" class="text-base font-semibold text-white">
+          {{ coordenador.fase() === 'pendente' ? operacaoPendente() : 'Resultado incerto' }}
+        </h2>
+      </div>
+
+      <p class="mt-2 text-sm text-slate-300">
+        @if (coordenador.fase() === 'pendente') {
+          Comando pendente. A navegação interna, o logout e a saída da página ficam bloqueados até o
+          resultado ser conhecido.
+        } @else {
+          A resposta se perdeu. Repita exatamente a mesma tentativa, com a mesma chave e o mesmo
+          conteúdo, sem reenvio automático.
+        }
+      </p>
+
+      <p class="mt-2 text-xs text-amber-200">
+        A tentativa existe apenas em memória. Recarregar ou fechar a página a descarta; ao voltar,
+        consulte o estado atual no servidor.
+      </p>
+
+      @if (coordenador.fase() === 'incerto') {
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            (click)="repetir()"
+            [disabled]="processando()"
+            class="rounded-lg bg-amber-400 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:opacity-60"
+          >
+            {{ processando() ? 'Repetindo…' : 'Repetir a mesma tentativa' }}
+          </button>
+          <button
+            type="button"
+            (click)="descartarTentativa()"
+            class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+          >
+            Descartar tentativa
+          </button>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+@if (confirmacaoAberta()) {
+  <div
+    class="fixed inset-0 z-40 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="titulo-confirmacao-entrega"
+    aria-describedby="info-confirmacao-entrega"
+    (keydown.escape)="fecharConfirmacao()"
+  >
+    <div class="w-full max-w-md rounded-xl border border-emerald-500/50 bg-slate-900 p-5">
+      <div class="flex items-center gap-3">
+        <svg lucideCircleCheck class="h-6 w-6 text-emerald-300" aria-hidden="true"></svg>
+        <h2 id="titulo-confirmacao-entrega" class="text-base font-semibold text-white">
+          Confirmar entrega
+        </h2>
+      </div>
+      <p id="info-confirmacao-entrega" class="mt-2 text-sm text-slate-200">
+        @if (prontidao(); as pronta) {
+          @if (pronta.saldo > 0) {
+            Confirme a entrega e a liberação da vaga {{ pronta.vagaCodigo }} com saldo pendente de
+            {{ formatarValor(pronta.saldo) }}. A autorização financeira não quita o saldo.
+          } @else {
+            Confirme a entrega e a liberação da vaga {{ pronta.vagaCodigo }}. A operação não pode
+            ser desfeita.
+          }
+        }
+      </p>
+      <div class="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          (click)="fecharConfirmacao()"
+          class="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        >
+          Voltar
+        </button>
+        <button
+          #botaoConfirmacao
+          type="button"
+          (click)="confirmarEntrega()"
+          [disabled]="processando() || coordenador.bloqueado()"
+          class="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 disabled:opacity-60"
+        >
+          Confirmar entrega
+        </button>
+      </div>
+    </div>
+  </div>
+}

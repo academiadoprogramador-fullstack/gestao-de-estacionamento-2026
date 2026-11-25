@@ -288,6 +288,52 @@
             </div>
           </dl>
 
+          @if (item.retirada?.pedidoId; as pedidoId) {
+            <a
+              [routerLink]="['/delivery', pedidoId]"
+              class="inline-block rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+            >
+              Abrir operação de entrega
+            </a>
+          }
+
+          @if (item.entrega; as entrega) {
+            <section
+              class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3"
+              aria-labelledby="titulo-entrega-atendimento"
+            >
+              <h3
+                id="titulo-entrega-atendimento"
+                class="text-xs font-semibold tracking-wide text-emerald-200 uppercase"
+              >
+                Entrega e liberação dessa visita
+              </h3>
+              <dl class="mt-1 grid gap-1 text-sm text-emerald-50 sm:grid-cols-2">
+                <div>
+                  <dt class="text-xs text-emerald-200/80">Entrega</dt>
+                  <dd class="font-mono">{{ entrega.entregaId }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-emerald-200/80">Responsável</dt>
+                  <dd>{{ entrega.responsavel }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-emerald-200/80">Entregue em</dt>
+                  <dd>{{ formatarDataHora(entrega.entregueEmUtc) }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-emerald-200/80">Vaga liberada nesta visita</dt>
+                  <dd class="font-mono">
+                    {{ entrega.vagaCodigo }} · {{ formatarDataHora(entrega.liberadaEmUtc) }}
+                  </dd>
+                </div>
+              </dl>
+              <p class="mt-1 text-xs text-emerald-200/80">
+                Liberação histórica da visita; não representa a disponibilidade corrente da vaga.
+              </p>
+            </section>
+          }
+
           @if (item.tarifaValorSnapshot !== undefined) {
             <section
               class="rounded-lg border border-slate-800 bg-slate-950/40 p-3"
@@ -333,6 +379,21 @@
                 <svg lucideEye class="h-4 w-4" aria-hidden="true"></svg>
                 {{ lendo() === 'vistoria' ? 'Lendo vistoria…' : 'Ler vistoria de entrada' }}
               </button>
+              @if (item.vistoriaSaidaRegistrada) {
+                <button
+                  type="button"
+                  (click)="ler('vistoria-saida')"
+                  [disabled]="lendo() !== null"
+                  class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+                >
+                  <svg lucideEye class="h-4 w-4" aria-hidden="true"></svg>
+                  {{
+                    lendo() === 'vistoria-saida'
+                      ? 'Lendo vistoria de saída…'
+                      : 'Ler vistoria de saída'
+                  }}
+                </button>
+              }
             </div>
 
             @if (erroLeitura(); as mensagem) {
@@ -348,7 +409,11 @@
               <div class="mt-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
                 <h4 class="text-xs font-semibold tracking-wide text-slate-400 uppercase">
                   {{
-                    conteudo.tipo === 'documento' ? 'Documento do titular' : 'Vistoria de entrada'
+                    conteudo.tipo === 'documento'
+                      ? 'Documento do titular'
+                      : conteudo.tipo === 'vistoria'
+                        ? 'Vistoria de entrada'
+                        : 'Vistoria de saída'
                   }}
                 </h4>
                 <p class="mt-1 text-sm whitespace-pre-wrap text-slate-100 select-all">

@@ -70,6 +70,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/caixa/caixa').then((modulo) => modulo.Caixa),
   },
   {
+    path: 'delivery/:withdrawalId',
+    title: 'Entrega do veículo — Gestão de Estacionamento',
+    canActivate: [guardaSessao],
+    canDeactivate: [guardaComandoPendente],
+    loadComponent: () => import('./features/delivery/delivery').then((modulo) => modulo.Delivery),
+  },
+  {
     path: 'administracao',
     title: 'Administração — Gestão de Estacionamento',
     canActivate: [guardaSessao, guardaPerfil(['Administrador'])],

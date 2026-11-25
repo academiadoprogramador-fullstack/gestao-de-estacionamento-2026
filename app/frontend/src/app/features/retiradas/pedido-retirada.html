@@ -558,7 +558,7 @@
 
               <div class="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100">
                 O valor está fixado e não muda com nova tarifa. A entrega do veículo e a liberação da
-                vaga pertencem à Fase 4.
+                vaga ocorrem na operação de entrega, com vistoria de saída e confirmação explícita.
               </div>
 
               <div class="flex flex-wrap gap-2">
@@ -627,14 +627,15 @@
           <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
           <p>
             O pedido não entrega o veículo. Vistoria de saída, entrega, consumo de autorização e
-            liberação da vaga pertencem à Fase 4.
+            liberação da vaga ocorrem na operação de entrega, sem efeitos ao registrar ou consultar
+            o pedido.
           </p>
         </div>
       </aside>
     </div>
   }
 
-  @if (coordenador.bloqueado()) {
+  @if (coordenador.exibirBloqueio()) {
     <div
       class="fixed inset-0 z-30 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
       role="dialog"

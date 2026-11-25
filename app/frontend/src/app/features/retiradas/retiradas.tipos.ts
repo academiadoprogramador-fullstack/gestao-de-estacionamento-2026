@@ -1,5 +1,15 @@
 import { Pagina } from '../../core/http/erro-api';
 
+/** Vínculo histórico da entrega com a vaga liberada naquela visita. */
+export interface ResumoEntrega {
+  readonly entregaId: string;
+  readonly responsavel: string;
+  readonly entregueEmUtc: string;
+  readonly vagaId: string;
+  readonly vagaCodigo: string;
+  readonly liberadaEmUtc: string;
+}
+
 /** Item da fila de retiradas. O Manobrista não recebe os campos financeiros. */
 export interface RetiradaFila {
   readonly id: string;
@@ -14,6 +24,8 @@ export interface RetiradaFila {
   readonly buscaIniciadaEmUtc: string | null;
   readonly responsavelBusca: string | null;
   readonly versaoPedido: string;
+  readonly vistoriaSaidaRegistrada?: boolean;
+  readonly entrega?: ResumoEntrega | null;
   readonly totalOriginal?: number;
   readonly pagoLiquido?: number;
   readonly saldo?: number;
@@ -35,11 +47,18 @@ export interface LancamentoResumo {
 export interface AutorizacaoResumo {
   readonly tipo: 'documental' | 'financeira';
   readonly id: string | null;
-  readonly vigencia: 'vigente' | 'revogada' | 'substituida' | 'obsoleta' | 'nao_concedida';
+  readonly vigencia:
+    | 'vigente'
+    | 'revogada'
+    | 'substituida'
+    | 'obsoleta'
+    | 'consumida'
+    | 'nao_concedida';
   readonly revisaoReferencia: number | null;
   readonly concedidaPor: string | null;
   readonly concedidaEmUtc: string | null;
   readonly temJustificativa: boolean;
+  readonly consumidaEmUtc?: string | null;
 }
 
 /** Detalhe financeiro do pedido. */
@@ -68,6 +87,8 @@ export interface RetiradaDetalheFinanceira
   readonly lancamentos: readonly LancamentoResumo[];
   readonly autorizacaoDocumental: AutorizacaoResumo;
   readonly autorizacaoFinanceira: AutorizacaoResumo;
+  readonly vistoriaSaidaRegistrada?: boolean;
+  readonly entrega?: ResumoEntrega | null;
 }
 
 export interface AtendimentoResumo {
@@ -86,6 +107,9 @@ export interface AtendimentoResumo {
 export interface AtendimentoBusca extends AtendimentoResumo {
   readonly tarifaVersao?: number;
   readonly tarifaValorSnapshot?: number;
+  readonly versaoAtendimento?: string;
+  readonly vistoriaSaidaRegistrada?: boolean;
+  readonly entrega?: ResumoEntrega | null;
   readonly retirada?: {
     readonly pedidoId: string;
     readonly estado: string;

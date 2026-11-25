@@ -114,6 +114,9 @@ export class Caixa implements OnInit, OnDestroy {
   readonly saldo = computed(() => this.pedido()?.saldo ?? 0);
   readonly cobrado = computed(() => this.pedido()?.cobrado ?? 0);
   readonly pagoLiquido = computed(() => this.pedido()?.pagoLiquido ?? 0);
+  readonly entregue = computed(
+    () => Boolean(this.pedido()?.entrega) || this.pedido()?.estado === 'entregue',
+  );
   readonly pagamentoBloqueado = computed(() => this.saldo() <= 0);
   readonly descontoBloqueado = computed(
     () => this.pagoLiquido() > 0 || this.cobrado() <= 0,
@@ -347,7 +350,7 @@ export class Caixa implements OnInit, OnDestroy {
         tipo: `autorizacao-${tipo}`,
         dados: { tipo, justificativa, versaoEsperada: pedido.versaoPedido },
       },
-      'Autorização registrada. A entrega futura avaliará a vigência; nada foi consumido.',
+      'Autorização registrada. Ela é consumida somente na entrega, se a condição excepcional aplicável existir.',
       () => campo.focus(),
     );
   }
@@ -473,12 +476,13 @@ export class Caixa implements OnInit, OnDestroy {
       revogada: 'Revogada',
       substituida: 'Substituída',
       obsoleta: 'Obsoleta',
+      consumida: 'Consumida',
       nao_concedida: 'Não concedida',
     }[vigencia];
   }
 
   classeVigencia(vigencia: AutorizacaoResumo['vigencia']): string {
-    if (vigencia === 'vigente') {
+    if (vigencia === 'vigente' || vigencia === 'consumida') {
       return 'bg-emerald-500/10 text-emerald-300';
     }
 
@@ -741,10 +745,10 @@ export class Caixa implements OnInit, OnDestroy {
       detalhe = `Estorno de ${formatarValor(dados.valor)} vinculado ao pagamento original. ` + detalhe;
     } else if (conteudo?.tipo.startsWith('autorizacao-')) {
       detalhe =
-        'A autorização não altera saldo, pagamento ou estado do pedido, e nada foi consumido nesta fase.';
+        'A autorização não altera saldo, pagamento ou estado do pedido; o consumo ocorre somente na entrega.';
     } else if (conteudo?.tipo.startsWith('revogacao-')) {
       detalhe =
-        'A concessão e a revogação permanecem no histórico; nada foi consumido nesta fase.';
+        'A concessão e a revogação permanecem no histórico; nenhum consumo é registrado por esta ação.';
     }
 
     this.confirmacaoTitulo.set('Operação confirmada');

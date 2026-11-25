@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Define a fila de pedidos de retirada consultável pelos três perfis, com estados aguardando e em busca, início de busca auditado, atualização periódica sem sobreposição, projeções por perfil e ausência de entrega antecipada.
+Define a fila de pedidos de retirada consultável pelos três perfis, com estados aguardando, em busca e entregue, início de busca auditado, atualização periódica sem sobreposição, projeções por perfil e acesso à operação de entrega sem liberar vaga nem consumir autorização.
 
 ## Requirements
 
 ### Requirement: Fila paginada de pedidos de retirada
 
-O sistema SHALL permitir aos três perfis consultar pedidos de retirada com paginação padrão de 20 e máxima de 100, em ordem estável por horário do pedido e identificador, exibindo os estados aguardando e em busca; o estado entregue SHALL NOT ser produzido nesta fase.
+O sistema SHALL permitir aos três perfis consultar pedidos de retirada com paginação padrão de 20 e máxima de 100, em ordem estável por horário do pedido e identificador, exibindo os estados aguardando, em busca e entregue (F4-R06).
 
 #### Scenario: Consulta pelos três perfis
 
@@ -22,8 +22,27 @@ O sistema SHALL permitir aos três perfis consultar pedidos de retirada com pagi
 
 #### Scenario: Estado entregue ausente
 
-- **WHEN** a fila é consultada durante a Fase 3
-- **THEN** os pedidos aparecem somente como aguardando ou em busca, sem registro produzido como entregue
+- **WHEN** o filtro entregue é aplicado sem pedidos entregues correspondentes
+- **THEN** a fila apresenta um estado vazio textual, sem inventar entregas
+
+#### Scenario: Entregues na fila
+
+- **WHEN** um dos três perfis abre a fila após uma entrega ou seleciona o filtro entregue
+- **THEN** os registros correspondentes mostram entregue, identificação da entrega, horário, responsável, vaga histórica e horário da liberação, sem ação de iniciar busca no registro entregue
+
+### Requirement: Acesso à operação de entrega pela fila
+
+A fila SHALL oferecer aos três perfis acesso à operação de entrega do pedido, com as ações permitidas pelo perfil e estado. Consultar fila ou iniciar busca SHALL NOT liberar vaga nem consumir autorização (F4-R02/06).
+
+#### Scenario: Abertura do pedido pela fila
+
+- **WHEN** o funcionário abre a operação de um pedido na fila
+- **THEN** a tela de entrega abre no pedido correto, com vistoria para os três perfis e confirmação somente para Caixa ou Administrador quando elegível
+
+#### Scenario: Fila não libera vaga
+
+- **WHEN** um pedido em aberto entra em busca ou sua linha é atualizada na fila sem confirmação de entrega
+- **THEN** a ocupação permanece aberta e a vaga continua indisponível para nova entrada
 
 ### Requirement: Início de busca registrado
 
@@ -75,7 +94,7 @@ O sistema SHALL omitir do Manobrista finanças, conferência, autorizações, ju
 #### Scenario: Visão do Manobrista
 
 - **WHEN** um Manobrista consulta a fila ou o detalhe operacional de um pedido
-- **THEN** a resposta contém identificação, veículo, estado e horários operacionais, sem valores, saldo, conferência, autorização, justificativa ou documento completo
+- **THEN** a resposta contém identificação, veículo, estado e horários operacionais, sem valores, saldo, conferência, autorização, justificativa, documento completo ou texto de vistoria
 
 #### Scenario: Visão do caixa
 
@@ -92,16 +111,3 @@ O sistema SHALL omitir do Manobrista finanças, conferência, autorizações, ju
 - **WHEN** o JSON de um perfil proibido é inspecionado
 - **THEN** os campos omitidos não existem no DTO, e não apenas estão escondidos na tela
 
-### Requirement: Ausência de entrega antecipada
-
-A Fase 3 SHALL NOT oferecer comando, rota ou transição que marque o pedido como entregue, libere a vaga ou consuma autorização de entrega, e qualquer tentativa SHALL ser negada sem efeito.
-
-#### Scenario: Tentativa de marcar entregue
-
-- **WHEN** um cliente tenta confirmar entrega, liberar vaga ou consumir autorização pela API desta fase
-- **THEN** a operação é negada sem alterar pedido, atendimento, ocupação, vaga ou autorização
-
-#### Scenario: Fila não libera vaga
-
-- **WHEN** um pedido entra em busca ou a fila é atualizada
-- **THEN** a ocupação permanece aberta e a vaga continua indisponível para nova entrada

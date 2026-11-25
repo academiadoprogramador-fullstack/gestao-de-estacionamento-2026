@@ -183,10 +183,10 @@ test.describe.serial('Fase 2 — preparação, entrada e consulta', () => {
     await expect(page.getByText(`Acesso de Funcionário E2E atualizado.`)).toBeVisible();
 
     // A sessão anterior é recusada na próxima requisição protegida, inclusive
-    // com o refresh já revogado.
+    // com o refresh já revogado. A própria carga da lista de atendimentos em
+    // aberto dispara a recusa e a reautenticação, sem depender de um clique
+    // posterior em um controle que pode ser desmontado pela navegação.
     await paginaFuncionario.getByRole('link', { name: 'Atendimentos' }).click();
-    await paginaFuncionario.locator('#termo-busca').fill('REV1A23');
-    await paginaFuncionario.getByRole('button', { name: 'Buscar', exact: true }).click();
     await expect(paginaFuncionario).toHaveURL(/\/login$/);
 
     await contextoFuncionario.close();

@@ -6,7 +6,7 @@
 
 **Branch:** `feat/fase-4-entrega-liberacao`
 
-**Rastreabilidade:** PRD §5.5, §9 e §10; RF-05/09/10/11 e RNF-01–04/07; TDD §4.3 (D4-T01–D4-T08), §5, §6 e §7.1; itens F4-01–F4-06 do roadmap. Especificações em `openspec/changes/fase-4-entrega-liberacao/specs`; protótipos em `openspec/changes/fase-4-entrega-liberacao/prototypes`.
+**Rastreabilidade:** PRD §5.5, §9 e §10; RF-05/09/10/11 e RNF-01–04/07; TDD §4.3 (D4-T01–D4-T08), §5, §6 e §7.1; itens F4-01–F4-06 do roadmap. Especificações em `openspec/changes/archive/2026-11-25-fase-4-entrega-liberacao/specs`; protótipos em `openspec/changes/archive/2026-11-25-fase-4-entrega-liberacao/prototypes`.
 
 ## 1. Escopo entregue
 

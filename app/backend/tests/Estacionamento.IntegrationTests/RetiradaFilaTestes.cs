@@ -63,9 +63,11 @@ public sealed class RetiradaFilaTestes
         Assert.IsFalse(detalheManobrista.RootElement.TryGetProperty("lancamentos", out _));
         Assert.IsFalse(detalheManobrista.RootElement.TryGetProperty("saldo", out _));
 
-        var respostaFiltroInvalido = await administrador.GetAsync("/api/v1/withdrawals?state=entregue");
-        Assert.AreEqual(HttpStatusCode.BadRequest, respostaFiltroInvalido.StatusCode);
-        Assert.AreEqual("filtro_invalido", await Fase3Apoio.CodigoAsync(respostaFiltroInvalido));
+        var respostaFiltroEntregue = await administrador.GetAsync("/api/v1/withdrawals?state=entregue");
+        Assert.AreEqual(HttpStatusCode.OK, respostaFiltroEntregue.StatusCode);
+        using var filaEntregue = JsonDocument.Parse(
+            await respostaFiltroEntregue.Content.ReadAsStringAsync());
+        Assert.AreEqual(0, filaEntregue.RootElement.GetProperty("total").GetInt32());
 
         var respostaInexistente = await administrador.GetAsync($"/api/v1/withdrawals/{Guid.NewGuid()}");
         Assert.AreEqual(HttpStatusCode.NotFound, respostaInexistente.StatusCode);
@@ -232,15 +234,13 @@ public sealed class RetiradaFilaTestes
         Assert.AreEqual(1, await db.Ocupacoes.CountAsync(ocupacao =>
             ocupacao.AtendimentoId == atendimentoId && ocupacao.FimUtc == null));
 
-        var entregaGet = await manobrista.GetAsync($"/api/v1/withdrawals/{pedidoId}/delivery");
-        Assert.AreEqual(HttpStatusCode.NotFound, entregaGet.StatusCode);
+        var entregaGet = await manobrista.GetAsync($"/api/v1/withdrawals/{pedidoId}/delivery-readiness");
+        Assert.AreEqual(HttpStatusCode.Forbidden, entregaGet.StatusCode);
 
         var entregaPost = await manobrista.PostAsync(
             $"/api/v1/withdrawals/{pedidoId}/delivery",
             new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
-        Assert.IsTrue(
-            entregaPost.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed,
-            $"Não deve existir rota de entrega nesta fase (recebido {(int)entregaPost.StatusCode}).");
+        Assert.AreEqual(HttpStatusCode.Forbidden, entregaPost.StatusCode);
 
         var consumo = await administrador.PostAsync(
             $"/api/v1/withdrawals/{pedidoId}/authorizations/{Guid.NewGuid()}/consume",

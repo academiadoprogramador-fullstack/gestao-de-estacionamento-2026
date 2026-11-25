@@ -1,4 +1,5 @@
 using Estacionamento.Application.Comum;
+using Estacionamento.Application.Entrega;
 
 namespace Estacionamento.Application.Atendimentos;
 
@@ -95,7 +96,9 @@ public sealed record AtendimentoDetalheOperacional(
     string VagaCodigo,
     DateTimeOffset EntradaUtc,
     byte[] VersaoAtendimento,
-    ResumoRetiradaOperacional? Retirada = null);
+    ResumoRetiradaOperacional? Retirada = null,
+    bool VistoriaSaidaRegistrada = false,
+    ResumoEntrega? Entrega = null);
 
 /// <summary>
 /// Detalhe administrativo/operador. O DTO do Manobrista é outro tipo e não
@@ -113,7 +116,9 @@ public sealed record AtendimentoDetalheAdministrativo(
     byte[] VersaoAtendimento,
     int TarifaVersao,
     decimal TarifaValorSnapshot,
-    ResumoRetiradaFinanceiro? Retirada = null);
+    ResumoRetiradaFinanceiro? Retirada = null,
+    bool VistoriaSaidaRegistrada = false,
+    ResumoEntrega? Entrega = null);
 
 /// <summary>Evento do histórico, sem conteúdo sensível.</summary>
 public sealed record EventoHistorico(

@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Estacionamento.Application.Comum;
+using Estacionamento.Application.Entrega;
 using Estacionamento.Application.Retiradas;
 using Estacionamento.Domain.Atendimentos;
+using Estacionamento.Domain.Entrega;
 using Estacionamento.Domain.Idempotencia;
 using Estacionamento.Domain.Retiradas;
 using Estacionamento.Infrastructure.Persistencia;
@@ -120,6 +122,18 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
             join usuario in _db.Users.AsNoTracking()
                 on pedido.BuscaPorId equals usuario.Id into usuarios
             from usuario in usuarios.DefaultIfEmpty()
+            join entrega in _db.EntregasVeiculo.AsNoTracking()
+                on pedido.Id equals entrega.PedidoId into entregas
+            from entrega in entregas.DefaultIfEmpty()
+            join usuarioEntrega in _db.Users.AsNoTracking()
+                on entrega.AtorId equals usuarioEntrega.Id into usuariosEntrega
+            from usuarioEntrega in usuariosEntrega.DefaultIfEmpty()
+            join vagaEntrega in _db.Vagas.AsNoTracking()
+                on entrega.VagaId equals vagaEntrega.Id into vagasEntrega
+            from vagaEntrega in vagasEntrega.DefaultIfEmpty()
+            join ocupacaoEntrega in _db.Ocupacoes.AsNoTracking()
+                on entrega.OcupacaoId equals ocupacaoEntrega.Id into ocupacoesEntrega
+            from ocupacaoEntrega in ocupacoesEntrega.DefaultIfEmpty()
             where filtro == null || pedido.Estado == filtro
             orderby pedido.SolicitadoEmUtc descending, pedido.Id descending
             select new LinhaRetirada(
@@ -128,14 +142,21 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
                 atendimento.IdentificadorPublico ?? string.Empty,
                 atendimento.Placa,
                 atendimento.Modelo,
-                vaga == null ? string.Empty : vaga.Codigo,
+                vaga == null ? (vagaEntrega == null ? string.Empty : vagaEntrega.Codigo) : vaga.Codigo,
                 pedido.Estado,
                 atendimento.EntradaUtc,
                 pedido.SolicitadoEmUtc,
                 pedido.BuscaIniciadaEmUtc,
                 usuario == null ? null : usuario.Nome,
                 pedido.RowVersion,
-                pedido.Conferencia);
+                pedido.Conferencia,
+                _db.VistoriasSaida.Any(vistoria => vistoria.AtendimentoId == atendimento.Id),
+                entrega == null ? (Guid?)null : entrega.Id,
+                entrega == null ? (DateTimeOffset?)null : entrega.EntregueEmUtc,
+                usuarioEntrega == null ? null : usuarioEntrega.Nome,
+                entrega == null ? (Guid?)null : entrega.VagaId,
+                vagaEntrega == null ? string.Empty : vagaEntrega.Codigo,
+                ocupacaoEntrega == null ? null : ocupacaoEntrega.FimUtc);
 
         var total = await consulta.CountAsync(cancellationToken);
         var linhas = await consulta
@@ -174,12 +195,13 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
                     dados.Composicao.PagoLiquido,
                     dados.Composicao.Saldo,
                     dados.Documental,
-                    dados.Financeira);
+                    dados.Financeira,
+                    linha.VistoriaSaidaRegistrada,
+                    MontarEntrega(linha));
             }).ToList(),
             pagina,
             tamanho,
-            total);
-    }
+            total);    }
 
     public async Task<object> ObterAsync(
         AtorAtual ator,
@@ -190,7 +212,7 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
 
         if (!ator.EhOperador)
         {
-            return ProjetarOperacional(linha);
+            return ProjetarDetalheOperacional(linha);
         }
 
         var financeiro = await MontarFinanceiroAsync([linha], cancellationToken);
@@ -225,7 +247,9 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
             dados.RevisaoRazao,
             lancamentos,
             dados.DocumentalResumo,
-            dados.FinanceiraResumo);
+            dados.FinanceiraResumo,
+            linha.VistoriaSaidaRegistrada,
+            MontarEntrega(linha));
     }
 
     public async Task<object?> ObterResumoPorAtendimentoAsync(
@@ -291,6 +315,18 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
                 join usuario in _db.Users.AsNoTracking()
                     on pedido.BuscaPorId equals usuario.Id into usuarios
                 from usuario in usuarios.DefaultIfEmpty()
+                join entrega in _db.EntregasVeiculo.AsNoTracking()
+                    on pedido.Id equals entrega.PedidoId into entregas
+                from entrega in entregas.DefaultIfEmpty()
+                join usuarioEntrega in _db.Users.AsNoTracking()
+                    on entrega.AtorId equals usuarioEntrega.Id into usuariosEntrega
+                from usuarioEntrega in usuariosEntrega.DefaultIfEmpty()
+                join vagaEntrega in _db.Vagas.AsNoTracking()
+                    on entrega.VagaId equals vagaEntrega.Id into vagasEntrega
+                from vagaEntrega in vagasEntrega.DefaultIfEmpty()
+                join ocupacaoEntrega in _db.Ocupacoes.AsNoTracking()
+                    on entrega.OcupacaoId equals ocupacaoEntrega.Id into ocupacoesEntrega
+                from ocupacaoEntrega in ocupacoesEntrega.DefaultIfEmpty()
                 where pedido.Id == pedidoId
                 select new LinhaRetirada(
                     pedido.Id,
@@ -298,14 +334,21 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
                     atendimento.IdentificadorPublico ?? string.Empty,
                     atendimento.Placa,
                     atendimento.Modelo,
-                    vaga == null ? string.Empty : vaga.Codigo,
+                    vaga == null ? (vagaEntrega == null ? string.Empty : vagaEntrega.Codigo) : vaga.Codigo,
                     pedido.Estado,
                     atendimento.EntradaUtc,
                     pedido.SolicitadoEmUtc,
                     pedido.BuscaIniciadaEmUtc,
                     usuario == null ? null : usuario.Nome,
                     pedido.RowVersion,
-                    pedido.Conferencia))
+                    pedido.Conferencia,
+                    _db.VistoriasSaida.Any(vistoria => vistoria.AtendimentoId == atendimento.Id),
+                    entrega == null ? (Guid?)null : entrega.Id,
+                    entrega == null ? (DateTimeOffset?)null : entrega.EntregueEmUtc,
+                    usuarioEntrega == null ? null : usuarioEntrega.Nome,
+                    entrega == null ? (Guid?)null : entrega.VagaId,
+                    vagaEntrega == null ? string.Empty : vagaEntrega.Codigo,
+                    ocupacaoEntrega == null ? null : ocupacaoEntrega.FimUtc))
             .SingleOrDefaultAsync(cancellationToken);
 
         return linha ?? throw ExcecaoAplicacao.NaoEncontrado(
@@ -366,6 +409,18 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
             .Where(revogacao => concessoes.Select(concessao => concessao.Id).Contains(revogacao.ConcessaoId))
             .ToDictionaryAsync(revogacao => revogacao.ConcessaoId, cancellationToken);
 
+        var entregas = await _db.EntregasVeiculo
+            .AsNoTracking()
+            .Where(entrega => pedidoIds.Contains(entrega.PedidoId))
+            .Select(entrega => new { entrega.Id, entrega.PedidoId })
+            .ToListAsync(cancellationToken);
+
+        var entregaIds = entregas.Select(entrega => entrega.Id).ToArray();
+        var consumos = await _db.ConsumosAutorizacao
+            .AsNoTracking()
+            .Where(consumo => entregaIds.Contains(consumo.EntregaId))
+            .ToDictionaryAsync(consumo => consumo.ConcessaoId, cancellationToken);
+
         foreach (var linha in linhas)
         {
             var cobranca = cobrancas[linha.PedidoId];
@@ -383,6 +438,10 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
                 ? razao.Revisao
                 : 1;
 
+            var entregue =
+                string.Equals(linha.Estado, EstadoAtendimento.Entregue, StringComparison.Ordinal) ||
+                entregas.Any(entrega => entrega.PedidoId == linha.PedidoId);
+
             var porTipo = concessoes
                 .Where(concessao => concessao.PedidoId == linha.PedidoId)
                 .GroupBy(concessao => concessao.Tipo)
@@ -395,13 +454,17 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
                 TipoAutorizacaoRetirada.Documental,
                 porTipo,
                 revogacoes,
+                consumos,
                 revisaoRazao,
+                entregue,
                 autoresConcessao);
             var financeira = MontarAutorizacao(
                 TipoAutorizacaoRetirada.Financeira,
                 porTipo,
                 revogacoes,
+                consumos,
                 revisaoRazao,
+                entregue,
                 autoresConcessao);
 
             resultado[linha.PedidoId] = new DadosFinanceiros(
@@ -433,7 +496,9 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
         string tipo,
         IReadOnlyDictionary<string, ConcessaoAutorizacao[]> porTipo,
         IReadOnlyDictionary<Guid, RevogacaoAutorizacao> revogacoes,
+        IReadOnlyDictionary<Guid, ConsumoAutorizacao> consumos,
         int revisaoRazao,
+        bool entregue,
         IReadOnlyDictionary<Guid, string> autores)
     {
         if (!porTipo.TryGetValue(tipo, out var concessoes) || concessoes.Length == 0)
@@ -442,11 +507,18 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
         }
 
         var ultima = concessoes[^1];
-        var vigencia = ComposicaoSaldo.DerivarVigencia(
-            ultima,
-            ehUltimaDoTipo: true,
-            revogacoes.ContainsKey(ultima.Id),
-            revisaoRazao);
+        var consumida = consumos.TryGetValue(ultima.Id, out var consumo);
+        var vigencia = entregue
+            ? consumida
+                ? VigenciaAutorizacao.Consumida
+                : revogacoes.ContainsKey(ultima.Id)
+                    ? VigenciaAutorizacao.Revogada
+                    : VigenciaAutorizacao.Obsoleta
+            : ComposicaoSaldo.DerivarVigencia(
+                ultima,
+                ehUltimaDoTipo: true,
+                revogacoes.ContainsKey(ultima.Id),
+                revisaoRazao);
 
         return new AutorizacaoResumo(
             tipo,
@@ -455,8 +527,26 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
             ultima.RevisaoReferencia,
             autores.TryGetValue(ultima.ConcedidaPorId, out var autor) ? autor : "—",
             ultima.ConcedidaEmUtc,
-            ultima.JustificativaCifrada.Length > 0);
+            ultima.JustificativaCifrada.Length > 0,
+            consumida ? consumo!.ConsumidaEmUtc : null);
     }
+
+    private static RetiradaDetalheOperacional ProjetarDetalheOperacional(LinhaRetirada linha) =>
+        new(
+            linha.PedidoId,
+            linha.AtendimentoId,
+            linha.Identificador,
+            linha.Placa,
+            linha.Modelo,
+            linha.VagaCodigo,
+            linha.Estado,
+            linha.EntradaUtc,
+            linha.SolicitadoEmUtc,
+            linha.BuscaIniciadaEmUtc,
+            linha.ResponsavelBusca,
+            linha.VersaoPedido,
+            linha.VistoriaSaidaRegistrada,
+            MontarEntrega(linha));
 
     private static RetiradaFilaOperacional ProjetarOperacional(LinhaRetirada linha) =>
         new(
@@ -471,7 +561,20 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
             linha.SolicitadoEmUtc,
             linha.BuscaIniciadaEmUtc,
             linha.ResponsavelBusca,
-            linha.VersaoPedido);
+            linha.VersaoPedido,
+            linha.VistoriaSaidaRegistrada,
+            MontarEntrega(linha));
+
+    private static ResumoEntrega? MontarEntrega(LinhaRetirada linha) =>
+        linha.EntregaId is null
+            ? null
+            : new ResumoEntrega(
+                linha.EntregaId.Value,
+                linha.ResponsavelEntrega ?? "—",
+                linha.EntregueEmUtc ?? linha.LiberadaEmUtc ?? DateTimeOffset.MinValue,
+                linha.VagaEntregaId ?? Guid.Empty,
+                linha.VagaEntregaCodigo,
+                linha.LiberadaEmUtc ?? linha.EntregueEmUtc ?? DateTimeOffset.MinValue);
 
     private static string? NormalizarFiltro(string? estado)
     {
@@ -480,11 +583,11 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
             return null;
         }
 
-        if (!EstadoAtendimento.ProduzidosNaFase3.Contains(estado))
+        if (!EstadoAtendimento.ProduzidosNaFase4.Contains(estado))
         {
             throw ExcecaoAplicacao.Validacao(
                 "filtro_invalido",
-                "O filtro de estado deve ser aguardando ou em busca.");
+                "O filtro de estado deve ser aguardando, em busca ou entregue.");
         }
 
         return estado;
@@ -503,7 +606,14 @@ public sealed class ServicoConsultaRetiradas : IServicoConsultaRetiradas
         DateTimeOffset? BuscaIniciadaEmUtc,
         string? ResponsavelBusca,
         byte[] VersaoPedido,
-        string Conferencia);
+        string Conferencia,
+        bool VistoriaSaidaRegistrada,
+        Guid? EntregaId,
+        DateTimeOffset? EntregueEmUtc,
+        string? ResponsavelEntrega,
+        Guid? VagaEntregaId,
+        string VagaEntregaCodigo,
+        DateTimeOffset? LiberadaEmUtc);
 
     private sealed record DadosFinanceiros(
         Cobranca Cobranca,

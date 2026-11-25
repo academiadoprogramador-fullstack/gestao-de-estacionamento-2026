@@ -2,6 +2,7 @@ using Estacionamento.Api.Autenticacao;
 using Estacionamento.Api.Infra;
 using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Comum;
+using Estacionamento.Application.Entrega;
 using Estacionamento.Application.Retiradas;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,15 +22,18 @@ public sealed class AtendimentosController : ControllerBase
     private readonly IServicoAtendimentos _atendimentos;
     private readonly IServicoConsultaAtendimentos _consulta;
     private readonly IServicoRetiradas _retiradas;
+    private readonly IServicoVistoriaSaida _vistoriaSaida;
 
     public AtendimentosController(
         IServicoAtendimentos atendimentos,
         IServicoConsultaAtendimentos consulta,
-        IServicoRetiradas retiradas)
+        IServicoRetiradas retiradas,
+        IServicoVistoriaSaida vistoriaSaida)
     {
         _atendimentos = atendimentos;
         _consulta = consulta;
         _retiradas = retiradas;
+        _vistoriaSaida = vistoriaSaida;
     }
 
     [HttpPost]
@@ -156,6 +160,53 @@ public sealed class AtendimentosController : ControllerBase
     [Authorize(Policy = PoliticasAutorizacao.Funcionario)]
     public async Task<IActionResult> VistoriaEntrada(Guid id, CancellationToken cancellationToken) =>
         Ok(await _consulta.LerVistoriaEntradaAsync(
+            AtorHttp.Obter(User),
+            id,
+            CorrelacaoHttp.Obter(HttpContext),
+            cancellationToken));
+
+    /// <summary>
+    /// Registra a vistoria textual de saída, única e imutável. Aceita os três
+    /// perfis e exige <c>Idempotency-Key</c> e a versão-base do atendimento.
+    /// Respostas: 201 com recibo mínimo; 400 texto/versão inválidos; 403 perfil;
+    /// 404 atendimento; 409 vistoria existente, entrega concluída ou conflito.
+    /// </summary>
+    [HttpPost("{id:guid}/exit-inspection")]
+    [Authorize(Policy = PoliticasAutorizacao.Funcionario)]
+    [ProducesResponseType<ResultadoVistoriaSaida>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RegistrarVistoriaSaida(
+        Guid id,
+        [FromBody] RequisicaoVistoriaSaida requisicao,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _vistoriaSaida.RegistrarAsync(
+            AtorHttp.Obter(User),
+            id,
+            requisicao,
+            ParametrosHttp.LerChaveIdempotencia(Request),
+            CorrelacaoHttp.Obter(HttpContext),
+            cancellationToken);
+
+        return Created(resultado.Location, resultado);
+    }
+
+    /// <summary>
+    /// Leitura explícita e auditada da vistoria de saída, disponível aos três
+    /// perfis. A auditoria é confirmada antes de devolver o texto; a resposta
+    /// nunca é armazenável em cache.
+    /// </summary>
+    [HttpGet("{id:guid}/exit-inspection")]
+    [Authorize(Policy = PoliticasAutorizacao.Funcionario)]
+    [ProducesResponseType<LeituraVistoriaSaida>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> VistoriaSaida(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _vistoriaSaida.LerAsync(
             AtorHttp.Obter(User),
             id,
             CorrelacaoHttp.Obter(HttpContext),

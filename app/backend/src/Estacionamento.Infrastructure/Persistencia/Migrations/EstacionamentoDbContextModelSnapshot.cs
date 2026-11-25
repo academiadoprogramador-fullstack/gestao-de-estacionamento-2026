@@ -232,6 +232,126 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                     b.ToTable("EventosAuditoriaNegocio", (string)null);
                 });
 
+            modelBuilder.Entity("Estacionamento.Domain.Entrega.ConsumoAutorizacao", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ConcessaoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ConsumidaEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("EntregaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RevisaoReferencia")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConcessaoId")
+                        .IsUnique();
+
+                    b.HasIndex("EntregaId", "Tipo")
+                        .IsUnique();
+
+                    b.ToTable("ConsumosAutorizacao", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ConsumosAutorizacao_Tipo", "[Tipo] IN ('documental', 'financeira')");
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Entrega.EntregaVeiculo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("EntregueEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("OcupacaoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PedidoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("VagaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("VistoriaSaidaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId")
+                        .IsUnique();
+
+                    b.HasIndex("AtorId");
+
+                    b.HasIndex("EntregueEmUtc");
+
+                    b.HasIndex("OcupacaoId");
+
+                    b.HasIndex("PedidoId")
+                        .IsUnique();
+
+                    b.HasIndex("VagaId");
+
+                    b.HasIndex("VistoriaSaidaId");
+
+                    b.ToTable("EntregasVeiculo", (string)null);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Entrega.VistoriaSaida", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CriadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("PedidoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("TextoCifrado")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtendimentoId")
+                        .IsUnique();
+
+                    b.HasIndex("AtorId");
+
+                    b.HasIndex("PedidoId")
+                        .IsUnique();
+
+                    b.ToTable("VistoriasSaida", (string)null);
+                });
+
             modelBuilder.Entity("Estacionamento.Domain.Idempotencia.ResultadoIdempotente", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1041,6 +1161,81 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                     b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
                         .WithMany()
                         .HasForeignKey("AtorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Entrega.ConsumoAutorizacao", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Retiradas.ConcessaoAutorizacao", null)
+                        .WithMany()
+                        .HasForeignKey("ConcessaoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Entrega.EntregaVeiculo", null)
+                        .WithMany()
+                        .HasForeignKey("EntregaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Entrega.EntregaVeiculo", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("AtorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Ocupacao", null)
+                        .WithMany()
+                        .HasForeignKey("OcupacaoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Retiradas.PedidoRetirada", null)
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Vagas.Vaga", null)
+                        .WithMany()
+                        .HasForeignKey("VagaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Entrega.VistoriaSaida", null)
+                        .WithMany()
+                        .HasForeignKey("VistoriaSaidaId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Entrega.VistoriaSaida", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("AtorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Retiradas.PedidoRetirada", null)
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });

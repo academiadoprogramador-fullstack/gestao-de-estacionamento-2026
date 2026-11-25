@@ -1,6 +1,7 @@
 using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Auditoria;
 using Estacionamento.Application.Comum;
+using Estacionamento.Application.Entrega;
 using Estacionamento.Application.Retiradas;
 using Estacionamento.Application.Seguranca;
 using Estacionamento.Application.Tempo;
@@ -188,6 +189,10 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
             ator,
             atendimentoAtual.Id,
             cancellationToken);
+        var vistoriaSaidaRegistrada = await _db.VistoriasSaida
+            .AsNoTracking()
+            .AnyAsync(vistoria => vistoria.AtendimentoId == atendimentoAtual.Id, cancellationToken);
+        var entrega = await CarregarEntregaAsync(atendimentoAtual.Id, cancellationToken);
 
         if (!ator.EhOperador)
         {
@@ -202,7 +207,9 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
                 dados.VagaCodigo,
                 atendimentoAtual.EntradaUtc,
                 atendimentoAtual.RowVersion,
-                retirada as ResumoRetiradaOperacional);
+                retirada as ResumoRetiradaOperacional,
+                vistoriaSaidaRegistrada,
+                entrega);
         }
 
         var versaoTarifa = await _db.TarifasDiarias
@@ -223,7 +230,44 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
             atendimentoAtual.RowVersion,
             versaoTarifa,
             atendimentoAtual.TarifaValorSnapshot,
-            retirada as ResumoRetiradaFinanceiro);
+            retirada as ResumoRetiradaFinanceiro,
+            vistoriaSaidaRegistrada,
+            entrega);
+    }
+
+    private async Task<ResumoEntrega?> CarregarEntregaAsync(
+        Guid atendimentoId,
+        CancellationToken cancellationToken)
+    {
+        var dados = await (
+                from entrega in _db.EntregasVeiculo.AsNoTracking()
+                join usuario in _db.Users.AsNoTracking()
+                    on entrega.AtorId equals usuario.Id
+                join vaga in _db.Vagas.AsNoTracking()
+                    on entrega.VagaId equals vaga.Id
+                join ocupacao in _db.Ocupacoes.AsNoTracking()
+                    on entrega.OcupacaoId equals ocupacao.Id
+                where entrega.AtendimentoId == atendimentoId
+                select new
+                {
+                    entrega.Id,
+                    usuario.Nome,
+                    entrega.EntregueEmUtc,
+                    entrega.VagaId,
+                    vaga.Codigo,
+                    ocupacao.FimUtc
+                })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return dados is null
+            ? null
+            : new ResumoEntrega(
+                dados.Id,
+                dados.Nome,
+                dados.EntregueEmUtc,
+                dados.VagaId,
+                dados.Codigo,
+                dados.FimUtc ?? dados.EntregueEmUtc);
     }
 
     public async Task<Pagina<EventoHistorico>> ListarHistoricoAsync(

@@ -178,6 +178,56 @@ public static class CanonicalizadorIdempotencia
                 new KeyValuePair<string, string>("valor", FormatarValor(valor))
             });
 
+    /// <summary>
+    /// Hash da vistoria de saída: ator, atendimento, texto normalizado e versão
+    /// do atendimento. O texto nunca é persistido no resultado idempotente.
+    /// </summary>
+    public static byte[] CalcularHashVistoriaSaidaV1(
+        Guid atorId,
+        Guid atendimentoId,
+        string textoNormalizado,
+        byte[] versaoAtendimento) =>
+        CalcularHash(
+            VersaoAtual,
+            ResultadoIdempotente.OperacaoVistoriaSaida,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.atendimento", atendimentoId.ToString("N")),
+                new KeyValuePair<string, string>("texto", textoNormalizado),
+                new KeyValuePair<string, string>("versaoAtendimento", Converter(versaoAtendimento))
+            });
+
+    /// <summary>
+    /// Hash da entrega: ator, alvo, confirmação e todas as versões-base. A
+    /// confirmação é sempre <c>true</c>; versões diferentes conflitam.
+    /// </summary>
+    public static byte[] CalcularHashEntregaV1(
+        Guid atorId,
+        Guid pedidoId,
+        Guid atendimentoId,
+        bool confirmacao,
+        byte[] versaoAtendimento,
+        byte[] versaoPedido,
+        byte[] versaoRazao,
+        string versaoControleDocumental,
+        string versaoControleFinanceira) =>
+        CalcularHash(
+            VersaoAtual,
+            ResultadoIdempotente.OperacaoEntrega,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.pedido", pedidoId.ToString("N")),
+                new KeyValuePair<string, string>("alvo.atendimento", atendimentoId.ToString("N")),
+                new KeyValuePair<string, string>("confirmacao", confirmacao ? "true" : "false"),
+                new KeyValuePair<string, string>("versaoAtendimento", Converter(versaoAtendimento)),
+                new KeyValuePair<string, string>("versaoPedido", Converter(versaoPedido)),
+                new KeyValuePair<string, string>("versaoRazao", Converter(versaoRazao)),
+                new KeyValuePair<string, string>("versaoControleDocumental", versaoControleDocumental),
+                new KeyValuePair<string, string>("versaoControleFinanceira", versaoControleFinanceira)
+            });
+
     private static string FormatarValor(decimal valor) =>
         valor.ToString("0.00", CultureInfo.InvariantCulture);
 

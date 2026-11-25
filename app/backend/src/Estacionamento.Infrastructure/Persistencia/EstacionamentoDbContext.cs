@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Estacionamento.Domain.Atendimentos;
 using Estacionamento.Domain.Auditoria;
+using Estacionamento.Domain.Entrega;
 using Estacionamento.Domain.Idempotencia;
 using Estacionamento.Domain.Retiradas;
 using Estacionamento.Domain.Tarifas;
@@ -61,6 +62,12 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
     public DbSet<ConcessaoAutorizacao> ConcessoesAutorizacao => Set<ConcessaoAutorizacao>();
 
     public DbSet<RevogacaoAutorizacao> RevogacoesAutorizacao => Set<RevogacaoAutorizacao>();
+
+    public DbSet<VistoriaSaida> VistoriasSaida => Set<VistoriaSaida>();
+
+    public DbSet<EntregaVeiculo> EntregasVeiculo => Set<EntregaVeiculo>();
+
+    public DbSet<ConsumoAutorizacao> ConsumosAutorizacao => Set<ConsumoAutorizacao>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -123,6 +130,7 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
         ConfigurarIdempotencia(builder);
         ConfigurarAuditoriaNegocio(builder);
         ConfigurarRetiradas(builder);
+        ConfigurarEntrega(builder);
 
         // Sequência usada exclusivamente pelo identificador público do
         // atendimento; não é chave primária nem expõe a chave interna.
@@ -469,6 +477,87 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
         });
     }
 
+    private static void ConfigurarEntrega(ModelBuilder builder)
+    {
+        builder.Entity<VistoriaSaida>(entidade =>
+        {
+            entidade.ToTable("VistoriasSaida");
+            entidade.HasKey(vistoria => vistoria.Id);
+            entidade.Property(vistoria => vistoria.TextoCifrado).HasColumnType("varbinary(max)").IsRequired();
+            entidade.Property(vistoria => vistoria.CriadoEmUtc).IsRequired();
+            entidade.HasOne<Atendimento>()
+                .WithMany()
+                .HasForeignKey(vistoria => vistoria.AtendimentoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<PedidoRetirada>()
+                .WithMany()
+                .HasForeignKey(vistoria => vistoria.PedidoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<UsuarioAplicacao>()
+                .WithMany()
+                .HasForeignKey(vistoria => vistoria.AtorId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(vistoria => vistoria.AtendimentoId).IsUnique();
+            entidade.HasIndex(vistoria => vistoria.PedidoId).IsUnique();
+        });
+
+        builder.Entity<EntregaVeiculo>(entidade =>
+        {
+            entidade.ToTable("EntregasVeiculo");
+            entidade.HasKey(entrega => entrega.Id);
+            entidade.Property(entrega => entrega.EntregueEmUtc).IsRequired();
+            entidade.HasOne<Atendimento>()
+                .WithMany()
+                .HasForeignKey(entrega => entrega.AtendimentoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<PedidoRetirada>()
+                .WithMany()
+                .HasForeignKey(entrega => entrega.PedidoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<VistoriaSaida>()
+                .WithMany()
+                .HasForeignKey(entrega => entrega.VistoriaSaidaId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<Ocupacao>()
+                .WithMany()
+                .HasForeignKey(entrega => entrega.OcupacaoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<Vaga>()
+                .WithMany()
+                .HasForeignKey(entrega => entrega.VagaId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<UsuarioAplicacao>()
+                .WithMany()
+                .HasForeignKey(entrega => entrega.AtorId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(entrega => entrega.AtendimentoId).IsUnique();
+            entidade.HasIndex(entrega => entrega.PedidoId).IsUnique();
+            entidade.HasIndex(entrega => entrega.EntregueEmUtc);
+        });
+
+        builder.Entity<ConsumoAutorizacao>(entidade =>
+        {
+            entidade.ToTable("ConsumosAutorizacao", tabela =>
+                tabela.HasCheckConstraint(
+                    "CK_ConsumosAutorizacao_Tipo",
+                    "[Tipo] IN ('documental', 'financeira')"));
+            entidade.HasKey(consumo => consumo.Id);
+            entidade.Property(consumo => consumo.Tipo).HasMaxLength(16).IsRequired();
+            entidade.Property(consumo => consumo.RevisaoReferencia).IsRequired();
+            entidade.Property(consumo => consumo.ConsumidaEmUtc).IsRequired();
+            entidade.HasOne<EntregaVeiculo>()
+                .WithMany()
+                .HasForeignKey(consumo => consumo.EntregaId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<ConcessaoAutorizacao>()
+                .WithMany()
+                .HasForeignKey(consumo => consumo.ConcessaoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(consumo => new { consumo.EntregaId, consumo.Tipo }).IsUnique();
+            entidade.HasIndex(consumo => consumo.ConcessaoId).IsUnique();
+        });
+    }
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ImpedirAlteracaoDeHistorico();
@@ -482,11 +571,11 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
     }
 
     /// <summary>
-    /// Auditoria, eventos de atendimento, resultados idempotentes e lançamentos
-    /// financeiros são append-only durante a operação normal. Cobrança e
-    /// autorizações também não podem ser editadas nem excluídas; apenas
+    /// Auditoria, eventos de atendimento, resultados idempotentes, lançamentos
+    /// financeiros, cobrança, autorizações, vistoria de saída, entrega e
+    /// consumo são append-only durante a operação normal. Apenas
     /// <see cref="PedidoRetirada"/> e <see cref="RazaoAtendimento"/> evoluem sob
-    /// versão.
+    /// versão, e a ocupação encerra uma única vez por atualização condicional.
     /// </summary>
     private void ImpedirAlteracaoDeHistorico()
     {
@@ -511,6 +600,15 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
             .Concat(ChangeTracker.Entries<RevogacaoAutorizacao>()
                 .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
                 .Select(_ => "RevogacoesAutorizacao"))
+            .Concat(ChangeTracker.Entries<VistoriaSaida>()
+                .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
+                .Select(_ => "VistoriasSaida"))
+            .Concat(ChangeTracker.Entries<EntregaVeiculo>()
+                .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
+                .Select(_ => "EntregasVeiculo"))
+            .Concat(ChangeTracker.Entries<ConsumoAutorizacao>()
+                .Where(entrada => entrada.State is EntityState.Modified or EntityState.Deleted)
+                .Select(_ => "ConsumosAutorizacao"))
             .ToList();
 
         if (alteracoesProibidas.Count > 0)

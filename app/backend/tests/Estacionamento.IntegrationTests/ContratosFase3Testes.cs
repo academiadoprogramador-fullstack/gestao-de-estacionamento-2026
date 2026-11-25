@@ -90,7 +90,10 @@ public sealed class ContratosFase3Testes
             "/api/v1/withdrawals/{id}/authorizations",
             "/api/v1/withdrawals/{id}/authorizations/{authorizationId}/revoke",
             "/api/v1/withdrawals/{id}/authorizations/{authorizationId}/justification",
-            "/api/v1/withdrawals/{id}/launches/{launchId}/justification"
+            "/api/v1/withdrawals/{id}/launches/{launchId}/justification",
+            "/api/v1/attendances/{id}/exit-inspection",
+            "/api/v1/withdrawals/{id}/delivery-readiness",
+            "/api/v1/withdrawals/{id}/delivery"
         ];
 
         foreach (var caminho in esperados)
@@ -100,11 +103,32 @@ public sealed class ContratosFase3Testes
                 $"O OpenAPI deve documentar {caminho}.");
         }
 
+        string[] codigosEntrega = ["201", "400", "403", "404", "409", "422"];
+        var respostasEntrega = caminhos
+            .GetProperty("/api/v1/withdrawals/{id}/delivery")
+            .GetProperty("post")
+            .GetProperty("responses");
+        foreach (var codigo in codigosEntrega)
+        {
+            Assert.IsTrue(
+                respostasEntrega.TryGetProperty(codigo, out _),
+                $"O OpenAPI deve documentar o status {codigo} da entrega.");
+        }
+
+        var respostasVistoria = caminhos
+            .GetProperty("/api/v1/attendances/{id}/exit-inspection")
+            .GetProperty("post")
+            .GetProperty("responses");
+        foreach (var codigo in new[] { "201", "400", "403", "404", "409", "422" })
+        {
+            Assert.IsTrue(
+                respostasVistoria.TryGetProperty(codigo, out _),
+                $"O OpenAPI deve documentar o status {codigo} da vistoria de saída.");
+        }
+
         string[] proibidos =
         [
-            "/api/v1/withdrawals/{id}/delivery",
-            "/api/v1/withdrawals/{id}/authorizations/{authorizationId}/consume",
-            "/api/v1/withdrawals/{id}/exit-inspection"
+            "/api/v1/withdrawals/{id}/authorizations/{authorizationId}/consume"
         ];
 
         foreach (var caminho in proibidos)

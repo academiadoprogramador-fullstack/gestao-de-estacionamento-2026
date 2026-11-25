@@ -1,0 +1,253 @@
+<!--
+  High-fidelity prototype — Vistoria e entrega
+  Source: proposal.md (What Changes), specs/vistoria-saida/spec.md, specs/entrega-veiculo/spec.md
+  Style: Tailwind CSS 4.3.5 (inlined utility subset, MIT) + project palette and inline CSS.
+  Covered:
+  - Registro único da vistoria de saída / Registro confirmado na tela de entrega; Texto inválido ou propriedades inesperadas; Vistoria inelegível ou concorrente -> form, summary, immutable result.
+  - Proteção e leitura explícita da vistoria de saída / Consulta explícita ou por projeção; Falha fechada na leitura -> explicit read action, readonly content and error.
+  - Prontidão e confirmação de entrega / Entrega normal a partir dos dois estados; Bloqueios antes da confirmação; Exceções independentes na confirmação; Manobrista e sessão inválida -> profile projection, checklist, explicit dialog.
+  - Encerramento e liberação atômicos / Liberação reutilizável; Disputa ou rollback; Replay não afeta nova ocupação -> delivered receipt, refresh and conflict.
+  - Recuperação de tentativa incerta e feedback acessível / POST pendente ou resposta perdida; Rejeição definitiva e recarga; Estado corrente após sucesso -> status, navigation guard, explicit replay.
+  Not specified (presentational only): chrome, fictional identities and review controls.
+  Open questions: none. No network, backend or storage.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protótipo — Entrega do veículo</title>
+  <style>
+    /*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
+    @layer utilities {
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border-width: 0; }
+      .break-words { overflow-wrap: break-word; }
+    }
+    :root { color-scheme: dark; font: 16px/1.5 system-ui,sans-serif; color: #e2e8f0; background: #020617; }
+    * { box-sizing: border-box; } [hidden] { display: none !important; }
+    body { margin: 0; } a { color: #7dd3fc; } :focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+    header { padding: .9rem max(1rem,calc((100% - 70rem)/2)); border-bottom: 1px solid #334155; font-weight: 700; }
+    header span { margin-left: .7rem; font-weight: 400; color: #94a3b8; }
+    main, .review { width: min(70rem,calc(100% - 2rem)); margin: 1rem auto; }
+    .review, .card, dialog { padding: 1rem; border: 1px solid #334155; border-radius: .8rem; background: #0f172a; }
+    .review { border-color: #80601f; color: #fde68a; background: #201809; font-size: .875rem; }
+    summary { cursor: pointer; } .row { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,24rem),1fr)); gap: 1rem; align-items: start; }
+    .eyebrow, h2 { letter-spacing: .09em; text-transform: uppercase; font-size: .85rem; }
+    .eyebrow { color: #7dd3fc; font-weight: 750; margin: 1.25rem 0 .25rem; }
+    h1 { margin: 0; color: #fff; font-size: 1.8rem; } h2, h3 { margin: 0 0 .6rem; }
+    .muted { color: #a5b4c7; } .badge { border-radius: 2rem; padding: .25rem .65rem; background: #17304b; color: #bae6fd; font-weight: 650; }
+    .meta { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit,minmax(9rem,1fr)); margin: .75rem 0 1rem; padding: .85rem; background: #0d1b2e; border: 1px solid #1e3a53; border-radius: .65rem; }
+    dt { font-size: .8rem; color: #a5b4c7; } dd { margin: 0; font-weight: 650; }
+    output, #notice:not(:empty), #problem:not(:empty) { display: block; border: 1px solid #3b5975; border-radius: .5rem; padding: .7rem; margin: .65rem 0; background: #0d2238; }
+    output { white-space: pre-wrap; } #problem:not(:empty) { color: #fecdd3; background: #341722; border-color: #9f5266; }
+    button, textarea, select { font: inherit; color: inherit; background: #020617; border: 1px solid #64748b; border-radius: .5rem; padding: .5rem .65rem; }
+    button { font-weight: 650; cursor: pointer; } button:disabled { opacity: .55; cursor: default; }
+    .primary { color: #02121f; background: #38bdf8; border-color: #38bdf8; } textarea { display: block; width: 100%; margin: .35rem 0; resize: vertical; }
+    ul { padding-left: 1.3rem; } li + li { margin-top: .35rem; } dialog { color: inherit; width: min(30rem, calc(100% - 2rem)); } dialog::backdrop { background: #020617cc; }
+  </style>
+</head>
+<body>
+  <header>Gestão de estacionamento <span>Operação de retirada</span></header>
+  <details class="review" open>
+    <summary>Protótipo para revisão · dados fictícios · sem servidor</summary>
+    <div class="row">
+      <label>Perfil simulado <select id="role"><option>Caixa</option><option>Manobrista</option><option>Administrador</option><option value="Sessão inválida">Sessão inválida</option></select></label>
+      <label>Cenário simulado <select id="fixture"><option value="waiting">Normal · aguardando, sem vistoria</option><option value="searching">Normal · em busca</option><option value="discount">Normal · zerado por desconto</option><option value="blocked">Divergência e saldo sem autorização</option><option value="stale">Autorização financeira obsoleta</option><option value="document">Só exceção documental</option><option value="financial">Só exceção financeira</option><option value="exception">Duas exceções vigentes</option><option value="occupancy">Ocupação alheia</option><option value="delivered">Entregue</option></select></label>
+      <label>Próxima resposta simulada <select id="response"><option value="ok">Normal</option><option value="lost">Perdida após confirmação</option><option value="conflict">Conflito de versão</option><option value="read-error">Falha na leitura explícita</option></select></label>
+    </div>
+  </details>
+  <main>
+    <nav aria-label="Retorno"><a id="back" href="fila-retiradas.html">← Fila de retiradas</a></nav>
+    <p class="eyebrow">Operação de retirada</p>
+    <h1>Entrega do veículo</h1>
+    <p id="problem" tabindex="-1" role="alert"></p>
+    <p id="notice" role="status"></p>
+    <button id="retry" hidden type="button">Repetir a mesma tentativa</button>
+    <button id="refresh" hidden type="button">Recarregar estado</button>
+    <div id="operation">
+      <dl class="meta">
+        <div><dt>Atendimento</dt><dd id="attendance-code">AT-DEMO-0042</dd></div>
+        <div><dt>Veículo</dt><dd id="vehicle-code">DEMO0042 · Série fictícia</dd></div>
+        <div><dt>Vaga</dt><dd>B-07</dd></div>
+        <div><dt>Estado</dt><dd><span class="badge" id="state"></span></dd></div>
+      </dl>
+      <div class="grid">
+        <section class="card" aria-labelledby="inspection-title">
+          <h2 id="inspection-title">Vistoria de saída</h2>
+          <p id="inspection-state" class="muted"></p>
+          <form id="inspection-form" novalidate>
+            <label for="observations">Condições do veículo na saída (obrigatório)</label>
+            <textarea id="observations" rows="4" aria-required="true" aria-describedby="observations-help observations-error"></textarea>
+            <p id="observations-help" class="muted">De 1 a 4.000 caracteres, sem contar espaços nas extremidades. O registro não pode ser editado.</p>
+            <p id="observations-error"></p>
+            <button type="submit" class="primary" id="save">Registrar vistoria</button>
+          </form>
+          <button id="read" type="button" hidden>Consultar texto da vistoria</button>
+          <output id="inspection-text" class="break-words" aria-label="Texto da vistoria de saída" hidden></output>
+        </section>
+        <section class="card" id="readiness" aria-labelledby="readiness-title">
+          <h2 id="readiness-title">Prontidão para entrega</h2>
+          <p class="muted" id="readiness-state"></p>
+          <ul id="conditions"></ul>
+          <button class="primary" id="open-confirm" type="button">Revisar e confirmar entrega</button>
+        </section>
+        <section class="card" id="receipt" aria-labelledby="receipt-title" hidden>
+          <h2 id="receipt-title">Entrega registrada</h2>
+          <p><span id="delivery-code">Entrega ENT-DEMO-0042</span> · Operador de teste · 23/11/2026 às 10:42</p>
+          <p>Vaga B-07 liberada às 10:42 nessa visita.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+  <dialog id="confirmation" aria-labelledby="confirmation-title" aria-describedby="confirmation-info">
+    <h3 id="confirmation-title">Confirmar entrega</h3>
+    <p id="confirmation-info"></p>
+    <div class="row">
+      <form method="dialog"><button type="submit" autofocus>Voltar</button></form>
+      <button class="primary" id="confirm" type="button">Confirmar entrega</button>
+    </div>
+  </dialog>
+  <script>
+    const byId = id => document.getElementById(id);
+    const role = byId('role'), fixture = byId('fixture'), response = byId('response');
+    const scenarios = {
+      waiting: { state: 'Aguardando', text: '' }, searching: { state: 'Em busca' },
+      discount: { state: 'Aguardando', discounted: true },
+      blocked: { state: 'Em busca', divergent: true, balance: 40 },
+      stale: { state: 'Em busca', balance: 40, stale: true },
+      document: { state: 'Aguardando', divergent: true, documentGrant: true },
+      financial: { state: 'Em busca', balance: 40, balanceGrant: true },
+      exception: { state: 'Aguardando', divergent: true, balance: 40, documentGrant: true, balanceGrant: true },
+      occupancy: { state: 'Em busca', noOccupancy: true },
+      delivered: { state: 'Entregue', delivered: true }
+    };
+    const query = new URLSearchParams(location.search);
+    const visit = /^\d{4}$/.test(query.get('visita') || '') ? query.get('visita') : '0042';
+    byId('attendance-code').textContent = `AT-DEMO-${visit}`;
+    byId('vehicle-code').textContent = `DEMO${visit} · Série fictícia`;
+    byId('delivery-code').textContent = `Entrega ENT-DEMO-${visit}`;
+    if ([...role.options].some(option => option.value === query.get('perfil'))) role.value = query.get('perfil');
+    if (Object.hasOwn(scenarios, query.get('cenario'))) fixture.value = query.get('cenario');
+    let server, view, pending, busy;
+    const refresh = () => { view = { ...server }; };
+    const allowed = () => role.value === 'Caixa' || role.value === 'Administrador';
+    const blocked = () => !view.text || (view.divergent && !view.documentGrant) || (view.balance > 0 && !view.balanceGrant) || view.noOccupancy;
+    const alert = text => { byId('problem').textContent = text; if (text) byId('problem').focus(); };
+    const status = text => { byId('notice').textContent = text; };
+    function clearFieldError() {
+      byId('observations').removeAttribute('aria-invalid');
+      byId('observations-error').textContent = '';
+    }
+    function render() {
+      const locked = Boolean(pending);
+      const valid = role.value !== 'Sessão inválida';
+      byId('operation').hidden = !valid;
+      byId('back').setAttribute('aria-disabled', String(locked));
+      byId('back').href = `fila-retiradas.html?${new URLSearchParams({ perfil: role.value })}`;
+      byId('state').textContent = view.state;
+      byId('inspection-state').textContent = view.text ? 'Vistoria registrada · registro imutável' : 'Vistoria ainda não registrada';
+      byId('inspection-form').hidden = Boolean(view.text || view.delivered);
+      byId('observations').disabled = byId('save').disabled = locked;
+      byId('read').hidden = !view.text;
+      byId('read').disabled = locked;
+      byId('receipt').hidden = !view.delivered;
+      byId('readiness').hidden = !allowed() || view.delivered;
+      byId('retry').hidden = !locked || busy;
+      byId('refresh').disabled = locked;
+      role.disabled = fixture.disabled = locked;
+      byId('open-confirm').disabled = locked || Boolean(blocked()) || !byId('refresh').hidden;
+      const cash = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(view.balance || 0);
+      byId('readiness-state').textContent = blocked() ? 'Entrega bloqueada. Consulte as condições abaixo.' : 'Pronto para confirmação. A consulta não reserva a entrega.';
+      byId('conditions').replaceChildren(...[
+        view.text ? 'Vistoria registrada' : 'Bloqueio: registre a vistoria de saída.',
+        !view.divergent ? 'Conferência aprovada' : view.documentGrant ? 'Conferência divergente · exceção documental vigente' : 'Bloqueio: divergência sem autorização documental vigente.',
+        !view.balance ? `Saldo: ${cash}${view.discounted ? ' · cobrança zerada por desconto' : ''}` : view.balanceGrant ? `Saldo: ${cash} · exceção financeira vigente; o saldo continuará pendente.` : `Bloqueio: saldo de ${cash} sem autorização financeira vigente${view.stale ? ' (concessão obsoleta)' : ''}.`,
+        view.noOccupancy ? 'Bloqueio: não há ocupação aberta vinculada ao atendimento.' : 'Ocupação vinculada ao atendimento'
+      ].filter(() => allowed()).map(text => Object.assign(document.createElement('li'), { textContent: text })));
+    }
+    function reset() {
+      server = { text: 'Condições de saída conferidas na demonstração.', ...scenarios[fixture.value] };
+      pending = null; busy = false;
+      refresh(); clearFieldError();
+      byId('observations').value = '';
+      byId('inspection-text').hidden = true;
+      byId('inspection-text').textContent = '';
+      byId('refresh').hidden = true;
+      alert(role.value === 'Sessão inválida' ? 'Sessão inválida. Entre novamente para acessar a operação.' : '');
+      status(''); render();
+    }
+    async function send() {
+      if (!pending || busy) return;
+      busy = true;
+      const result = response.value;
+      response.value = 'ok';
+      alert(''); status('Enviando. Navegação e saída da sessão indisponíveis até resolver a tentativa.'); render();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      busy = false;
+      if (result === 'conflict' && !pending.committed) {
+        pending = null;
+        byId('refresh').hidden = false;
+        status(''); render(); alert('O estado mudou. Recarregue antes de enviar outra confirmação.');
+        return;
+      }
+      const kind = pending.kind;
+      if (!pending.committed) {
+        if (kind === 'inspection') server.text = pending.text;
+        else { server.delivered = true; server.state = 'Entregue'; }
+        pending.committed = true;
+      }
+      if (result === 'lost') {
+        status('Resultado incerto. Volte a enviar somente pela ação de repetir; a tentativa está apenas em memória.'); render();
+        byId('retry').focus(); return;
+      }
+      pending = null; refresh();
+      byId('observations').value = '';
+      status(kind === 'inspection' ? 'Vistoria registrada. Estado atualizado.' : 'Entrega confirmada. Vaga B-07 liberada nesta visita.');
+      render();
+      if (kind === 'inspection') byId('read').focus();
+      else { byId('receipt-title').tabIndex = -1; byId('receipt-title').focus(); }
+    }
+    role.addEventListener('change', reset); fixture.addEventListener('change', reset);
+    byId('back').addEventListener('click', event => { if (pending) event.preventDefault(); });
+    addEventListener('beforeunload', event => { if (pending) { event.preventDefault(); event.returnValue = ''; } });
+    byId('observations').addEventListener('input', clearFieldError);
+    byId('inspection-form').addEventListener('submit', event => {
+      event.preventDefault();
+      if (pending || view.delivered || view.text || role.value === 'Sessão inválida') return;
+      const text = byId('observations').value.trim();
+      if (text.length < 1 || text.length > 4000) {
+        byId('observations').setAttribute('aria-invalid', 'true');
+        byId('observations-error').textContent = 'Informe de 1 a 4.000 caracteres.';
+        alert('Confira o campo Condições do veículo na saída.'); return;
+      }
+      pending = { kind: 'inspection', text, actor: role.value }; void send();
+    });
+    byId('read').addEventListener('click', () => {
+      const output = byId('inspection-text');
+      alert('');
+      if (response.value === 'read-error') {
+        response.value = 'ok'; output.hidden = true; output.textContent = '';
+        alert('Não foi possível consultar a vistoria. Nenhum texto foi retornado.'); return;
+      }
+      output.textContent = server.text; output.hidden = false;
+    });
+    byId('open-confirm').addEventListener('click', () => {
+      byId('confirmation-info').textContent = view.balance > 0
+        ? 'Confirme a entrega e a liberação da vaga B-07 com saldo pendente. A autorização financeira não quita o saldo.'
+        : 'Confirme a entrega e a liberação da vaga B-07. A operação não pode ser desfeita.';
+      byId('confirmation').showModal();
+    });
+    byId('confirm').addEventListener('click', () => {
+      byId('confirmation').close();
+      if (!allowed() || pending || view.delivered || blocked()) return;
+      pending = { kind: 'delivery', actor: role.value }; void send();
+    });
+    byId('retry').addEventListener('click', () => { if (pending?.actor === role.value) void send(); });
+    byId('refresh').addEventListener('click', () => {
+      refresh(); byId('refresh').hidden = true; alert(''); status('Estado atualizado. Revise antes de confirmar.'); render();
+    });
+    reset();
+  </script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!--
+  High-fidelity prototype — Detalhe e histórico de atendimentos
+  Source: proposal.md (What Changes), specs/consulta-atendimentos/spec.md
+  Style: Tailwind CSS 4.3.5 (inlined utility subset, MIT) + project palette and inline CSS.
+  Covered:
+  - Detalhe do atendimento com retirada e caixa / Detalhe de atendimento entregue; Manobrista sem finanças -> exact lookup, delivery ID, author, timestamp and historical release.
+  - Histórico de retirada e caixa por perfil / Histórico de saída por perfil; Histórico operacional do manobrista; Paginação filtrada -> profile projection and event list without sensitive text.
+  Not specified (presentational only): shell, review profile chooser and fictional data. The prototype focuses on delivered visits.
+  Open questions: none. No network, backend or storage.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protótipo — Atendimentos</title>
+  <style>
+    /*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
+    @layer utilities { .break-words { overflow-wrap: break-word; } }
+    :root { color-scheme: dark; font: 16px/1.5 system-ui,sans-serif; background: #020617; color: #e2e8f0; }
+    * { box-sizing: border-box; } body { margin: 0; } [hidden] { display: none !important; }
+    :focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+    header { padding: .9rem max(1rem,calc((100% - 68rem)/2)); border-bottom: 1px solid #334155; font-weight: 700; }
+    main, aside { width: min(68rem,calc(100% - 2rem)); margin: 1rem auto; }
+    aside { border: 1px solid #80601f; color: #fde68a; background: #201809; border-radius: .6rem; padding: .7rem; }
+    h1 { font-size: 1.8rem; margin: 0; color: white; }
+    h2, .eyebrow { font-size: .85rem; letter-spacing: .09em; text-transform: uppercase; }
+    .eyebrow, a { color: #7dd3fc; } .eyebrow { font-weight: 750; margin-bottom: .25rem; }
+    .layout { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,25rem),1fr)); gap: 1rem; align-items: start; }
+    .card { padding: .8rem 1rem 1rem; background: #0f172a; border: 1px solid #334155; border-radius: .8rem; }
+    input, select, button { font: inherit; color: inherit; background: #020617; border: 1px solid #64748b; border-radius: .45rem; padding: .4rem .6rem; }
+    .row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; } .primary { color: #02121f; background: #38bdf8; border-color: #38bdf8; font-weight: 700; }
+    .muted { color: #a5b4c7; } .badge { background: #12362f; color: #a7f3d0; border-radius: 1rem; padding: .15rem .55rem; font-weight: 700; }
+    dl { display: grid; grid-template-columns: repeat(auto-fit,minmax(9rem,1fr)); gap: .7rem; }
+    dt, small { color: #a5b4c7; font-size: .8rem; } dd { margin: 0; }
+    ol { padding-left: 1.4rem; } li { padding: .45rem 0; } li + li { border-top: 1px solid #334155; }
+  </style>
+</head>
+<body>
+  <header>Gestão de estacionamento</header>
+  <aside aria-label="Revisão do protótipo">Protótipo para revisão · dados fictícios.
+    <label>Perfil simulado <select id="role"><option>Manobrista</option><option>Caixa</option><option>Administrador</option></select></label>
+  </aside>
+  <main>
+    <p class="eyebrow">Consulta operacional</p><h1>Atendimentos</h1>
+    <p class="muted">Localize a visita para consultar entrega, liberação e histórico.</p>
+    <div class="layout">
+      <section class="card" aria-labelledby="search-title">
+        <h2 id="search-title">Busca exata</h2>
+        <form class="row" id="search">
+          <label for="identifier">Identificador do atendimento</label>
+          <input id="identifier" value="AT-DEMO-0042" required>
+          <button class="primary" type="submit">Buscar</button>
+        </form>
+        <p id="result" role="status"></p>
+        <button id="open" type="button" hidden>Abrir AT-DEMO-0042 · Entregue</button>
+      </section>
+      <section class="card" id="details" aria-labelledby="detail-title" hidden>
+        <div class="row"><h2 id="detail-title" tabindex="-1">Detalhe do atendimento</h2><span class="badge">Entregue</span></div>
+        <p class="break-words">AT-DEMO-0042 · DEMO0042</p>
+        <dl>
+          <div><dt>Entrega</dt><dd>ENT-DEMO-0042</dd></div>
+          <div><dt>Responsável</dt><dd>Operador de teste</dd></div>
+          <div><dt>Entregue em</dt><dd>23/11/2026 às 10:42</dd></div>
+          <div><dt>Liberação nesta visita</dt><dd>B-07 · 23/11/2026 às 10:42</dd></div>
+        </dl>
+        <div id="financial" hidden></div>
+        <h2>Histórico da visita</h2>
+        <ol id="history"></ol>
+      </section>
+    </div>
+  </main>
+  <script>
+    const byId = id => document.getElementById(id);
+    function renderHistory() {
+      const operator = byId('role').value !== 'Manobrista', financial = byId('financial');
+      financial.hidden = !operator;
+      financial.textContent = operator ? 'Saldo exigível após entrega: R$ 40,00.' : '';
+      const items = [
+        ['Vistoria de saída registrada', '10:31 · Manobrista de teste'],
+        ...(operator ? [['Autorização financeira consumida', '10:42 · Operador de teste']] : []),
+        ['Veículo entregue', '10:42 · Operador de teste'],
+        ['Vaga B-07 liberada', '10:42 · Operador de teste']
+      ];
+      byId('history').replaceChildren(...items.map(([label, time]) => {
+        const item = document.createElement('li');
+        item.append(label, document.createElement('br'), Object.assign(document.createElement('small'), { textContent: time }));
+        return item;
+      }));
+    }
+    byId('role').onchange = renderHistory;
+    byId('search').onsubmit = event => {
+      event.preventDefault();
+      byId('details').hidden = true;
+      const found = byId('identifier').value.trim() === 'AT-DEMO-0042';
+      byId('result').textContent = found ? '1 atendimento encontrado.' : 'Nenhum atendimento encontrado.';
+      byId('open').hidden = !found;
+    };
+    byId('open').onclick = () => {
+      renderHistory(); byId('details').hidden = false; byId('detail-title').focus();
+    };
+  </script>
+</body>
+</html>

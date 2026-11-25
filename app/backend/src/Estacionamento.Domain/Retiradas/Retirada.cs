@@ -173,5 +173,6 @@ public static class VigenciaAutorizacao
     public const string Revogada = "revogada";
     public const string Substituida = "substituida";
     public const string Obsoleta = "obsoleta";
+    public const string Consumida = "consumida";
     public const string NaoConcedida = "nao_concedida";
 }

@@ -14,6 +14,8 @@ public sealed class ResultadoIdempotente
     public const string OperacaoPagamento = "cashier.payment";
     public const string OperacaoDesconto = "cashier.discount";
     public const string OperacaoEstorno = "cashier.refund";
+    public const string OperacaoVistoriaSaida = "attendance.exit-inspection";
+    public const string OperacaoEntrega = "withdrawal.delivery";
 
     public Guid Id { get; set; }
     public Guid AtorId { get; set; }

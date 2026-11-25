@@ -7,6 +7,7 @@ using Estacionamento.Application.Idempotencia;
 using Estacionamento.Application.Seguranca;
 using Estacionamento.Application.Tempo;
 using Estacionamento.Domain.Atendimentos;
+using Estacionamento.Domain.Entrega;
 using Estacionamento.Domain.Idempotencia;
 using Estacionamento.Domain.Retiradas;
 using Estacionamento.Infrastructure.Persistencia;
@@ -114,6 +115,21 @@ public sealed class ServicoAutorizacoes : IServicoAutorizacoes
 
         try
         {
+            // Ordem de bloqueio comum aos escritores: atendimento → pedido.
+            var atendimentoVinculado = await _db.PedidosRetirada
+                .AsNoTracking()
+                .Where(registro => registro.Id == pedidoId)
+                .Select(registro => (Guid?)registro.AtendimentoId)
+                .SingleOrDefaultAsync(cancellationToken)
+                ?? throw ExcecaoAplicacao.NaoEncontrado(
+                    "withdrawal_not_found",
+                    "Pedido de retirada não encontrado.");
+
+            var atendimento = await _db.Atendimentos
+                .FromSqlInterpolated(
+                    $"SELECT * FROM [Atendimentos] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {atendimentoVinculado}")
+                .SingleAsync(cancellationToken);
+
             var pedido = await _db.PedidosRetirada
                 .FromSqlInterpolated(
                     $"SELECT * FROM [PedidosRetirada] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {pedidoId}")
@@ -121,6 +137,15 @@ public sealed class ServicoAutorizacoes : IServicoAutorizacoes
                 ?? throw ExcecaoAplicacao.NaoEncontrado(
                     "withdrawal_not_found",
                     "Pedido de retirada não encontrado.");
+
+            if (pedido.AtendimentoId != atendimento.Id)
+            {
+                throw ExcecaoAplicacao.Conflito(
+                    "concurrency_conflict",
+                    "O vínculo entre pedido e atendimento mudou. Recarregue o estado atual.");
+            }
+
+            await BloquearMutacaoSeEntregueAsync(pedido, atendimento, cancellationToken);
 
             if (!pedido.RowVersion.SequenceEqual(requisicao.VersaoEsperada))
             {
@@ -275,12 +300,36 @@ public sealed class ServicoAutorizacoes : IServicoAutorizacoes
 
         try
         {
-            var pedido = await _db.PedidosRetirada
+            var atendimentoVinculado = await _db.PedidosRetirada
                 .AsNoTracking()
-                .SingleOrDefaultAsync(registro => registro.Id == pedidoId, cancellationToken)
+                .Where(registro => registro.Id == pedidoId)
+                .Select(registro => (Guid?)registro.AtendimentoId)
+                .SingleOrDefaultAsync(cancellationToken)
                 ?? throw ExcecaoAplicacao.NaoEncontrado(
                     "withdrawal_not_found",
                     "Pedido de retirada não encontrado.");
+
+            var atendimento = await _db.Atendimentos
+                .FromSqlInterpolated(
+                    $"SELECT * FROM [Atendimentos] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {atendimentoVinculado}")
+                .SingleAsync(cancellationToken);
+
+            var pedido = await _db.PedidosRetirada
+                .FromSqlInterpolated(
+                    $"SELECT * FROM [PedidosRetirada] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {pedidoId}")
+                .SingleOrDefaultAsync(cancellationToken)
+                ?? throw ExcecaoAplicacao.NaoEncontrado(
+                    "withdrawal_not_found",
+                    "Pedido de retirada não encontrado.");
+
+            if (pedido.AtendimentoId != atendimento.Id)
+            {
+                throw ExcecaoAplicacao.Conflito(
+                    "concurrency_conflict",
+                    "O vínculo entre pedido e atendimento mudou. Recarregue o estado atual.");
+            }
+
+            await BloquearMutacaoSeEntregueAsync(pedido, atendimento, cancellationToken);
 
             var concessao = await _db.ConcessoesAutorizacao
                 .AsNoTracking()
@@ -431,6 +480,26 @@ public sealed class ServicoAutorizacoes : IServicoAutorizacoes
                 pedido.AtendimentoId,
                 concessao.Id,
                 concessao.JustificativaCifrada));
+    }
+
+    private async Task BloquearMutacaoSeEntregueAsync(
+        PedidoRetirada pedido,
+        Atendimento atendimento,
+        CancellationToken cancellationToken)
+    {
+        var entregue =
+            string.Equals(pedido.Estado, EstadoAtendimento.Entregue, StringComparison.Ordinal) ||
+            string.Equals(atendimento.Estado, EstadoAtendimento.Entregue, StringComparison.Ordinal) ||
+            await _db.EntregasVeiculo
+                .AsNoTracking()
+                .AnyAsync(entrega => entrega.PedidoId == pedido.Id, cancellationToken);
+
+        if (entregue)
+        {
+            throw ExcecaoAplicacao.Conflito(
+                CodigosBloqueioEntrega.JaConcluida,
+                "O pedido já foi entregue e não admite nova concessão ou revogação de autorização.");
+        }
     }
 
     private async Task<ResultadoAutorizacao?> BuscarRepeticaoAsync(

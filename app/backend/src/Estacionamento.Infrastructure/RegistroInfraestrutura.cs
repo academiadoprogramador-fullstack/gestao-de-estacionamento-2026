@@ -3,6 +3,7 @@ using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Autenticacao;
 using Estacionamento.Application.Caixa;
 using Estacionamento.Application.Configuracao;
+using Estacionamento.Application.Entrega;
 using Estacionamento.Application.Funcionarios;
 using Estacionamento.Application.Provisionamento;
 using Estacionamento.Application.Retiradas;
@@ -93,6 +94,8 @@ public static class RegistroInfraestrutura
         services.AddScoped<IServicoRetiradas, ServicoRetiradas>();
         services.AddScoped<IServicoCaixa, ServicoCaixa>();
         services.AddScoped<IServicoAutorizacoes, ServicoAutorizacoes>();
+        services.AddScoped<IServicoVistoriaSaida, ServicoVistoriaSaida>();
+        services.AddScoped<IServicoEntrega, ServicoEntrega>();
 
         services.AddSingleton<IValidateOptions<AutenticacaoJwtOptions>, AutenticacaoJwtOptionsValidator>();
         services.AddSingleton<IValidateOptions<ProtecaoDadosOptions>, ProtecaoDadosOptionsValidator>();

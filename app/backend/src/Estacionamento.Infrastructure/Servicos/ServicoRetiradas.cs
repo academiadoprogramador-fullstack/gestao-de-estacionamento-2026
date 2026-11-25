@@ -312,6 +312,22 @@ public sealed class ServicoRetiradas : IServicoRetiradas
             IsolationLevel.ReadCommitted,
             cancellationToken);
 
+        // Vínculo inicial sem bloqueio; os locks são adquiridos na ordem
+        // atendimento → pedido para não formar ciclo com a entrega.
+        var atendimentoVinculado = await _db.PedidosRetirada
+            .AsNoTracking()
+            .Where(registro => registro.Id == pedidoId)
+            .Select(registro => (Guid?)registro.AtendimentoId)
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw ExcecaoAplicacao.NaoEncontrado(
+                "withdrawal_not_found",
+                "Pedido de retirada não encontrado.");
+
+        var atendimento = await _db.Atendimentos
+            .FromSqlInterpolated(
+                $"SELECT * FROM [Atendimentos] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {atendimentoVinculado}")
+            .SingleAsync(cancellationToken);
+
         var pedido = await _db.PedidosRetirada
             .FromSqlInterpolated(
                 $"SELECT * FROM [PedidosRetirada] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {pedidoId}")
@@ -319,6 +335,13 @@ public sealed class ServicoRetiradas : IServicoRetiradas
             ?? throw ExcecaoAplicacao.NaoEncontrado(
                 "withdrawal_not_found",
                 "Pedido de retirada não encontrado.");
+
+        if (pedido.AtendimentoId != atendimento.Id)
+        {
+            throw ExcecaoAplicacao.Conflito(
+                "concurrency_conflict",
+                "O vínculo entre pedido e atendimento mudou. Recarregue o estado atual.");
+        }
 
         if (!pedido.RowVersion.SequenceEqual(versaoEsperada))
         {
@@ -333,11 +356,6 @@ public sealed class ServicoRetiradas : IServicoRetiradas
                 "withdrawal_not_waiting",
                 "O pedido não está mais aguardando busca. Recarregue a fila para ver o estado atual.");
         }
-
-        var atendimento = await _db.Atendimentos
-            .FromSqlInterpolated(
-                $"SELECT * FROM [Atendimentos] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {pedido.AtendimentoId}")
-            .SingleAsync(cancellationToken);
 
         var agora = _relogio.UtcNow;
         var atorOpaco = ator.Id.ToString();

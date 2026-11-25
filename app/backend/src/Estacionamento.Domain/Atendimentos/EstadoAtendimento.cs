@@ -25,6 +25,15 @@ public static class EstadoAtendimento
             Aguardando,
             EmBusca
         };
+
+    /// <summary>Estados produzidos na fila a partir da Fase 4.</summary>
+    public static readonly IReadOnlySet<string> ProduzidosNaFase4 =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            Aguardando,
+            EmBusca,
+            Entregue
+        };
 }
 
 /// <summary>
@@ -47,6 +56,11 @@ public static class TiposEventoAtendimento
     public const string AutorizacaoConcedida = "autorizacao_concedida";
     public const string AutorizacaoRevogada = "autorizacao_revogada";
     public const string JustificativaAdministrativaLida = "justificativa_administrativa_lida";
+    public const string VistoriaSaidaRegistrada = "vistoria_saida_registrada";
+    public const string VistoriaSaidaLida = "vistoria_saida_lida";
+    public const string AutorizacaoConsumida = "autorizacao_consumida";
+    public const string EntregaConfirmada = "entrega_confirmada";
+    public const string VagaLiberada = "vaga_liberada";
 
     /// <summary>
     /// Allowlist de eventos visíveis ao Manobrista. Exclui conferência,
@@ -59,7 +73,11 @@ public static class TiposEventoAtendimento
             VagaOcupada,
             VistoriaEntradaLida,
             PedidoRetiradaRegistrado,
-            BuscaIniciada
+            BuscaIniciada,
+            VistoriaSaidaRegistrada,
+            VistoriaSaidaLida,
+            EntregaConfirmada,
+            VagaLiberada
         };
 }
 
@@ -75,6 +93,7 @@ public static class PropositosCriptografia
     public const string JustificativaEstorno = "justificativa-estorno";
     public const string JustificativaAutorizacaoDocumental = "justificativa-autorizacao-documental";
     public const string JustificativaAutorizacaoFinanceira = "justificativa-autorizacao-financeira";
+    public const string VistoriaSaida = "exit-inspection";
 }
 
 /// <summary>
@@ -98,4 +117,9 @@ public static class TiposAuditoriaNegocio
     public const string AutorizacaoConcedida = "autorizacao_concedida";
     public const string AutorizacaoRevogada = "autorizacao_revogada";
     public const string JustificativaLida = "justificativa_lida";
+    public const string VistoriaSaidaRegistrada = "vistoria_saida_registrada";
+    public const string VistoriaSaidaLida = "vistoria_saida_lida";
+    public const string AutorizacaoConsumida = "autorizacao_consumida";
+    public const string EntregaConfirmada = "entrega_confirmada";
+    public const string VagaLiberada = "vaga_liberada";
 }

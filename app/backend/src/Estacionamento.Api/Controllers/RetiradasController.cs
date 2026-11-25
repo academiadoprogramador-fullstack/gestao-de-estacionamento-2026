@@ -1,6 +1,7 @@
 using Estacionamento.Api.Autenticacao;
 using Estacionamento.Api.Infra;
 using Estacionamento.Application.Caixa;
+using Estacionamento.Application.Entrega;
 using Estacionamento.Application.Retiradas;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,9 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Estacionamento.Api.Controllers;
 
 /// <summary>
-/// Fila, pedido, acerto, ajustes e autorizações da retirada. Não existe rota de
-/// entrega, vistoria de saída, consumo de autorização ou liberação de vaga: a
-/// ausência é intencional e pertence à Fase 4.
+/// Fila, pedido, acerto, ajustes, autorizações, prontidão e entrega da
+/// retirada. A vistoria de saída vive no caminho do atendimento; consumo de
+/// autorização e liberação de vaga só acontecem na confirmação da entrega.
 /// </summary>
 [ApiController]
 [Route("api/v1/withdrawals")]
@@ -20,17 +21,20 @@ public sealed class RetiradasController : ControllerBase
     private readonly IServicoConsultaRetiradas _consulta;
     private readonly IServicoCaixa _caixa;
     private readonly IServicoAutorizacoes _autorizacoes;
+    private readonly IServicoEntrega _entrega;
 
     public RetiradasController(
         IServicoRetiradas retiradas,
         IServicoConsultaRetiradas consulta,
         IServicoCaixa caixa,
-        IServicoAutorizacoes autorizacoes)
+        IServicoAutorizacoes autorizacoes,
+        IServicoEntrega entrega)
     {
         _retiradas = retiradas;
         _consulta = consulta;
         _caixa = caixa;
         _autorizacoes = autorizacoes;
+        _entrega = entrega;
     }
 
     [HttpGet]
@@ -191,6 +195,54 @@ public sealed class RetiradasController : ControllerBase
             authorizationId,
             CorrelacaoHttp.Obter(HttpContext),
             cancellationToken));
+
+    /// <summary>
+    /// Prontidão informativa da entrega, restrita a Caixa/Administrador. Devolve
+    /// estado, saldo, conferência, presença da vistoria, condições, bloqueios e
+    /// versões-base, sem texto, justificativa ou documento. Não reserva a
+    /// entrega.
+    /// </summary>
+    [HttpGet("{id:guid}/delivery-readiness")]
+    [Authorize(Policy = PoliticasAutorizacao.Operador)]
+    [ProducesResponseType<ProntidaoEntrega>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ProntidaoEntrega(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _entrega.ObterProntidaoAsync(
+            AtorHttp.Obter(User),
+            id,
+            cancellationToken));
+
+    /// <summary>
+    /// Confirma explicitamente a entrega, gravando entrega, consumos,
+    /// encerramentos, fim da ocupação, liberação da vaga, histórico, auditoria
+    /// e recibo idempotente na mesma transação. Restrita a Caixa/Administrador.
+    /// Respostas: 201; 400 validação; 403 perfil; 404 pedido; 409 conflito ou já
+    /// entregue; 422 condição de negócio não satisfeita.
+    /// </summary>
+    [HttpPost("{id:guid}/delivery")]
+    [Authorize(Policy = PoliticasAutorizacao.Operador)]
+    [ProducesResponseType<ResultadoEntrega>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ConfirmarEntrega(
+        Guid id,
+        [FromBody] RequisicaoConfirmarEntrega requisicao,
+        CancellationToken cancellationToken)
+    {
+        var resultado = await _entrega.ConfirmarAsync(
+            AtorHttp.Obter(User),
+            id,
+            requisicao,
+            ParametrosHttp.LerChaveIdempotencia(Request),
+            CorrelacaoHttp.Obter(HttpContext),
+            cancellationToken);
+
+        return Created(resultado.Location, resultado);
+    }
 }
 
 /// <summary>Corpo do início de busca com a versão esperada do pedido.</summary>

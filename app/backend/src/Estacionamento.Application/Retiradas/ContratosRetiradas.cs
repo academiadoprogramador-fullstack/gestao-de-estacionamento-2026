@@ -1,4 +1,5 @@
 using Estacionamento.Application.Comum;
+using Estacionamento.Application.Entrega;
 
 namespace Estacionamento.Application.Retiradas;
 
@@ -38,7 +39,9 @@ public sealed record RetiradaFilaOperacional(
     DateTimeOffset SolicitadoEmUtc,
     DateTimeOffset? BuscaIniciadaEmUtc,
     string? ResponsavelBusca,
-    byte[] VersaoPedido);
+    byte[] VersaoPedido,
+    bool VistoriaSaidaRegistrada = false,
+    ResumoEntrega? Entrega = null);
 
 /// <summary>
 /// Projeção financeira da fila, restrita a Caixa/Administrador. O Manobrista
@@ -61,7 +64,9 @@ public sealed record RetiradaFilaFinanceira(
     decimal PagoLiquido,
     decimal Saldo,
     string AutorizacaoDocumental,
-    string AutorizacaoFinanceira);
+    string AutorizacaoFinanceira,
+    bool VistoriaSaidaRegistrada = false,
+    ResumoEntrega? Entrega = null);
 
 /// <summary>Lançamento financeiro resumido, sem justificativa.</summary>
 public sealed record LancamentoResumo(
@@ -82,7 +87,8 @@ public sealed record AutorizacaoResumo(
     int? RevisaoReferencia,
     string? ConcedidaPor,
     DateTimeOffset? ConcedidaEmUtc,
-    bool TemJustificativa);
+    bool TemJustificativa,
+    DateTimeOffset? ConsumidaEmUtc = null);
 
 /// <summary>Detalhe operacional do pedido, sem conferência ou finanças.</summary>
 public sealed record RetiradaDetalheOperacional(
@@ -97,7 +103,9 @@ public sealed record RetiradaDetalheOperacional(
     DateTimeOffset SolicitadoEmUtc,
     DateTimeOffset? BuscaIniciadaEmUtc,
     string? ResponsavelBusca,
-    byte[] VersaoPedido);
+    byte[] VersaoPedido,
+    bool VistoriaSaidaRegistrada = false,
+    ResumoEntrega? Entrega = null);
 
 /// <summary>
 /// Detalhe financeiro do pedido, restrito a Caixa/Administrador. Inclui
@@ -132,7 +140,9 @@ public sealed record RetiradaDetalheFinanceira(
     int RevisaoRazao,
     IReadOnlyList<LancamentoResumo> Lancamentos,
     AutorizacaoResumo AutorizacaoDocumental,
-    AutorizacaoResumo AutorizacaoFinanceira);
+    AutorizacaoResumo AutorizacaoFinanceira,
+    bool VistoriaSaidaRegistrada = false,
+    ResumoEntrega? Entrega = null);
 
 /// <summary>Comandos e consultas do pedido, da fila e do início de busca.</summary>
 public interface IServicoRetiradas

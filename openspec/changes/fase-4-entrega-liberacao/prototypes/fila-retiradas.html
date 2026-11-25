@@ -1,0 +1,124 @@
+<!--
+  High-fidelity prototype — Fila de retiradas
+  Source: proposal.md (What Changes), specs/fila-retiradas/spec.md
+  Style: Tailwind CSS 4.3.5 (inlined utility subset, MIT) + project palette and inline CSS.
+  Covered:
+  - Fila paginada de pedidos de retirada / Consulta pelos três perfis; Paginação completa; Estado entregue ausente; Entregues na fila -> rows, state filter, page controls, delivery metadata.
+  - Acesso à operação de entrega pela fila / Abertura do pedido pela fila; Fila não libera vaga -> local link, refresh and start search without release.
+  Not specified (presentational only): existing chrome and finance columns; profile and empty dataset are review controls.
+  Open questions: none. No network, backend or storage.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protótipo — Fila de retiradas</title>
+  <style>
+    /*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
+    @layer utilities { .overflow-x-auto { overflow-x: auto; } .text-right { text-align: right; } }
+    :root { color-scheme: dark; font: 16px/1.5 system-ui,sans-serif; background: #020617; color: #e2e8f0; }
+    * { box-sizing: border-box; } body { margin: 0; } [hidden] { display: none !important; }
+    header { padding: .9rem max(1rem,calc((100% - 72rem)/2)); border-bottom: 1px solid #334155; font-weight: 700; }
+    main, aside { width: min(72rem,calc(100% - 2rem)); margin: 1rem auto; }
+    aside { border: 1px solid #80601f; border-radius: .65rem; padding: .65rem .85rem; color: #fde68a; background: #201809; }
+    h1 { font-size: 1.8rem; color: white; margin: 0; } h2, .eyebrow, th { font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; }
+    .eyebrow, a { color: #7dd3fc; } .eyebrow { font-weight: 750; margin-bottom: .25rem; }
+    .muted, small { color: #a5b4c7; } .card { border: 1px solid #334155; background: #0f172a; border-radius: .8rem; }
+    .toolbar { padding: .85rem 1rem; display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; }
+    label, button, select { font: inherit; } button, select { background: #020617; color: inherit; border: 1px solid #64748b; padding: .4rem .6rem; border-radius: .5rem; }
+    button:disabled { opacity: .55; } :focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: .9rem; }
+    th, td { padding: .65rem .85rem; border-top: 1px solid #334155; vertical-align: top; }
+    caption { text-align: left; padding: 0 1rem .4rem; }
+    .badge { display: inline-block; white-space: nowrap; background: #18334c; color: #bae6fd; border-radius: 1rem; padding: .12rem .55rem; font-weight: 700; }
+    .delivered { background: #12362f; color: #a7f3d0; } td a { display: block; margin-top: .35rem; }
+    #empty { padding: 1rem; } #feedback { min-height: 1.5rem; } footer { border-top: 1px solid #334155; }
+  </style>
+</head>
+<body>
+  <header>Gestão de estacionamento</header>
+  <aside aria-label="Revisão do protótipo">
+    Protótipo para revisão · dados fictícios.
+    <label>Perfil simulado <select id="role"><option>Caixa</option><option>Manobrista</option><option>Administrador</option></select></label>
+    <label><input id="without-deliveries" type="checkbox"> Amostra sem entregues</label>
+  </aside>
+  <main>
+    <p class="eyebrow">Operação de retirada</p>
+    <h1>Fila de retiradas</h1>
+    <p class="muted">Acompanhe pedidos, vistorias e entregas da unidade.</p>
+    <section class="card" aria-labelledby="queue-title">
+      <div class="toolbar">
+        <h2 id="queue-title">Pedidos na fila</h2>
+        <label for="filter">Estado</label>
+        <select id="filter"><option>Todos</option><option>Aguardando</option><option>Em busca</option><option>Entregue</option></select>
+        <button type="button" id="refresh">Atualizar agora</button>
+        <span id="feedback" class="muted" role="status"></span>
+      </div>
+      <div class="overflow-x-auto" role="region" aria-label="Tabela de retiradas" tabindex="0">
+        <table id="table">
+          <caption class="muted">Pedidos em ordem de registro</caption>
+          <thead><tr><th scope="col">Atendimento</th><th scope="col">Veículo e vaga</th><th scope="col">Estado e entrega</th><th scope="col" id="balance-heading">Saldo</th><th scope="col">Ações</th></tr></thead>
+          <tbody id="orders"></tbody>
+        </table>
+      </div>
+      <p id="empty" hidden>Nenhum pedido neste estado.</p>
+      <footer class="toolbar" aria-label="Paginação de retiradas">
+        <span id="page"></span><button id="previous" type="button">Anterior</button><button id="next" type="button">Próxima</button>
+      </footer>
+    </section>
+  </main>
+  <script>
+    const byId = id => document.getElementById(id), filter = byId('filter'), role = byId('role');
+    const reviewerRole = new URLSearchParams(location.search).get('perfil');
+    if ([...role.options].some(option => option.value === reviewerRole)) role.value = reviewerRole;
+    const rows = Array.from({ length: 23 }, (_, index) => ({
+      number: 42 + index, state: ['Aguardando','Em busca','Entregue'][index % 3]
+    }));
+    let page = 1;
+    function cell(row, text) { const td = row.insertCell(); td.textContent = text; return td; }
+    function render() {
+      const showMoney = role.value !== 'Manobrista';
+      const visible = rows.filter(item => (filter.value === 'Todos' || filter.value === item.state) && (!byId('without-deliveries').checked || item.state !== 'Entregue'));
+      const pages = Math.max(1, Math.ceil(visible.length / 20));
+      page = Math.min(page, pages);
+      const body = byId('orders'); body.replaceChildren();
+      byId('balance-heading').hidden = !showMoney;
+      for (const item of visible.slice((page - 1) * 20, page * 20)) {
+        const row = body.insertRow(), code = String(item.number).padStart(4, '0');
+        cell(row, `AT-DEMO-${code}`);
+        cell(row, `DEMO${code} · vaga B-07`);
+        const state = cell(row, '');
+        const badge = Object.assign(document.createElement('span'), { className: item.state === 'Entregue' ? 'badge delivered' : 'badge', textContent: item.state });
+        state.append(badge);
+        if (item.state === 'Entregue') {
+          state.append(document.createElement('br'), Object.assign(document.createElement('small'), {
+            textContent: `ENT-DEMO-${code} · Operador de teste · 23/11/2026 às 10:42 · vaga liberada às 10:42`
+          }));
+        }
+        if (showMoney) cell(row, item.state === 'Entregue' ? 'R$ 40,00' : 'R$ 0,00').className = 'text-right';
+        const actions = cell(row, '');
+        if (item.state === 'Aguardando') {
+          const start = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Iniciar busca' });
+          start.onclick = () => { item.state = 'Em busca'; render(); byId('feedback').textContent = 'Busca iniciada. A vaga continua ocupada.'; };
+          actions.append(start);
+        }
+        const scenario = { Aguardando: 'waiting', 'Em busca': 'searching', Entregue: 'delivered' }[item.state];
+        const link = Object.assign(document.createElement('a'), { textContent: 'Abrir operação de entrega', href: `entrega.html?${new URLSearchParams({ cenario: scenario, perfil: role.value, visita: code })}` });
+        link.setAttribute('aria-label', `Abrir operação de entrega do atendimento AT-DEMO-${code}`);
+        actions.append(link);
+      }
+      byId('empty').hidden = visible.length > 0;
+      byId('table').hidden = visible.length === 0;
+      byId('page').textContent = `Página ${page} de ${pages} · ${visible.length} pedido(s)`;
+      byId('previous').disabled = page <= 1;
+      byId('next').disabled = page >= pages;
+    }
+    filter.onchange = byId('without-deliveries').onchange = () => { page = 1; render(); };
+    role.onchange = render;
+    byId('previous').onclick = () => { page--; render(); };
+    byId('next').onclick = () => { page++; render(); };
+    byId('refresh').onclick = () => { render(); byId('feedback').textContent = 'Fila atualizada.'; };
+    render();
+  </script>
+</body>
+</html>

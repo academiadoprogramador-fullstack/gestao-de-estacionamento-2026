@@ -1,0 +1,105 @@
+<!--
+  High-fidelity prototype — Caixa após entrega excepcional
+  Source: proposal.md (What Changes), specs/pagamentos-caixa/spec.md, specs/autorizacoes-retirada/spec.md
+  Style: Tailwind CSS 4.3.5 (inlined utility subset, MIT) + project palette and inline CSS.
+  Covered:
+  - Novo acerto após reabertura ou entrega excepcional / Acerto após entrega excepcional; Entrega não é antecipada -> delivered status, due amount, existing payment form, success dialog and refreshed event list.
+  - Acesso à operação de entrega pelo caixa / Abertura da entrega no caixa -> local delivery link.
+  - Consumo vinculado à entrega / Consulta após entrega -> immutable grant consumption without justification or grant/revoke controls.
+  Not specified (presentational only): existing shell and existing payment form/confirmation chrome; the demo focuses on a delivered visit with outstanding balance.
+  Open questions: none. No network, backend or storage.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protótipo — Caixa do atendimento</title>
+  <style>
+    /*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
+    @layer utilities { .break-words { overflow-wrap: break-word; } }
+    :root { color-scheme: dark; font: 16px/1.5 system-ui,sans-serif; background: #020617; color: #e2e8f0; }
+    * { box-sizing: border-box; } body { margin: 0; } [hidden] { display: none !important; }
+    :focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; } a { color: #7dd3fc; }
+    header { padding: .9rem max(1rem,calc((100% - 68rem)/2)); border-bottom: 1px solid #334155; font-weight: 700; }
+    main, aside { width: min(68rem,calc(100% - 2rem)); margin: 1rem auto; }
+    aside { border: 1px solid #80601f; color: #fde68a; background: #201809; border-radius: .6rem; padding: .7rem; }
+    h1 { font-size: 1.8rem; margin: 0; color: white; } h2, .eyebrow { font-size: .85rem; letter-spacing: .09em; text-transform: uppercase; }
+    .eyebrow { color: #7dd3fc; font-weight: 750; margin-bottom: .25rem; }
+    .layout { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,25rem),1fr)); gap: 1rem; align-items: start; }
+    .card, dialog { padding: .8rem 1rem 1rem; background: #0f172a; border: 1px solid #334155; border-radius: .8rem; }
+    .muted { color: #a5b4c7; } .badge { background: #12362f; color: #a7f3d0; border-radius: 1rem; padding: .15rem .55rem; font-weight: 700; }
+    .amount { display: block; font-size: 1.65rem; font-weight: 750; color: #bae6fd; }
+    input, button { font: inherit; color: inherit; background: #020617; border: 1px solid #64748b; border-radius: .45rem; padding: .4rem .6rem; }
+    input[type="text"] { display: block; margin: .25rem 0; width: 10rem; } fieldset { border: 0; margin: .7rem 0; padding: 0; }
+    .primary { color: #02121f; background: #38bdf8; border-color: #38bdf8; font-weight: 700; } .row { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; }
+    #error:not(:empty) { padding: .65rem; background: #341722; color: #fecdd3; border: 1px solid #9f5266; border-radius: .45rem; }
+    dialog { color: inherit; width: min(30rem,calc(100% - 2rem)); } dialog::backdrop { background: #020617cc; }
+  </style>
+</head>
+<body>
+  <header>Gestão de estacionamento</header>
+  <aside>Protótipo para revisão · dados fictícios · visão de Caixa ou Administrador.</aside>
+  <main>
+    <p class="eyebrow">Operação de caixa</p>
+    <h1>Caixa do atendimento</h1>
+    <p class="row"><span class="badge">Entregue</span> <span class="break-words">AT-DEMO-0042 · Entrega ENT-DEMO-0042 · Vaga B-07 liberada às 10:42</span>
+      <a href="entrega.html?cenario=delivered&amp;perfil=Caixa">Abrir operação de entrega</a></p>
+    <div class="layout">
+      <section class="card" aria-labelledby="balance-title">
+        <h2 id="balance-title">Saldo exigível</h2>
+        <p role="status" id="balance-description">Pendente após entrega excepcional <strong class="amount">R$ 40,00</strong></p>
+        <form id="payment" novalidate>
+          <label for="amount">Valor integral em reais</label>
+          <input id="amount" type="text" inputmode="decimal" value="40,00" aria-describedby="error">
+          <fieldset class="row" aria-describedby="error">
+            <legend>Forma de pagamento</legend>
+            <label><input type="radio" name="method" value="Dinheiro" checked> Dinheiro</label>
+            <label><input type="radio" name="method" value="Cartão"> Cartão</label>
+            <label><input type="radio" name="method" value="Pix"> Pix</label>
+          </fieldset>
+          <p id="error" tabindex="-1" role="alert"></p>
+          <button class="primary" type="submit">Registrar pagamento integral</button>
+        </form>
+      </section>
+      <section class="card" aria-labelledby="history-title">
+        <h2>Autorizações da retirada</h2>
+        <p>Financeira · Consumida na entrega ENT-DEMO-0042.</p>
+        <p class="muted">Não é possível conceder ou revogar autorizações de um pedido entregue.</p>
+        <h2 id="history-title">Histórico</h2>
+        <ul id="event-list"><li>10:42 · Autorização financeira consumida</li><li>10:42 · Entrega confirmada e vaga liberada</li></ul>
+      </section>
+    </div>
+  </main>
+  <dialog id="receipt" aria-labelledby="receipt-title">
+    <h2 id="receipt-title">Pagamento confirmado</h2>
+    <p id="receipt-summary"></p>
+    <form method="dialog"><button type="submit" autofocus class="primary">Concluir</button></form>
+  </dialog>
+  <script>
+    const byId = id => document.getElementById(id);
+    const payment = byId('payment'), amount = byId('amount'), error = byId('error');
+    let paid = false;
+    amount.oninput = () => { error.textContent = ''; amount.removeAttribute('aria-invalid'); };
+    payment.onsubmit = event => {
+      event.preventDefault();
+      if (paid) return;
+      const value = amount.value.trim();
+      if (!/^40(?:[,.]0{1,2})?$/.test(value)) {
+        amount.setAttribute('aria-invalid', 'true');
+        error.textContent = 'Informe exatamente o saldo de R$ 40,00.';
+        error.focus(); return;
+      }
+      const method = new FormData(payment).get('method');
+      paid = true; payment.hidden = true;
+      const updated = Object.assign(document.createElement('strong'), { className: 'amount', textContent: 'R$ 0,00' });
+      byId('balance-description').replaceChildren('Saldo quitado. A entrega e a liberação permanecem registradas.', updated);
+      byId('event-list').append(Object.assign(document.createElement('li'), { textContent: `11:03 · Pagamento de R$ 40,00 · ${method}` }));
+      byId('receipt-summary').textContent = `R$ 40,00 · ${method} · Saldo atual R$ 0,00`;
+      byId('receipt').showModal();
+    };
+    byId('receipt').onclose = () => {
+      byId('balance-title').tabIndex = -1; byId('balance-title').focus();
+    };
+  </script>
+</body>
+</html>

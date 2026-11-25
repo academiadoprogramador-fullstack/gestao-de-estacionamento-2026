@@ -32,7 +32,7 @@ O sistema SHALL permitir aos três perfis buscar atendimentos exigindo exatament
 
 ### Requirement: Projeções por perfil no servidor
 
-O sistema SHALL omitir documento completo e vistoria das listagens e do detalhe comum e SHALL omitir versão e valor de tarifa e demais dados financeiros do JSON entregue ao Manobrista, negando também no servidor o que o perfil não pode ver.
+O sistema SHALL omitir documento completo e texto de vistoria das listagens e do detalhe comum e SHALL omitir versão e valor de tarifa e demais dados financeiros do JSON entregue ao Manobrista, negando também no servidor o que o perfil não pode ver.
 
 #### Scenario: Listagem sem conteúdo sensível
 
@@ -113,7 +113,7 @@ A confirmação do check-in e o detalhe SHALL exibir o identificador público em
 
 ### Requirement: Detalhe do atendimento com retirada e caixa
 
-O detalhe do atendimento SHALL informar a existência e o estado do pedido de retirada e os horários de pedido e início de busca, e SHALL entregar a Caixa e Administrador a cobrança, o saldo e o resumo financeiro permitidos, mantendo o Manobrista sem finanças, conferência, autorizações, justificativas, documento completo e vistoria.
+O detalhe do atendimento SHALL informar existência e estado do pedido, horários de pedido e busca e, após entrega, ID, autor e horário da entrega e horário de liberação. Caixa e Administrador SHALL receber cobrança, saldo e resumo financeiro; Manobrista SHALL NOT receber finanças, conferência, autorizações, justificativas, documento completo ou texto de vistoria (F4-R06).
 
 #### Scenario: Atendimento ativo sem pedido
 
@@ -128,16 +128,21 @@ O detalhe do atendimento SHALL informar a existência e o estado do pedido de re
 #### Scenario: Manobrista sem finanças
 
 - **WHEN** um Manobrista consulta o mesmo detalhe
-- **THEN** a resposta não contém valores, saldo, conferência, autorizações, justificativas, documento completo ou vistoria
+- **THEN** a resposta não contém valores, saldo, conferência, autorizações, justificativas, documento completo ou texto de vistoria
 
 #### Scenario: Conteúdo sensível permanece explícito
 
-- **WHEN** Caixa ou Administrador precisa do documento ou da vistoria
+- **WHEN** Caixa ou Administrador precisa do documento, ou algum dos três perfis precisa da vistoria
 - **THEN** a leitura continua exigindo ação explícita e auditoria confirmada antes de retornar o conteúdo
+
+#### Scenario: Detalhe de atendimento entregue
+
+- **WHEN** o funcionário localiza por busca exata e abre o detalhe de um atendimento entregue
+- **THEN** a tela exibe entregue, identificação, horário e responsável pela entrega e a liberação da vaga vinculada, sem confundir histórico da visita com disponibilidade corrente
 
 ### Requirement: Histórico de retirada e caixa por perfil
 
-O histórico do atendimento SHALL registrar pedido, conferência, cálculo, mudanças de estado da fila, pagamentos, descontos, estornos e autorizações com ator e horário UTC e SHALL ser filtrado por perfil antes da paginação, sem expor conteúdo sensível ao Manobrista nem justificativas fora do Administrador.
+O histórico SHALL registrar pedido, conferência, cálculo, estados da fila, pagamentos, descontos, estornos, autorizações, vistoria de saída, consumo, entrega e liberação com ator e horário UTC. SHALL filtrar por perfil antes de paginar, sem incluir texto de vistoria, documento ou justificativa em eventos (F4-R06).
 
 #### Scenario: Histórico financeiro do caixa
 
@@ -161,12 +166,17 @@ O histórico do atendimento SHALL registrar pedido, conferência, cálculo, muda
 
 #### Scenario: Auditoria sem conteúdo
 
-- **WHEN** um evento de retirada, caixa ou autorização é gravado
+- **WHEN** um evento de retirada, caixa, autorização, vistoria de saída, entrega ou liberação é gravado
 - **THEN** a auditoria guarda ator, alvo, tipo e UTC, sem documento, justificativa ou texto de vistoria
+
+#### Scenario: Histórico de saída por perfil
+
+- **WHEN** o funcionário abre o histórico de uma entrega com exceções
+- **THEN** os três perfis veem vistoria registrada, entrega e liberação com ator e horário; somente Caixa e Administrador veem os consumos permitidos, sem texto de justificativa
 
 ### Requirement: Listagem de atendimentos em aberto
 
-O sistema SHALL permitir aos três perfis listar, com paginação, os atendimentos em aberto da unidade (ativo, aguardando ou em busca), em ordem estável de entrada, informando identificação, veículo, vaga, entrada e a existência/estado da retirada, e SHALL NOT incluir finanças, conferência, autorizações, justificativas, documento completo ou vistoria na projeção de lista.
+O sistema SHALL permitir aos três perfis listar, com paginação, os atendimentos em aberto da unidade (ativo, aguardando ou em busca), em ordem estável de entrada, informando identificação, veículo, vaga, entrada e a existência/estado da retirada, e SHALL NOT incluir finanças, conferência, autorizações, justificativas, documento completo ou texto de vistoria na projeção de lista.
 
 #### Scenario: Lista padrão de abertos
 
@@ -191,7 +201,7 @@ O sistema SHALL permitir aos três perfis listar, com paginação, os atendiment
 #### Scenario: Visão do Manobrista
 
 - **WHEN** um Manobrista consulta a lista de atendimentos em aberto
-- **THEN** recebe a mesma projeção operacional, sem valores, saldo, conferência, autorizações, justificativas, documento completo ou vistoria
+- **THEN** recebe a mesma projeção operacional, sem valores, saldo, conferência, autorizações, justificativas, documento completo ou texto de vistoria
 
 #### Scenario: Filtro exclusivo
 

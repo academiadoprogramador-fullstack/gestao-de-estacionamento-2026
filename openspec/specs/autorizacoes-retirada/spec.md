@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define a concessão, revogação e substituição de autorizações administrativas para divergência documental e saldo pendente, vinculadas à versão vigente e preservadas sem consumo, sem alterar conferência, saldo ou direito de retirada.
+Define a concessão, revogação, substituição e consumo de autorizações administrativas para divergência documental e saldo pendente, vinculadas à revisão vigente e preservadas no histórico, sem quitar o saldo, aprovar a conferência ou transferir o direito de retirada.
 
 ## Requirements
 
@@ -37,12 +37,12 @@ O sistema SHALL permitir somente ao Administrador conceder autorização documen
 
 ### Requirement: Vigência derivada da versão
 
-Uma autorização SHALL ser vigente somente enquanto não estiver revogada, não tiver sido substituída e continuar vinculada à revisão corrente da conferência ou da razão; alteração financeira relevante SHALL invalidar a autorização financeira anterior, e nenhuma autorização SHALL expirar por prazo arbitrado.
+Uma autorização SHALL ser vigente somente enquanto o pedido não estiver entregue e a concessão não estiver revogada nem substituída e corresponder à revisão corrente da conferência ou da razão. Mudança financeira relevante SHALL invalidar a concessão financeira anterior; nenhuma autorização SHALL expirar por prazo arbitrado.
 
 #### Scenario: Autorização vigente
 
-- **WHEN** a autorização não foi revogada nem substituída e a revisão vinculada continua corrente
-- **THEN** o estado derivado é vigente e pode ser considerado pela entrega da Fase 4
+- **WHEN** o pedido está aberto, a autorização não foi revogada nem substituída e a revisão vinculada continua corrente
+- **THEN** o estado derivado é vigente e a entrega pode considerá-la para o tipo correspondente
 
 #### Scenario: Alteração financeira invalida
 
@@ -61,12 +61,12 @@ Uma autorização SHALL ser vigente somente enquanto não estiver revogada, não
 
 #### Scenario: Sem expiração por tempo
 
-- **WHEN** decorre tempo sem revogação, substituição ou alteração relevante
+- **WHEN** decorre tempo sem revogação, substituição, entrega ou alteração relevante
 - **THEN** a autorização continua vigente, sem prazo arbitrado de expiração
 
 ### Requirement: Revogação antes do consumo
 
-O Administrador SHALL poder revogar autorização vigente com justificativa, preservando concessão e revogação, e a Fase 3 SHALL NOT consumir autorização em entrega nem expor comando de consumo.
+O Administrador SHALL poder revogar autorização vigente, antes do consumo, com justificativa, preservando concessão e revogação. O sistema SHALL NOT expor comando de consumo independente da entrega.
 
 #### Scenario: Revogação confirmada
 
@@ -80,7 +80,7 @@ O Administrador SHALL poder revogar autorização vigente com justificativa, pre
 
 #### Scenario: Consumo indisponível
 
-- **WHEN** um cliente tenta consumir autorização pela API desta fase
+- **WHEN** um cliente tenta consumir autorização isoladamente pela API, fora do comando de entrega
 - **THEN** a operação é negada sem alterar a autorização, o pedido, a vaga ou a ocupação
 
 #### Scenario: Revogação não reativa
@@ -133,7 +133,7 @@ O sistema SHALL persistir a justificativa da autorização cifrada com propósit
 
 ### Requirement: Autorização não transfere o direito de retirada
 
-A autorização de exceção SHALL NOT transferir o direito de retirada, dispensar a presença do titular, aprovar a conferência, quitar o saldo ou liberar a vaga; ela apenas registra uma condição excepcional para a entrega futura.
+A concessão de exceção SHALL NOT transferir o direito de retirada, dispensar a presença do titular, aprovar a conferência, quitar o saldo ou liberar a vaga; ela apenas registra uma condição excepcional a validar na entrega.
 
 #### Scenario: Terceiro com autorização
 
@@ -147,8 +147,28 @@ A autorização de exceção SHALL NOT transferir o direito de retirada, dispens
 
 #### Scenario: Autorização não entrega
 
-- **WHEN** existem as duas autorizações vigentes
-- **THEN** o pedido continua sem entrega, sem liberação de vaga e sem consumo nesta fase
+- **WHEN** existem as duas autorizações vigentes mas nenhuma entrega foi confirmada
+- **THEN** o pedido continua aberto, sem liberação de vaga ou consumo
+
+### Requirement: Consumo vinculado à entrega
+
+A entrega SHALL consumir somente a autorização corrente e vigente de cada tipo indispensável, uma vez por entrega e tipo, preservando a concessão, a revisão e seu histórico, sem copiar a justificativa. O sistema SHALL NOT aceitar nova concessão, revogação ou consumo para pedido entregue (F4-R03).
+
+#### Scenario: Consumo independente por tipo
+
+- **WHEN** entrega exige autorização para conferência divergente, saldo positivo ou ambos
+- **THEN** somente os tipos necessários são consumidos, referenciando a concessão vigente e sua revisão; a entrega normal não consome autorização
+
+#### Scenario: Autorização anterior bloqueada
+
+- **WHEN** o comando usa controle desatualizado ou autorização revogada, substituída ou obsoleta
+- **THEN** a tentativa não consome a concessão anterior; a tela informa o bloqueio ou conflito e permite recarga, sem entrega parcial
+
+#### Scenario: Consulta após entrega
+
+- **WHEN** Caixa ou Administrador consulta autorizações do pedido entregue no caixa
+- **THEN** vê consumo e estado histórico das autorizações permitidas, sem opções de conceder ou revogar, e solicitações diretas de novas mutações são recusadas
+- **AND** consumos continuam registrados mesmo após acerto posterior; concessão não usada que ainda seria vigente é obsoleta; estados revogada e substituída não são reescritos
 
 ### Requirement: Tentativa incerta da autorização
 

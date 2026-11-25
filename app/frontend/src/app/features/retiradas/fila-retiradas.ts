@@ -16,7 +16,7 @@ import { PollingRetiradasService } from './polling-retiradas.service';
 import { RetiradasApiService } from './retiradas.service';
 import { RetiradaFila } from './retiradas.tipos';
 
-type FiltroEstado = '' | 'aguardando' | 'em busca';
+type FiltroEstado = '' | 'aguardando' | 'em busca' | 'entregue';
 
 @Component({
   selector: 'app-fila-retiradas',
@@ -81,7 +81,7 @@ export class FilaRetiradas implements OnInit, OnDestroy {
     Math.max(1, Math.ceil(this.total() / this.tamanhoPagina())),
   );
 
-  contar(estado: 'aguardando' | 'em busca'): number {
+  contar(estado: 'aguardando' | 'em busca' | 'entregue'): number {
     return this.itens().filter((item) => item.estado === estado).length;
   }
 

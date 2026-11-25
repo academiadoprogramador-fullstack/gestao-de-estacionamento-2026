@@ -10,6 +10,13 @@ export interface TentativaComando<T> {
 }
 
 /**
+ * Atraso antes de exibir o bloqueio visual de um comando pendente. Operações
+ * locais rápidas não devem piscar uma sobreposição amarela na tela; o bloqueio
+ * lógico de navegação/logout continua imediato.
+ */
+const AtrasoExibicaoPendenteMs = 400;
+
+/**
  * Coordenador de comando crítico em memória. Mantém chave e conteúdo apenas
  * até sucesso, rejeição definitiva ou descarte explícito; nunca usa storage.
  *
@@ -23,9 +30,19 @@ export interface TentativaComando<T> {
 export class CoordenadorComandoService implements OnDestroy {
   private readonly pendente = inject(ComandoPendenteService);
   private readonly faseInterna = signal<FaseComando>('ocioso');
+  private readonly exibicaoInterna = signal(false);
   private tentativa: TentativaComando<unknown> | null = null;
+  private temporizadorExibicao: ReturnType<typeof setTimeout> | null = null;
 
   readonly fase = this.faseInterna.asReadonly();
+
+  /**
+   * Indica quando a sobreposição de bloqueio deve aparecer. Um comando rápido
+   * conclui sem exibi-la; um comando demorado a exibe após o atraso, e um
+   * resultado incerto a exibe imediatamente.
+   */
+  readonly exibirBloqueio = this.exibicaoInterna.asReadonly();
+
   readonly bloqueado = computed(
     () => this.faseInterna() === 'pendente' || this.faseInterna() === 'incerto',
   );
@@ -49,6 +66,8 @@ export class CoordenadorComandoService implements OnDestroy {
     if (typeof window !== 'undefined') {
       window.removeEventListener('beforeunload', this.aoSairDoNavegador);
     }
+
+    this.limparTemporizadorExibicao();
   }
 
   /**
@@ -132,5 +151,36 @@ export class CoordenadorComandoService implements OnDestroy {
   private definirFase(fase: FaseComando): void {
     this.faseInterna.set(fase);
     this.pendente.definirBloqueado(fase === 'pendente' || fase === 'incerto');
+    this.agendarExibicao(fase);
+  }
+
+  private agendarExibicao(fase: FaseComando): void {
+    this.limparTemporizadorExibicao();
+
+    if (fase === 'incerto') {
+      this.exibicaoInterna.set(true);
+      return;
+    }
+
+    if (fase !== 'pendente') {
+      this.exibicaoInterna.set(false);
+      return;
+    }
+
+    this.exibicaoInterna.set(false);
+    this.temporizadorExibicao = setTimeout(() => {
+      this.temporizadorExibicao = null;
+
+      if (this.faseInterna() === 'pendente') {
+        this.exibicaoInterna.set(true);
+      }
+    }, AtrasoExibicaoPendenteMs);
+  }
+
+  private limparTemporizadorExibicao(): void {
+    if (this.temporizadorExibicao) {
+      clearTimeout(this.temporizadorExibicao);
+      this.temporizadorExibicao = null;
+    }
   }
 }

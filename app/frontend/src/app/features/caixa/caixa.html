@@ -5,8 +5,8 @@
       <h1 class="mt-1 text-2xl font-semibold text-white">Caixa do atendimento</h1>
       <p class="mt-1 max-w-3xl text-sm text-slate-400">
         Acerto integral do saldo, descontos e estornos preservados como lançamentos, com autorizações
-        separadas para a entrega futura. Esta tela não entrega veículo, não registra vistoria e não
-        libera vaga.
+        consumidas pela entrega. Esta tela não entrega veículo, não registra vistoria e não libera
+        vaga; a operação de entrega é aberta pelo vínculo abaixo.
       </p>
     </div>
     <a
@@ -62,13 +62,14 @@
         Carregando o caixa…
       </p>
     } @else if (pedido(); as atual) {
-      @if (atual.conferencia === 'divergente' || atendimento()?.estado === 'entregue') {
+      @if (atual.conferencia === 'divergente' || entregue()) {
         <div class="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100" role="note">
           <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
-          @if (atendimento()?.estado === 'entregue') {
+          @if (entregue()) {
             <p>
-              Atendimento entregue com saldo: fixture sintética da Fase 4. O acerto integral do saldo é
-              permitido, sem reabrir atendimento, pedido, ocupação ou vaga.
+              Atendimento entregue. O saldo exigível permanece reconciliável e pode ser quitado
+              integralmente, sem reabrir atendimento, pedido, ocupação ou vaga. Consumos e
+              lançamentos anteriores são preservados.
             </p>
           } @else {
             <p>
@@ -89,7 +90,7 @@
                 </h2>
                 <p class="text-xs text-slate-400">
                   Atendimento {{ atendimento()?.identificador }} ·
-                  {{ atendimento()?.estado === 'entregue' ? 'entregue (fixture Fase 4)' : atendimento()?.estado === 'em busca' ? 'em busca' : 'aguardando busca' }}
+                  {{ entregue() ? 'entregue' : atendimento()?.estado === 'em busca' ? 'em busca' : 'aguardando busca' }}
                 </p>
               </div>
               <span class="rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-300">
@@ -565,9 +566,41 @@
                 </div>
               </dl>
               <div class="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-100">
-                Entrega, vistoria de saída, consumo de autorização e liberação da vaga pertencem à
-                Fase 4. Nenhum botão desta tela altera a ocupação.
+                <p>
+                  @if (entregue()) {
+                    Entrega e liberação já registradas. Consulte o recibo e o histórico dessa visita;
+                    novas concessões e revogações estão bloqueadas.
+                  } @else {
+                    A entrega, a vistoria de saída, o consumo de autorização e a liberação da vaga
+                    ocorrem na operação de entrega, sem alterar esta tela.
+                  }
+                </p>
+                <a
+                  [routerLink]="['/delivery', atual.id]"
+                  class="mt-2 inline-block rounded-md border border-sky-400/60 px-2 py-1 text-xs font-semibold text-sky-100 transition hover:bg-sky-400/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                >
+                  Abrir operação de entrega
+                </a>
               </div>
+
+              @if (atual.entrega; as entrega) {
+                <dl class="grid gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-50">
+                  <div>
+                    <dt class="text-xs text-emerald-200/80 uppercase">Entrega</dt>
+                    <dd class="font-mono">{{ entrega.entregaId }} · {{ entrega.responsavel }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs text-emerald-200/80 uppercase">Entregue em</dt>
+                    <dd>{{ formatarDataHora(entrega.entregueEmUtc) }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs text-emerald-200/80 uppercase">Vaga liberada nesta visita</dt>
+                    <dd class="font-mono">
+                      {{ entrega.vagaCodigo }} · {{ formatarDataHora(entrega.liberadaEmUtc) }}
+                    </dd>
+                  </div>
+                </dl>
+              }
             </div>
           </section>
 
@@ -618,6 +651,12 @@
                         · concedida por {{ auth.concedidaPor ?? '—' }} em
                         {{ formatarDataHora(auth.concedidaEmUtc) }}
                       </p>
+                      @if (auth.consumidaEmUtc) {
+                        <p class="text-xs text-emerald-300">
+                          Consumida na entrega em {{ formatarDataHora(auth.consumidaEmUtc) }}.
+                          A concessão, a revisão e o histórico permanecem preservados.
+                        </p>
+                      }
                     } @else {
                       <p class="text-xs text-slate-400">Nenhuma concessão registrada.</p>
                     }
@@ -634,7 +673,7 @@
                       </div>
                     }
 
-                    @if (ehAdministrador()) {
+                    @if (ehAdministrador() && !entregue()) {
                       <details class="rounded-md border border-slate-700 p-2">
                         <summary class="cursor-pointer text-sm font-semibold text-slate-100">
                           {{ auth.id ? 'Substituir' : 'Conceder' }} autorização
@@ -699,6 +738,11 @@
                           </form>
                         </details>
                       }
+                    } @else if (ehAdministrador() && entregue()) {
+                      <p class="text-xs text-amber-200">
+                        Não é possível conceder ou revogar autorizações de um pedido entregue. O
+                        consumo e o estado histórico permanecem visíveis.
+                      </p>
                     } @else {
                       <p class="text-xs text-slate-400">
                         Concessão e revogação são exclusivas do Administrador. O caixa vê apenas a
@@ -715,7 +759,7 @@
     }
   }
 
-  @if (coordenador.bloqueado()) {
+  @if (coordenador.exibirBloqueio()) {
     <div
       class="fixed inset-0 z-30 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
       role="dialog"

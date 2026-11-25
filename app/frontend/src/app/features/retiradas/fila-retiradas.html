@@ -7,8 +7,9 @@
       </p>
       <h1 class="mt-1 text-2xl font-semibold text-white">Fila de retiradas</h1>
       <p class="mt-1 max-w-3xl text-sm text-slate-400">
-        Pedidos calculados e aguardando busca. O manobrista acompanha a operação sem finanças,
-        conferência ou autorizações; a entrega e a liberação da vaga pertencem à Fase 4.
+        Pedidos aguardando, em busca e entregues. O manobrista acompanha a operação sem finanças,
+        conferência ou autorizações; a entrega e a liberação da vaga são confirmadas na operação de
+        entrega. Consultar a fila ou iniciar busca não libera vaga.
       </p>
     </div>
 
@@ -36,8 +37,9 @@
   >
     <svg lucideCircleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true"></svg>
     <p>
-      Esta fase registra pedido, busca, cobrança e caixa. Não há comando de entrega: o pedido não
-      passa a <strong>entregue</strong>, a vaga continua ocupada e autorizações não são consumidas.
+      A fila não libera vaga nem consome autorização. A entrega ocorre somente na
+      <strong>operação de entrega</strong>, com vistoria de saída e confirmação explícita; o registro
+      entregue mostra a vaga histórica daquela visita.
     </p>
   </div>
 
@@ -53,6 +55,11 @@
       <small class="text-xs text-slate-400">Na página atual, com responsável e horário</small>
     </div>
     <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <dt class="text-xs font-semibold tracking-widest text-slate-400 uppercase">Entregues</dt>
+      <dd class="mt-1 text-2xl font-semibold text-white">{{ contar('entregue') }}</dd>
+      <small class="text-xs text-slate-400">Na página atual, com entrega e liberação</small>
+    </div>
+    <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
       <dt class="text-xs font-semibold tracking-widest text-slate-400 uppercase">Atualização</dt>
       <dd class="mt-1 text-base font-semibold text-white">{{ intervaloSegundos }} s</dd>
       <small class="text-xs text-slate-400" aria-live="polite">
@@ -62,13 +69,6 @@
           Polling ativo · sem sobreposição
         }
       </small>
-    </div>
-    <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
-      <dt class="text-xs font-semibold tracking-widest text-slate-400 uppercase">
-        Entregues nesta fase
-      </dt>
-      <dd class="mt-1 text-base font-semibold text-white">Fase 4</dd>
-      <small class="text-xs text-slate-400">Estado e liberação de vaga não são produzidos</small>
     </div>
   </dl>
 
@@ -101,6 +101,7 @@
           <option value="">Todos</option>
           <option value="aguardando">Aguardando</option>
           <option value="em busca">Em busca</option>
+          <option value="entregue">Entregue</option>
         </select>
       </div>
 
@@ -203,10 +204,23 @@
                   <span class="text-xs text-slate-500">horário do servidor</span>
                 </td>
                 <td class="border-b border-slate-800/70 px-4 py-3">
-                  @if (item.estado === 'em busca') {
+                  @if (item.estado === 'entregue') {
+                    <span class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-300">Entregue</span>
+                    @if (item.entrega; as entrega) {
+                      <span class="mt-1 block text-xs text-slate-400">
+                        {{ entrega.entregaId }} · {{ entrega.responsavel }} ·
+                        {{ formatarDataHora(entrega.entregueEmUtc) }} · vaga
+                        {{ entrega.vagaCodigo }} liberada às
+                        {{ formatarDataHora(entrega.liberadaEmUtc) }}
+                      </span>
+                    }
+                  } @else if (item.estado === 'em busca') {
                     <span class="rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-300">Em busca</span>
                   } @else {
                     <span class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-300">Aguardando</span>
+                  }
+                  @if (item.vistoriaSaidaRegistrada) {
+                    <span class="mt-1 block text-xs text-slate-400">Vistoria de saída registrada</span>
                   }
                 </td>
                 <td class="border-b border-slate-800/70 px-4 py-3">
@@ -237,9 +251,16 @@
                       >
                         {{ buscando() === item.id ? 'Iniciando…' : 'Iniciar busca' }}
                       </button>
-                    } @else {
+                    } @else if (item.estado === 'em busca') {
                       <span class="text-xs text-slate-400">Em busca</span>
                     }
+                    <a
+                      [routerLink]="['/delivery', item.id]"
+                      [attr.aria-label]="'Abrir operação de entrega do atendimento ' + item.identificador"
+                      class="rounded-md px-2 py-1 text-xs text-sky-300 transition hover:bg-sky-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                    >
+                      Abrir operação de entrega
+                    </a>
                     @if (ehOperador()) {
                       <a
                         [routerLink]="['/cashier', item.atendimentoId]"

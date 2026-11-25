@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { SessaoService } from '../../core/sessao/sessao.service';
 import { Atendimentos } from './atendimentos';
 import { aguardarAtualizacao } from '../../testing/aguardar';
@@ -11,6 +12,7 @@ function configurar() {
     providers: [
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideRouter([]),
       {
         provide: SessaoService,
         useValue: {
@@ -188,5 +190,60 @@ describe('Atendimentos', () => {
     await Promise.resolve();
 
     expect(componente.leitura()).toBeNull();
+  });
+});
+
+describe('Atendimentos — entrega', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => TestBed.resetTestingModule());
+  afterEach(() => http.verify());
+
+  it('mostra entrega histórica, liberação e leitura explícita da vistoria de saída', async () => {
+    http = configurar();
+    const fixture = await abrirTela(http);
+    const componente = fixture.componentInstance;
+
+    const selecao = componente.selecionar('a');
+    http
+      .expectOne((requisicao) => requisicao.url.endsWith('/attendances/a'))
+      .flush({
+        ...detalhe('a', 'AT-2026-000001'),
+        estado: 'entregue',
+        vistoriaSaidaRegistrada: true,
+        retirada: { pedidoId: '11111111-1111-1111-1111-111111111111', estado: 'entregue' },
+        entrega: {
+          entregaId: 'ENT-0001',
+          responsavel: 'Caixa Sintético',
+          entregueEmUtc: '2026-11-23T10:42:00Z',
+          vagaId: '33333333-3333-3333-3333-333333333333',
+          vagaCodigo: 'A-03',
+          liberadaEmUtc: '2026-11-23T10:42:00Z',
+        },
+      });
+    http
+      .expectOne((requisicao) => requisicao.url.includes('/attendances/a/history'))
+      .flush(paginaHistorico);
+    await selecao;
+    await aguardarAtualizacao(fixture);
+
+    const texto = fixture.nativeElement.textContent;
+    expect(texto).toContain('Entrega e liberação dessa visita');
+    expect(texto).toContain('ENT-0001');
+    expect(texto).toContain('Caixa Sintético');
+    expect(texto).toContain('A-03');
+    expect(texto).toContain('Abrir operação de entrega');
+    expect(texto).toContain('Ler vistoria de saída');
+
+    const leitura = componente.ler('vistoria-saida');
+    http
+      .expectOne((requisicao) => requisicao.url.endsWith('/attendances/a/exit-inspection'))
+      .flush({ conteudo: 'Vistoria de saída explícita.' });
+    await leitura;
+    await aguardarAtualizacao(fixture);
+
+    expect(texto).toBeTruthy();
+    expect(fixture.nativeElement.textContent).toContain('Vistoria de saída');
+    expect(fixture.nativeElement.textContent).toContain('Vistoria de saída explícita.');
   });
 });

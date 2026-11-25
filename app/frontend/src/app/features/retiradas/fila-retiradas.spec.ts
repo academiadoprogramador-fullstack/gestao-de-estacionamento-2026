@@ -180,3 +180,50 @@ describe('FilaRetiradas', () => {
     expect(fixture.componentInstance.conflito()).toContain('Conflito');
   });
 });
+
+describe('FilaRetiradas — entregas', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('exibe entrega e liberação histórica e abre a operação de entrega', async () => {
+    const { http } = configurar('Manobrista');
+    const fixture = TestBed.createComponent(FilaRetiradas);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    http.expectOne((req) => req.url.includes('/withdrawals?')).flush({
+      items: [
+        {
+          ...pedido(),
+          estado: 'entregue',
+          vistoriaSaidaRegistrada: true,
+          entrega: {
+            entregaId: 'ENT-0001',
+            responsavel: 'Caixa Sintético',
+            entregueEmUtc: '2026-11-23T10:42:00Z',
+            vagaId: '33333333-3333-3333-3333-333333333333',
+            vagaCodigo: 'A-03',
+            liberadaEmUtc: '2026-11-23T10:42:00Z',
+          },
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const texto = fixture.nativeElement.textContent;
+    expect(texto).toContain('Entregue');
+    expect(texto).toContain('ENT-0001');
+    expect(texto).toContain('Caixa Sintético');
+    expect(texto).toContain('vaga A-03 liberada');
+    expect(texto).toContain('Abrir operação de entrega');
+    expect(texto).not.toContain('Iniciar busca');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        'a[href="/delivery/11111111-1111-1111-1111-111111111111"]',
+      ),
+    ).not.toBeNull();
+  });
+});

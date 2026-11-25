@@ -15,7 +15,50 @@ describe('CoordenadorComandoService', () => {
 
   afterEach(() => {
     coordenador.descartar();
+    vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('não exibe a sobreposição para comandos rápidos', async () => {
+    let resolver: ((valor: string) => void) | null = null;
+    const envio = coordenador.executar(
+      'conteudo',
+      () =>
+        new Promise<string>((resolverInterno) => {
+          resolver = resolverInterno;
+        }),
+    );
+
+    expect(coordenador.fase()).toBe('pendente');
+    expect(coordenador.bloqueado()).toBe(true);
+    expect(coordenador.exibirBloqueio()).toBe(false);
+
+    resolver!('ok');
+    await expect(envio).resolves.toBe('ok');
+    expect(coordenador.exibirBloqueio()).toBe(false);
+  });
+
+  it('exibe a sobreposição somente após o atraso de um comando pendente', async () => {
+    vi.useFakeTimers();
+    let resolver: ((valor: string) => void) | null = null;
+    const envio = coordenador.executar(
+      'conteudo',
+      () =>
+        new Promise<string>((resolverInterno) => {
+          resolver = resolverInterno;
+        }),
+    );
+
+    expect(coordenador.exibirBloqueio()).toBe(false);
+    vi.advanceTimersByTime(399);
+    expect(coordenador.exibirBloqueio()).toBe(false);
+
+    vi.advanceTimersByTime(1);
+    expect(coordenador.exibirBloqueio()).toBe(true);
+
+    resolver!('ok');
+    await envio;
+    expect(coordenador.exibirBloqueio()).toBe(false);
   });
 
   it('começa ocioso e percorre pendente → sucesso', async () => {
@@ -54,6 +97,7 @@ describe('CoordenadorComandoService', () => {
     await expect(incerto).rejects.toBeInstanceOf(HttpErrorResponse);
     expect(coordenador.fase()).toBe('incerto');
     expect(pendente.bloqueado()).toBe(true);
+    expect(coordenador.exibirBloqueio()).toBe(true);
 
     const replay = coordenador.repetir((chave, conteudo) => {
       chaves.push(chave);

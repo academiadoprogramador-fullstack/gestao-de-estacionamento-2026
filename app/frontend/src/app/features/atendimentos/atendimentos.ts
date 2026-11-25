@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { takeUntil } from 'rxjs/operators';
 import { Subject, firstValueFrom } from 'rxjs';
 import {
@@ -32,6 +33,20 @@ interface AtendimentoLista {
 interface AtendimentoDetalhe extends AtendimentoLista {
   readonly tarifaVersao?: number;
   readonly tarifaValorSnapshot?: number;
+  readonly versaoAtendimento?: string;
+  readonly vistoriaSaidaRegistrada?: boolean;
+  readonly entrega?: {
+    readonly entregaId: string;
+    readonly responsavel: string;
+    readonly entregueEmUtc: string;
+    readonly vagaId: string;
+    readonly vagaCodigo: string;
+    readonly liberadaEmUtc: string;
+  } | null;
+  readonly retirada?: {
+    readonly pedidoId: string;
+    readonly estado: string;
+  } | null;
 }
 
 interface EventoHistorico {
@@ -45,11 +60,12 @@ interface LeituraSensivel {
 }
 
 type TipoBusca = 'placa' | 'identificador';
-type TipoLeitura = 'documento' | 'vistoria';
+type TipoLeitura = 'documento' | 'vistoria' | 'vistoria-saida';
 
 @Component({
   selector: 'app-atendimentos',
   imports: [
+    RouterLink,
     LucideClipboardList,
     LucideCopy,
     LucideEye,
@@ -350,7 +366,9 @@ export class Atendimentos implements OnInit {
     const caminho =
       tipo === 'documento'
         ? `/api/v1/attendances/${id}/document`
-        : `/api/v1/attendances/${id}/entry-inspection`;
+        : tipo === 'vistoria'
+          ? `/api/v1/attendances/${id}/entry-inspection`
+          : `/api/v1/attendances/${id}/exit-inspection`;
 
     try {
       const resposta = await firstValueFrom(

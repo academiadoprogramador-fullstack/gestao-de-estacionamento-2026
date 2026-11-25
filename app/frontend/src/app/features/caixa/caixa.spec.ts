@@ -110,7 +110,7 @@ function configurar(perfil: 'Administrador' | 'Caixa' | 'Manobrista') {
 
 async function carregar(
   perfil: 'Administrador' | 'Caixa' | 'Manobrista',
-  dados = financeiro(),
+  dados: Record<string, unknown> = financeiro(),
 ) {
   const http = configurar(perfil);
   const fixture = TestBed.createComponent(Caixa);
@@ -300,5 +300,50 @@ describe('Caixa', () => {
     expect(fixture.componentInstance.acessoNegado()).toBe(true);
     expect(fixture.nativeElement.textContent).toContain('Acesso negado');
     http.expectNone((req) => req.url.includes('/cashier'));
+  });
+});
+
+describe('Caixa — entrega', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => TestBed.resetTestingModule());
+  afterEach(() => http.verify());
+
+  it('mostra consumo, recibo e bloqueia novas concessões após a entrega', async () => {
+    const dados = {
+      ...financeiro(0, 60),
+      estado: 'entregue',
+      entrega: {
+        entregaId: 'ENT-0001',
+        responsavel: 'Caixa Sintético',
+        entregueEmUtc: new Date().toISOString(),
+        vagaId: '33333333-3333-3333-3333-333333333333',
+        vagaCodigo: 'A-03',
+        liberadaEmUtc: new Date().toISOString(),
+      },
+      autorizacaoFinanceira: {
+        tipo: 'financeira',
+        id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        vigencia: 'consumida',
+        revisaoReferencia: 1,
+        concedidaPor: 'Administrador Sintético',
+        concedidaEmUtc: new Date().toISOString(),
+        temJustificativa: true,
+        consumidaEmUtc: new Date().toISOString(),
+      },
+    };
+
+    const carregado = await carregar('Administrador', dados);
+    http = carregado.http;
+    const { fixture } = carregado;
+    const texto = fixture.nativeElement.textContent;
+
+    expect(texto).toContain('Consumida');
+    expect(texto).toContain('Consumida na entrega em');
+    expect(texto).toContain('Não é possível conceder ou revogar autorizações de um pedido entregue');
+    expect(texto).toContain('Abrir operação de entrega');
+    expect(texto).toContain('ENT-0001');
+    expect(texto).not.toContain('Conceder autorização documental');
+    expect(texto).not.toContain('Revogar autorização vigente');
   });
 });

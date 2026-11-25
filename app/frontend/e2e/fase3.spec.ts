@@ -329,7 +329,7 @@ test.describe.serial('Fase 3 — retirada e caixa', () => {
     expect(armazenamento.sessao).toBe(0);
   });
 
-  test('acerto integral, replay do pagamento e ausência de entrega', async ({
+  test('acerto integral e replay do pagamento sem entrega antecipada', async ({
     page,
     request,
   }) => {
@@ -372,17 +372,11 @@ test.describe.serial('Fase 3 — retirada e caixa', () => {
 
     const caixaFinal = await caixaDaApi(request, tokenCaixa, pedido.pedidoId);
     expect(caixaFinal.saldo).toBe(0);
+    expect(caixaFinal.estado).toBe('aguardando');
     expect((caixaFinal.lancamentos as unknown[]).length).toBe(1);
 
+    await expect(page.getByRole('link', { name: 'Abrir operação de entrega' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Entregar|Liberar vaga/ })).toHaveCount(0);
-    const entrega = await request.get(
-      `${api}/api/v1/withdrawals/${pedido.pedidoId}/delivery`,
-      {
-        headers: { Authorization: `Bearer ${tokenAdmin}` },
-        ignoreHTTPSErrors: true,
-      },
-    );
-    expect(entrega.status()).toBe(404);
   });
 
   test('desconto até zero, estorno com novo acerto e autorizações revogadas/obsoletas', async ({

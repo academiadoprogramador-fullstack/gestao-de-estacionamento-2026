@@ -68,7 +68,7 @@ npx playwright test
 
 - Configuração R2: bucket de desenvolvimento `gestao-de-estacionamento-dev` e bucket de testes `gestao-de-estacionamento-testes`; tokens Cloudflare `gestao-de-estacionamento-dev-api` e `gestao-de-estacionamento-testes-api`, com Access Key ID/Secret somente em User Secrets/.env.
 - O contrato real e o E2E de upload foram validados com o bucket de testes `gestao-de-estacionamento-testes`.
-- Revisão manual de acessibilidade com tecnologia assistiva não executada; o alvo WCAG 2.2 AA não é declarado conformidade.
+- Validação manual de acessibilidade informada pelo solicitante como concluída; ambiente, dispositivo e tecnologia assistiva não foram detalhados nesta evidência. O alvo WCAG 2.2 AA não é declarado conformidade.
 - O orçamento é um controle conservador local, não uma trava de cobrança da Cloudflare. A conta deve ser conferida manualmente.
 - Sem CI, Azure, publicação, quotas reais de produção ou SLA.
 

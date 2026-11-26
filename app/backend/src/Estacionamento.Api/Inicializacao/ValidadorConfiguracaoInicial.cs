@@ -17,6 +17,7 @@ public sealed class ValidadorConfiguracaoInicial
     private readonly IOptions<CorsOptions> _cors;
     private readonly IOptions<ConfiguracaoRegionalOptions> _regional;
     private readonly IOptions<OperacaoOptions> _operacao;
+    private readonly IOptions<ArmazenamentoFotosOptions> _fotos;
 
     public ValidadorConfiguracaoInicial(
         IConfiguration configuracao,
@@ -24,7 +25,8 @@ public sealed class ValidadorConfiguracaoInicial
         IOptions<ProtecaoDadosOptions> protecaoDados,
         IOptions<CorsOptions> cors,
         IOptions<ConfiguracaoRegionalOptions> regional,
-        IOptions<OperacaoOptions> operacao)
+        IOptions<OperacaoOptions> operacao,
+        IOptions<ArmazenamentoFotosOptions> fotos)
     {
         _configuracao = configuracao;
         _jwt = jwt;
@@ -32,6 +34,7 @@ public sealed class ValidadorConfiguracaoInicial
         _cors = cors;
         _regional = regional;
         _operacao = operacao;
+        _fotos = fotos;
     }
 
     public void Validar()
@@ -41,6 +44,7 @@ public sealed class ValidadorConfiguracaoInicial
         _ = _cors.Value;
         _ = _regional.Value;
         _ = _operacao.Value;
+        _ = _fotos.Value;
 
         if (string.IsNullOrWhiteSpace(_configuracao.GetConnectionString(EstacionamentoDbContext.NomeConexao)))
         {

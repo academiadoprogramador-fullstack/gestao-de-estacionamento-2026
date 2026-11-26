@@ -228,6 +228,35 @@ public static class CanonicalizadorIdempotencia
                 new KeyValuePair<string, string>("versaoControleFinanceira", versaoControleFinanceira)
             });
 
+    /// <summary>
+    /// Hash do envio de foto: ator, atendimento, tipo, versão-base e hash do
+    /// arquivo recebido. O binário e o nome original nunca são persistidos no
+    /// registro idempotente.
+    /// </summary>
+    public static byte[] CalcularHashFotoV1(
+        Guid atorId,
+        Guid atendimentoId,
+        string tipo,
+        byte[] versaoAtendimento,
+        byte[] hashEntrada)
+    {
+        var operacao = string.Equals(tipo, "entrada", StringComparison.Ordinal)
+            ? ResultadoIdempotente.OperacaoFotoEntrada
+            : ResultadoIdempotente.OperacaoFotoSaida;
+
+        return CalcularHash(
+            VersaoAtual,
+            operacao,
+            atorId,
+            new[]
+            {
+                new KeyValuePair<string, string>("alvo.atendimento", atendimentoId.ToString("N")),
+                new KeyValuePair<string, string>("tipo", tipo),
+                new KeyValuePair<string, string>("versaoAtendimento", Converter(versaoAtendimento)),
+                new KeyValuePair<string, string>("hashEntrada", Convert.ToBase64String(hashEntrada))
+            });
+    }
+
     private static string FormatarValor(decimal valor) =>
         valor.ToString("0.00", CultureInfo.InvariantCulture);
 

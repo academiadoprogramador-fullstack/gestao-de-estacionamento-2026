@@ -4,6 +4,7 @@ using Estacionamento.Application.Autenticacao;
 using Estacionamento.Application.Caixa;
 using Estacionamento.Application.Configuracao;
 using Estacionamento.Application.Entrega;
+using Estacionamento.Application.Fotos;
 using Estacionamento.Application.Funcionarios;
 using Estacionamento.Application.Provisionamento;
 using Estacionamento.Application.Retiradas;
@@ -96,12 +97,17 @@ public static class RegistroInfraestrutura
         services.AddScoped<IServicoAutorizacoes, ServicoAutorizacoes>();
         services.AddScoped<IServicoVistoriaSaida, ServicoVistoriaSaida>();
         services.AddScoped<IServicoEntrega, ServicoEntrega>();
+        services.AddSingleton<IProcessadorImagens, ProcessadorImagensSkia>();
+        services.AddSingleton<IArmazenamentoFotos, ArmazenamentoFotosR2>();
+        services.AddScoped<IServicoFotosVistoria, ServicoFotosVistoria>();
+        services.AddScoped<IServicoManutencaoFotos, ServicoManutencaoFotos>();
 
         services.AddSingleton<IValidateOptions<AutenticacaoJwtOptions>, AutenticacaoJwtOptionsValidator>();
         services.AddSingleton<IValidateOptions<ProtecaoDadosOptions>, ProtecaoDadosOptionsValidator>();
         services.AddSingleton<IValidateOptions<CorsOptions>, CorsOptionsValidator>();
         services.AddSingleton<IValidateOptions<ConfiguracaoRegionalOptions>, ConfiguracaoRegionalOptionsValidator>();
         services.AddSingleton<IValidateOptions<OperacaoOptions>, OperacaoOptionsValidator>();
+        services.AddSingleton<IValidateOptions<ArmazenamentoFotosOptions>, ArmazenamentoFotosOptionsValidator>();
 
         services.AddOptions<AutenticacaoJwtOptions>()
             .Bind(configuracao.GetSection(AutenticacaoJwtOptions.Secao))
@@ -117,6 +123,9 @@ public static class RegistroInfraestrutura
             .ValidateOnStart();
         services.AddOptions<OperacaoOptions>()
             .Bind(configuracao.GetSection(OperacaoOptions.Secao))
+            .ValidateOnStart();
+        services.AddOptions<ArmazenamentoFotosOptions>()
+            .Bind(configuracao.GetSection(ArmazenamentoFotosOptions.Secao))
             .ValidateOnStart();
         services.AddOptions<ContasSinteticasOptions>()
             .Bind(configuracao.GetSection(ContasSinteticasOptions.Secao));

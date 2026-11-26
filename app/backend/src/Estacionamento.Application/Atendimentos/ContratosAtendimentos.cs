@@ -1,5 +1,6 @@
 using Estacionamento.Application.Comum;
 using Estacionamento.Application.Entrega;
+using Estacionamento.Application.Fotos;
 
 namespace Estacionamento.Application.Atendimentos;
 
@@ -53,7 +54,9 @@ public sealed record AtendimentoLista(
     string VagaCodigo,
     DateTimeOffset EntradaUtc,
     Guid? PedidoId = null,
-    string? EstadoRetirada = null);
+    string? EstadoRetirada = null,
+    int FotosEntrada = 0,
+    int FotosSaida = 0);
 
 /// <summary>
 /// Resumo operacional da retirada exibido no detalhe do atendimento, sem
@@ -98,7 +101,8 @@ public sealed record AtendimentoDetalheOperacional(
     byte[] VersaoAtendimento,
     ResumoRetiradaOperacional? Retirada = null,
     bool VistoriaSaidaRegistrada = false,
-    ResumoEntrega? Entrega = null);
+    ResumoEntrega? Entrega = null,
+    ResumoFotosVistoria? Fotos = null);
 
 /// <summary>
 /// Detalhe administrativo/operador. O DTO do Manobrista é outro tipo e não
@@ -118,7 +122,8 @@ public sealed record AtendimentoDetalheAdministrativo(
     decimal TarifaValorSnapshot,
     ResumoRetiradaFinanceiro? Retirada = null,
     bool VistoriaSaidaRegistrada = false,
-    ResumoEntrega? Entrega = null);
+    ResumoEntrega? Entrega = null,
+    ResumoFotosVistoria? Fotos = null);
 
 /// <summary>Evento do histórico, sem conteúdo sensível.</summary>
 public sealed record EventoHistorico(

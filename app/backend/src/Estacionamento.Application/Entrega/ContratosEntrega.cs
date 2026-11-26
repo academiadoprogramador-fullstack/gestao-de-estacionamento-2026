@@ -1,4 +1,5 @@
 using Estacionamento.Application.Comum;
+using Estacionamento.Application.Fotos;
 using Estacionamento.Domain.Entrega;
 
 namespace Estacionamento.Application.Entrega;
@@ -76,7 +77,8 @@ public sealed record ProntidaoEntrega(
     IReadOnlyList<string> Bloqueios,
     bool Pronta,
     ResumoEntrega? Entrega,
-    VersoesEntrega Versoes);
+    VersoesEntrega Versoes,
+    ResumoFotosVistoria? Fotos = null);
 
 /// <summary>Recibo mínimo da entrega confirmada ou repetida.</summary>
 public sealed record ResultadoEntrega(

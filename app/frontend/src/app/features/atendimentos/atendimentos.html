@@ -426,6 +426,32 @@
             }
           </section>
 
+          @if (item.fotos; as fotos) {
+            <app-fotos-vistoria
+              [atendimentoId]="item.id"
+              tipo="entrada"
+              titulo="Fotos da vistoria de entrada"
+              [versaoAtendimento]="item.versaoAtendimento || ''"
+              [podeEnviar]="ehOperador()"
+              [quantidadeInicial]="fotos.quantidadeEntrada"
+              [janelaInicial]="fotos.janelaEntrada"
+              [orcamentoInicial]="fotos.orcamento"
+            />
+
+            @if (item.vistoriaSaidaRegistrada) {
+              <app-fotos-vistoria
+                [atendimentoId]="item.id"
+                tipo="saida"
+                titulo="Fotos da vistoria de saída"
+                [versaoAtendimento]="item.versaoAtendimento || ''"
+                [podeEnviar]="false"
+                [quantidadeInicial]="fotos.quantidadeSaida"
+                [janelaInicial]="fotos.janelaSaida"
+                [orcamentoInicial]="fotos.orcamento"
+              />
+            }
+          }
+
           <section aria-labelledby="titulo-historico">
             <h3
               id="titulo-historico"

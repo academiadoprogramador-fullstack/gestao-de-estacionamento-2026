@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Estacionamento.Domain.Atendimentos;
 using Estacionamento.Domain.Auditoria;
 using Estacionamento.Domain.Entrega;
+using Estacionamento.Domain.Fotos;
 using Estacionamento.Domain.Idempotencia;
 using Estacionamento.Domain.Retiradas;
 using Estacionamento.Domain.Tarifas;
@@ -69,6 +70,12 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
 
     public DbSet<ConsumoAutorizacao> ConsumosAutorizacao => Set<ConsumoAutorizacao>();
 
+    public DbSet<FotoVistoria> FotosVistoria => Set<FotoVistoria>();
+
+    public DbSet<ConsumoFotosMensal> ConsumosFotosMensais => Set<ConsumoFotosMensal>();
+
+    public DbSet<TarefaFoto> TarefasFotos => Set<TarefaFoto>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -131,6 +138,7 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
         ConfigurarAuditoriaNegocio(builder);
         ConfigurarRetiradas(builder);
         ConfigurarEntrega(builder);
+        ConfigurarFotos(builder);
 
         // Sequência usada exclusivamente pelo identificador público do
         // atendimento; não é chave primária nem expõe a chave interna.
@@ -558,6 +566,112 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
         });
     }
 
+    private static void ConfigurarFotos(ModelBuilder builder)
+    {
+        builder.Entity<FotoVistoria>(entidade =>
+        {
+            entidade.ToTable("FotosVistoria", tabela =>
+            {
+                tabela.HasCheckConstraint(
+                    "CK_FotosVistoria_Tipo",
+                    "[Tipo] IN ('entrada', 'saida')");
+                tabela.HasCheckConstraint(
+                    "CK_FotosVistoria_Estado",
+                    "[Estado] IN ('pendente', 'disponivel', 'limpeza_pendente', 'descartada')");
+                tabela.HasCheckConstraint(
+                    "CK_FotosVistoria_Vinculo",
+                    "([Tipo] = 'entrada' AND [VistoriaEntradaId] IS NOT NULL AND [VistoriaSaidaId] IS NULL) OR " +
+                    "([Tipo] = 'saida' AND [VistoriaSaidaId] IS NOT NULL AND [VistoriaEntradaId] IS NULL)");
+                tabela.HasCheckConstraint(
+                    "CK_FotosVistoria_Dimensoes",
+                    "[Largura] > 0 AND [Altura] > 0 AND [TamanhoBytes] > 0");
+            });
+
+            entidade.HasKey(foto => foto.Id);
+            entidade.Property(foto => foto.Tipo).HasMaxLength(16).IsRequired();
+            entidade.Property(foto => foto.Estado).HasMaxLength(24).IsRequired();
+            entidade.Property(foto => foto.ChaveObjeto).HasMaxLength(200).IsRequired();
+            entidade.Property(foto => foto.Mime).HasMaxLength(64).IsRequired();
+            entidade.Property(foto => foto.HashSha256).HasColumnType("binary(32)").IsRequired();
+            entidade.Property(foto => foto.HashEntradaSha256).HasColumnType("binary(32)").IsRequired();
+            entidade.Property(foto => foto.VersaoAtendimentoBase).HasColumnType("varbinary(max)").IsRequired();
+            entidade.Property(foto => foto.RowVersion).IsRowVersion();
+
+            entidade.HasOne<Atendimento>()
+                .WithMany()
+                .HasForeignKey(foto => foto.AtendimentoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<VistoriaEntrada>()
+                .WithMany()
+                .HasForeignKey(foto => foto.VistoriaEntradaId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<VistoriaSaida>()
+                .WithMany()
+                .HasForeignKey(foto => foto.VistoriaSaidaId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<UsuarioAplicacao>()
+                .WithMany()
+                .HasForeignKey(foto => foto.AtorId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasOne<ResultadoIdempotente>()
+                .WithOne()
+                .HasForeignKey<FotoVistoria>(foto => foto.ResultadoIdempotenteId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entidade.HasIndex(foto => foto.ChaveObjeto).IsUnique();
+            entidade.HasIndex(foto => foto.ResultadoIdempotenteId).IsUnique();
+            entidade.HasIndex(foto => new { foto.AtendimentoId, foto.Tipo, foto.Estado });
+            entidade.HasIndex(foto => new { foto.Estado, foto.ReservadoAteUtc });
+            entidade.HasIndex(foto => new { foto.Estado, foto.ConfirmadoEmUtc });
+        });
+
+        builder.Entity<ConsumoFotosMensal>(entidade =>
+        {
+            entidade.ToTable("ConsumosFotosMensais", tabela =>
+            {
+                tabela.HasCheckConstraint(
+                    "CK_ConsumosFotosMensais_Estado",
+                    "[EstadoReconciliacao] IN ('conhecido', 'desconhecido')");
+                tabela.HasCheckConstraint(
+                    "CK_ConsumosFotosMensais_NaoNegativos",
+                    "[BytesArmazenados] >= 0 AND [BytesTransferidos] >= 0 AND " +
+                    "[OperacoesClasseA] >= 0 AND [OperacoesClasseB] >= 0 AND [BytesReservados] >= 0");
+            });
+            entidade.HasKey(consumo => consumo.Id);
+            entidade.Property(consumo => consumo.Competencia).HasMaxLength(7).IsRequired();
+            entidade.Property(consumo => consumo.Ambiente).HasMaxLength(64).IsRequired();
+            entidade.Property(consumo => consumo.EstadoReconciliacao).HasMaxLength(24).IsRequired();
+            entidade.Property(consumo => consumo.RowVersion).IsRowVersion();
+            entidade.HasIndex(consumo => new { consumo.Competencia, consumo.Ambiente }).IsUnique();
+        });
+
+        builder.Entity<TarefaFoto>(entidade =>
+        {
+            entidade.ToTable("TarefasFotos", tabela =>
+            {
+                tabela.HasCheckConstraint(
+                    "CK_TarefasFotos_Tipo",
+                    "[Tipo] IN ('confirmacao', 'limpeza', 'retencao')");
+                tabela.HasCheckConstraint(
+                    "CK_TarefasFotos_Estado",
+                    "[Estado] IN ('pendente', 'concluida', 'falha')");
+            });
+            entidade.HasKey(tarefa => tarefa.Id);
+            entidade.Property(tarefa => tarefa.Tipo).HasMaxLength(16).IsRequired();
+            entidade.Property(tarefa => tarefa.Estado).HasMaxLength(16).IsRequired();
+            entidade.Property(tarefa => tarefa.UltimoErroCodigo).HasMaxLength(64);
+            entidade.Property(tarefa => tarefa.RowVersion).IsRowVersion();
+            entidade.HasOne<FotoVistoria>()
+                .WithMany()
+                .HasForeignKey(tarefa => tarefa.FotoId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entidade.HasIndex(tarefa => new { tarefa.Estado, tarefa.LeaseAteUtc });
+            entidade.HasIndex(tarefa => new { tarefa.FotoId, tarefa.Tipo });
+        });
+    }
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ImpedirAlteracaoDeHistorico();
@@ -615,6 +729,57 @@ public sealed class EstacionamentoDbContext : IdentityDbContext<UsuarioAplicacao
         {
             throw new InvalidOperationException(
                 $"Registros append-only não podem ser alterados ou excluídos: {string.Join(", ", alteracoesProibidas.Distinct())}.");
+        }
+
+        ImpedirAlteracaoDeConteudoFoto();
+    }
+
+    /// <summary>
+    /// A foto pode avançar apenas entre estados de reserva, disponibilidade,
+    /// limpeza e descarte. Vínculo, chave, hash, autoria e dimensões são
+    /// imutáveis após a reserva.
+    /// </summary>
+    private void ImpedirAlteracaoDeConteudoFoto()
+    {
+        var camposImutaveis = new[]
+        {
+            nameof(FotoVistoria.AtendimentoId),
+            nameof(FotoVistoria.Tipo),
+            nameof(FotoVistoria.VistoriaEntradaId),
+            nameof(FotoVistoria.VistoriaSaidaId),
+            nameof(FotoVistoria.ChaveObjeto),
+            nameof(FotoVistoria.Mime),
+            nameof(FotoVistoria.TamanhoBytes),
+            nameof(FotoVistoria.Largura),
+            nameof(FotoVistoria.Altura),
+            nameof(FotoVistoria.HashSha256),
+            nameof(FotoVistoria.HashEntradaSha256),
+            nameof(FotoVistoria.AtorId),
+            nameof(FotoVistoria.CriadoEmUtc),
+            nameof(FotoVistoria.VersaoAtendimentoBase),
+            nameof(FotoVistoria.ResultadoIdempotenteId)
+        };
+
+        foreach (var entrada in ChangeTracker.Entries<FotoVistoria>())
+        {
+            if (entrada.State == EntityState.Deleted)
+            {
+                throw new InvalidOperationException("Fotos de vistoria não podem ser excluídas; use o descarte auditado.");
+            }
+
+            if (entrada.State != EntityState.Modified)
+            {
+                continue;
+            }
+
+            foreach (var campo in camposImutaveis)
+            {
+                if (entrada.Property(campo).IsModified)
+                {
+                    throw new InvalidOperationException(
+                        $"O campo {campo} da foto de vistoria é imutável após a reserva.");
+                }
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 import { ResumoEntrega } from '../retiradas/retiradas.tipos';
+import { ResumoFotosVistoria } from '../../shared/fotos-vistoria/fotos-vistoria.tipos';
 
 /** Condição avaliada pelo servidor para a prontidão da entrega. */
 export interface CondicaoEntrega {
@@ -34,6 +35,7 @@ export interface ProntidaoEntrega {
   readonly pronta: boolean;
   readonly entrega: ResumoEntrega | null;
   readonly versoes: VersoesEntrega;
+  readonly fotos?: ResumoFotosVistoria | null;
 }
 
 export interface ResultadoVistoriaSaida {

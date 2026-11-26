@@ -352,6 +352,225 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                     b.ToTable("VistoriasSaida", (string)null);
                 });
 
+            modelBuilder.Entity("Estacionamento.Domain.Fotos.ConsumoFotosMensal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Ambiente")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset>("AtualizadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<long>("BytesArmazenados")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BytesReservados")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BytesTransferidos")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Competencia")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
+                    b.Property<string>("EstadoReconciliacao")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<long>("OperacoesClasseA")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("OperacoesClasseB")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Competencia", "Ambiente")
+                        .IsUnique();
+
+                    b.ToTable("ConsumosFotosMensais", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ConsumosFotosMensais_Estado", "[EstadoReconciliacao] IN ('conhecido', 'desconhecido')");
+
+                            t.HasCheckConstraint("CK_ConsumosFotosMensais_NaoNegativos", "[BytesArmazenados] >= 0 AND [BytesTransferidos] >= 0 AND [OperacoesClasseA] >= 0 AND [OperacoesClasseB] >= 0 AND [BytesReservados] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Fotos.FotoVistoria", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Altura")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("AtendimentoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AtorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ChaveObjeto")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTimeOffset?>("ConfirmadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CriadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<byte[]>("HashEntradaSha256")
+                        .IsRequired()
+                        .HasColumnType("binary(32)");
+
+                    b.Property<byte[]>("HashSha256")
+                        .IsRequired()
+                        .HasColumnType("binary(32)");
+
+                    b.Property<int>("Largura")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Mime")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset?>("ReservadoAteUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ResultadoIdempotenteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<long>("TamanhoBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<byte[]>("VersaoAtendimentoBase")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<Guid?>("VistoriaEntradaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("VistoriaSaidaId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtorId");
+
+                    b.HasIndex("ChaveObjeto")
+                        .IsUnique();
+
+                    b.HasIndex("ResultadoIdempotenteId")
+                        .IsUnique();
+
+                    b.HasIndex("VistoriaEntradaId");
+
+                    b.HasIndex("VistoriaSaidaId");
+
+                    b.HasIndex("Estado", "ConfirmadoEmUtc");
+
+                    b.HasIndex("Estado", "ReservadoAteUtc");
+
+                    b.HasIndex("AtendimentoId", "Tipo", "Estado");
+
+                    b.ToTable("FotosVistoria", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FotosVistoria_Dimensoes", "[Largura] > 0 AND [Altura] > 0 AND [TamanhoBytes] > 0");
+
+                            t.HasCheckConstraint("CK_FotosVistoria_Estado", "[Estado] IN ('pendente', 'disponivel', 'limpeza_pendente', 'descartada')");
+
+                            t.HasCheckConstraint("CK_FotosVistoria_Tipo", "[Tipo] IN ('entrada', 'saida')");
+
+                            t.HasCheckConstraint("CK_FotosVistoria_Vinculo", "([Tipo] = 'entrada' AND [VistoriaEntradaId] IS NOT NULL AND [VistoriaSaidaId] IS NULL) OR ([Tipo] = 'saida' AND [VistoriaSaidaId] IS NOT NULL AND [VistoriaEntradaId] IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Fotos.TarefaFoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CriadoEmUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("FotoId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("LeaseAteUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Tentativas")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("UltimoErroCodigo")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Estado", "LeaseAteUtc");
+
+                    b.HasIndex("FotoId", "Tipo");
+
+                    b.ToTable("TarefasFotos", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TarefasFotos_Estado", "[Estado] IN ('pendente', 'concluida', 'falha')");
+
+                            t.HasCheckConstraint("CK_TarefasFotos_Tipo", "[Tipo] IN ('confirmacao', 'limpeza', 'retencao')");
+                        });
+                });
+
             modelBuilder.Entity("Estacionamento.Domain.Idempotencia.ResultadoIdempotente", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1236,6 +1455,46 @@ namespace Estacionamento.Infrastructure.Persistencia.Migrations
                     b.HasOne("Estacionamento.Domain.Retiradas.PedidoRetirada", null)
                         .WithMany()
                         .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Fotos.FotoVistoria", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Atendimentos.Atendimento", null)
+                        .WithMany()
+                        .HasForeignKey("AtendimentoId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Infrastructure.Identidade.UsuarioAplicacao", null)
+                        .WithMany()
+                        .HasForeignKey("AtorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Idempotencia.ResultadoIdempotente", null)
+                        .WithOne()
+                        .HasForeignKey("Estacionamento.Domain.Fotos.FotoVistoria", "ResultadoIdempotenteId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Estacionamento.Domain.Atendimentos.VistoriaEntrada", null)
+                        .WithMany()
+                        .HasForeignKey("VistoriaEntradaId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Estacionamento.Domain.Entrega.VistoriaSaida", null)
+                        .WithMany()
+                        .HasForeignKey("VistoriaSaidaId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("Estacionamento.Domain.Fotos.TarefaFoto", b =>
+                {
+                    b.HasOne("Estacionamento.Domain.Fotos.FotoVistoria", null)
+                        .WithMany()
+                        .HasForeignKey("FotoId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });

@@ -83,6 +83,35 @@ const MENSAGENS: Readonly<Record<string, string>> = {
   launch_not_found: 'Lançamento financeiro não encontrado.',
   launch_without_justification: 'Este lançamento não possui justificativa administrativa.',
   ledger_not_found: 'O atendimento não possui razão financeira.',
+  photo_storage_disabled:
+    'O envio de fotos está desabilitado. A vistoria textual continua disponível.',
+  photo_storage_unavailable:
+    'O armazenamento privado de fotos está indisponível. A vistoria textual continua disponível.',
+  photo_processing_busy:
+    'O processamento de imagens está ocupado. Tente novamente em instantes; a vistoria textual não foi afetada.',
+  photo_processing_timeout:
+    'O processamento da imagem excedeu o tempo limite. A vistoria textual continua disponível.',
+  photo_unsupported_format: 'Envie uma imagem JPEG, PNG ou WebP estática.',
+  photo_corrupt: 'A imagem está corrompida ou não pôde ser decodificada.',
+  photo_animated: 'Animações não são aceitas; envie uma imagem estática.',
+  photo_too_large: 'A foto excede o limite de 5 MiB por arquivo.',
+  photo_dimensions_exceeded: 'A imagem excede 20 MP ou 10.000 px por lado.',
+  photo_limit_reached: 'O limite de cinco fotos por vistoria foi atingido.',
+  photo_window_closed:
+    'A janela de fotos desta vistoria está encerrada. As fotos confirmadas permanecem consultáveis.',
+  photo_quota_exceeded:
+    'O orçamento de fotos atingiu o limite de segurança. Tente novamente após a reconciliação.',
+  photo_quota_unknown:
+    'O consumo de fotos está desconhecido. As fotos ficam suspensas até a reconciliação.',
+  photo_content_unavailable: 'O conteúdo da foto não está disponível.',
+  photo_not_found: 'Foto não encontrada para esta vistoria.',
+  photo_expired: 'A foto venceu pela retenção e não está mais disponível.',
+  photo_idempotency_conflict:
+    'Esta tentativa de foto já foi usada com outro conteúdo. Revise a seleção antes de tentar novamente.',
+  photo_requires_inspection: 'Registre a vistoria textual antes de anexar fotos.',
+  photo_required: 'Selecione uma foto JPEG, PNG ou WebP para enviar.',
+  stale_attendance_version:
+    'O atendimento foi atualizado por outra operação. Recarregue o estado atual antes de anexar a foto.',
 };
 
 /** Mensagem acessível para falhas da API, priorizando o código estável. */

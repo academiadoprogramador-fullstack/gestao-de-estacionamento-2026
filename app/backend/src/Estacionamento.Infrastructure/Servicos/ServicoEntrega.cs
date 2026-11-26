@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Estacionamento.Application.Auditoria;
 using Estacionamento.Application.Comum;
 using Estacionamento.Application.Entrega;
+using Estacionamento.Application.Fotos;
 using Estacionamento.Application.Idempotencia;
 using Estacionamento.Application.Tempo;
 using Estacionamento.Domain.Atendimentos;
@@ -29,19 +30,22 @@ public sealed class ServicoEntrega : IServicoEntrega
     private readonly IRelogio _relogio;
     private readonly DbContextOptions<EstacionamentoDbContext> _opcoesContexto;
     private readonly ILogger<ServicoEntrega> _logger;
+    private readonly IServicoFotosVistoria _fotos;
 
     public ServicoEntrega(
         EstacionamentoDbContext db,
         IAuditoriaNegocio auditoria,
         IRelogio relogio,
         DbContextOptions<EstacionamentoDbContext> opcoesContexto,
-        ILogger<ServicoEntrega> logger)
+        ILogger<ServicoEntrega> logger,
+        IServicoFotosVistoria fotos)
     {
         _db = db;
         _auditoria = auditoria;
         _relogio = relogio;
         _opcoesContexto = opcoesContexto;
         _logger = logger;
+        _fotos = fotos;
     }
 
     public async Task<ProntidaoEntrega> ObterProntidaoAsync(
@@ -72,6 +76,7 @@ public sealed class ServicoEntrega : IServicoEntrega
         var vistoriaRegistrada = await _db.VistoriasSaida
             .AsNoTracking()
             .AnyAsync(vistoria => vistoria.AtendimentoId == atendimento.Id, cancellationToken);
+        var fotos = await _fotos.ObterResumoAsync(ator, atendimento.Id, cancellationToken);
 
         var ocupacao = await _db.Ocupacoes
             .AsNoTracking()
@@ -107,7 +112,8 @@ public sealed class ServicoEntrega : IServicoEntrega
                 [CodigosBloqueioEntrega.JaConcluida],
                 false,
                 entrega,
-                versoes);
+                versoes,
+                fotos);
         }
 
         var avaliacao = AvaliadorEntrega.Avaliar(
@@ -132,7 +138,8 @@ public sealed class ServicoEntrega : IServicoEntrega
             avaliacao.Bloqueios,
             avaliacao.Pronta,
             null,
-            versoes);
+            versoes,
+            fotos);
     }
 
     public async Task<ResultadoEntrega> ConfirmarAsync(

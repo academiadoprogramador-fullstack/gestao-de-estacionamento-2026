@@ -15,6 +15,9 @@ import {
 import { urlApi } from '../../../environments/environment';
 import { mensagemDoErro, Pagina } from '../../core/http/erro-api';
 import { SessaoService } from '../../core/sessao/sessao.service';
+import { CoordenadorComandoService } from '../check-in/coordenador-comando';
+import { FotosVistoria } from '../../shared/fotos-vistoria/fotos-vistoria';
+import { ResumoFotosVistoria } from '../../shared/fotos-vistoria/fotos-vistoria.tipos';
 import { formatarDataHora, formatarValor } from '../../shared/formato';
 
 interface AtendimentoLista {
@@ -47,6 +50,7 @@ interface AtendimentoDetalhe extends AtendimentoLista {
     readonly pedidoId: string;
     readonly estado: string;
   } | null;
+  readonly fotos?: ResumoFotosVistoria | null;
 }
 
 interface EventoHistorico {
@@ -66,6 +70,7 @@ type TipoLeitura = 'documento' | 'vistoria' | 'vistoria-saida';
   selector: 'app-atendimentos',
   imports: [
     RouterLink,
+    FotosVistoria,
     LucideClipboardList,
     LucideCopy,
     LucideEye,
@@ -80,6 +85,7 @@ export class Atendimentos implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly sessao = inject(SessaoService);
   private readonly destruicao = inject(DestroyRef);
+  readonly coordenador = inject(CoordenadorComandoService);
 
   readonly formatarDataHora = formatarDataHora;
   readonly formatarValor = formatarValor;
@@ -346,6 +352,10 @@ export class Atendimentos implements OnInit {
   }
 
   fechar(): void {
+    if (this.coordenador.bloqueado()) {
+      return;
+    }
+
     this.invalidar();
     this.iniciarFechamentoDetalhe();
   }

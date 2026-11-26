@@ -88,6 +88,9 @@ public sealed class MiddlewareErros
                 TipoFalha.NaoEncontrado => StatusCodes.Status404NotFound,
                 TipoFalha.Conflito => StatusCodes.Status409Conflict,
                 TipoFalha.RegraNaoSatisfeita => StatusCodes.Status422UnprocessableEntity,
+                TipoFalha.Indisponivel => StatusCodes.Status503ServiceUnavailable,
+                TipoFalha.ArquivoMuitoGrande => StatusCodes.Status413PayloadTooLarge,
+                TipoFalha.FormatoNaoAceito => StatusCodes.Status415UnsupportedMediaType,
                 _ => StatusCodes.Status500InternalServerError
             };
 

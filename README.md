@@ -247,14 +247,14 @@ Crie `~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.jso
   "ProtecaoDados": { "Chaves": { "v1": "<CHAVE_AES_ALEATORIA_DE_32_BYTES_EM_BASE64>" } },
   "ArmazenamentoFotos": {
     "R2": {
-      "AccessKeyId": "<ACCESS_KEY_ID_DO_R2>",
-      "SecretAccessKey": "<SECRET_ACCESS_KEY_DO_R2>"
+      "AccessKeyId": "<ACCESS_KEY_ID_DO_TOKEN_gestao-de-estacionamento-dev-api>",
+      "SecretAccessKey": "<SECRET_ACCESS_KEY_DO_TOKEN_gestao-de-estacionamento-dev-api>"
     }
   }
 }
 ```
 
-`chmod 600 ~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.json`. A senha em `<MSSQL_SA_PASSWORD>` deve ser exatamente a mesma fornecida ao Compose; alterar a variável depois que o volume foi inicializado não altera a senha do SQL. Não use `appsettings*.json` para esses valores e não copie o arquivo para build/deploy. Essa conexão administrativa é exclusiva de `Development`; não a reutilize em `Testing` ou `Production`. As credenciais `ArmazenamentoFotos:R2:AccessKeyId` e `SecretAccessKey` também ficam em User Secrets; endpoint, região, bucket, limites e orçamento permanecem em `appsettings.Development.json`.
+`chmod 600 ~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.json`. A senha em `<MSSQL_SA_PASSWORD>` deve ser exatamente a mesma fornecida ao Compose; alterar a variável depois que o volume foi inicializado não altera a senha do SQL. Não use `appsettings*.json` para esses valores e não copie o arquivo para build/deploy. Essa conexão administrativa é exclusiva de `Development`; não a reutilize em `Testing` ou `Production`. As credenciais `ArmazenamentoFotos:R2:AccessKeyId` e `SecretAccessKey` também ficam em User Secrets. Na Cloudflare, os tokens são `gestao-de-estacionamento-dev-api` e `gestao-de-estacionamento-testes-api`, correspondentes aos buckets `gestao-de-estacionamento-dev` e `gestao-de-estacionamento-testes`; endpoint, região, bucket, limites e orçamento permanecem em `appsettings.Development.json`.
 
 **3. Iniciar a API e a SPA no host, em origens HTTPS distintas**
 

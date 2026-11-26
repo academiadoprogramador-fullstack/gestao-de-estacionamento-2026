@@ -43,17 +43,138 @@
       @if (mensagemCopia(); as mensagem) {
         <p class="mt-2 text-sm text-emerald-100" role="status">{{ mensagem }}</p>
       }
+
+      <section class="mt-4 rounded-lg border border-emerald-500/30 bg-slate-950/30 p-3" aria-labelledby="titulo-fotos-sucesso">
+        <h3 id="titulo-fotos-sucesso" class="text-xs font-semibold tracking-wide text-emerald-100 uppercase">
+          Fotos da vistoria de entrada
+        </h3>
+        <p class="mt-1 text-xs text-emerald-100/80">
+          O check-in já está confirmado. Cada foto abaixo é enviada separadamente, com chave própria;
+          uma falha não desfaz a entrada.
+        </p>
+
+        @if (carregandoVersao()) {
+          <p class="mt-2 flex items-center gap-2 text-sm text-emerald-100" role="status">
+            <svg lucideLoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true"></svg>
+            Carregando a versão do atendimento para iniciar as fotos…
+          </p>
+        }
+
+        @if (erroFotos(); as mensagem) {
+          <div class="mt-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100" role="alert">
+            <p>{{ mensagem }}</p>
+            @if (fotos().length > 0 && !versaoAtendimento()) {
+              <button
+                type="button"
+                (click)="recarregarVersaoEIniciarFotos()"
+                class="mt-2 rounded-md border border-rose-300/60 px-2 py-1 text-xs font-semibold transition hover:bg-rose-400/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-200"
+              >
+                Recarregar atendimento
+              </button>
+            }
+          </div>
+        }
+
+        @if (fotos().length === 0) {
+          <p class="mt-2 text-sm text-emerald-100/80" role="status">
+            Nenhuma foto selecionada. Você pode adicionar fotos no detalhe do atendimento até o
+            pedido de retirada.
+          </p>
+        } @else {
+          <ul class="mt-2 space-y-1 text-sm" aria-label="Fila de envio das fotos selecionadas">
+            @for (foto of fotos(); track foto.id) {
+              <li class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-emerald-500/20 px-3 py-1.5">
+                <span class="break-words text-emerald-50">{{ foto.nome }}</span>
+                <span
+                  class="rounded-full px-2 py-0.5 text-xs font-semibold"
+                  [class]="
+                    foto.status === 'confirmada'
+                      ? 'bg-emerald-500/10 text-emerald-200'
+                      : foto.status === 'falhou' || foto.status === 'incerta'
+                        ? 'bg-rose-500/10 text-rose-200'
+                        : 'bg-sky-500/10 text-sky-200'
+                  "
+                >
+                  {{ rotuloStatusFoto(foto.status) }}
+                </span>
+              </li>
+            }
+          </ul>
+
+          @if (filaFotosAtiva()) {
+            <p class="mt-2 text-xs text-emerald-100/80" role="status">
+              Enviando as fotos selecionadas em sequência…
+            </p>
+          }
+
+          @if (fotoIncerta()) {
+            <div class="mt-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100" role="alert">
+              <p>
+                O resultado de uma foto é incerto. A entrada permanece confirmada; repita a mesma
+                tentativa ou descarte-a da tela.
+              </p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  (click)="repetirFoto()"
+                  [disabled]="filaFotosAtiva()"
+                  class="rounded-md border border-amber-400/60 px-2 py-1 text-xs font-semibold transition hover:bg-amber-400/10 disabled:opacity-60"
+                >
+                  Repetir a mesma foto
+                </button>
+                <button
+                  type="button"
+                  (click)="continuarSemFoto()"
+                  [disabled]="filaFotosAtiva() || coordenador.bloqueado()"
+                  class="rounded-md border border-amber-400/60 px-2 py-1 text-xs font-semibold transition hover:bg-amber-400/10 disabled:opacity-60"
+                >
+                  Descartar esta foto
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (fotoEmFalha(); as falha) {
+            <div class="mt-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-100" role="alert">
+              <p>
+                A foto {{ falha.nome }} não foi confirmada. A entrada permanece registrada; tente
+                novamente ou continue com as demais.
+              </p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  (click)="tentarFotoNovamente()"
+                  [disabled]="filaFotosAtiva() || coordenador.bloqueado()"
+                  class="rounded-md border border-rose-300/60 px-2 py-1 text-xs font-semibold transition hover:bg-rose-400/10 disabled:opacity-60"
+                >
+                  Tentar esta foto novamente
+                </button>
+                <button
+                  type="button"
+                  (click)="continuarSemFoto()"
+                  [disabled]="filaFotosAtiva() || coordenador.bloqueado()"
+                  class="rounded-md border border-rose-300/60 px-2 py-1 text-xs font-semibold transition hover:bg-rose-400/10 disabled:opacity-60"
+                >
+                  Continuar sem esta foto
+                </button>
+              </div>
+            </div>
+          }
+        }
+      </section>
+
       <button
         type="button"
         (click)="novoCheckIn()"
-        class="mt-4 rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        [disabled]="coordenador.bloqueado() || filaFotosAtiva()"
+        class="mt-4 rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-100 transition hover:border-sky-400 hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
       >
         Registrar outra entrada
       </button>
     </section>
   }
 
-  @if (coordenador.fase() === 'incerto') {
+  @if (checkInIncerto()) {
     <section
       class="mb-6 rounded-xl border border-amber-500/50 bg-amber-500/10 p-5"
       role="alert"
@@ -277,9 +398,75 @@
           }
         </div>
 
+        <section
+          class="rounded-lg border border-slate-800 bg-slate-950/40 p-3"
+          aria-labelledby="titulo-fotos-checkin"
+        >
+          <h3
+            id="titulo-fotos-checkin"
+            class="text-xs font-semibold tracking-wide text-slate-300 uppercase"
+          >
+            Fotos opcionais da entrada
+          </h3>
+          <p class="mt-1 text-xs text-slate-400">
+            Selecione até 5 fotos agora. Elas ficam somente na memória e são enviadas após o check-in
+            confirmado. A entrada continua válida sem fotos.
+          </p>
+          <label for="fotos-checkin" class="mt-2 block text-sm text-slate-200"
+            >Selecionar fotos</label
+          >
+          <input
+            id="fotos-checkin"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            (change)="selecionarFotos($event)"
+            [disabled]="enviando() || resultado() !== null || coordenador.bloqueado()"
+            aria-describedby="dica-fotos-checkin erro-fotos-checkin"
+            class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 file:mr-3 file:rounded file:border-0 file:bg-slate-800 file:px-3 file:py-1 file:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 disabled:opacity-60"
+          />
+          <p id="dica-fotos-checkin" class="mt-1 text-xs text-slate-500">
+            JPEG, PNG ou WebP estático, até 5 MiB, 20 MP e 10.000 px por lado. A validação local é
+            apenas feedback; o servidor revalida.
+          </p>
+          @if (erroFotos() && !resultado()) {
+            <p id="erro-fotos-checkin" class="mt-1 text-sm text-rose-300" role="alert">
+              {{ erroFotos() }}
+            </p>
+          }
+
+          @if (fotos().length > 0) {
+            <ul class="mt-3 grid gap-2 sm:grid-cols-2" aria-label="Fotos selecionadas para o check-in">
+              @for (foto of fotos(); track foto.id) {
+                <li class="rounded-md border border-slate-800 bg-slate-900/70 p-2 text-sm">
+                  <p class="break-words text-slate-100">{{ foto.nome }}</p>
+                  <p class="text-xs text-slate-400">{{ rotuloStatusFoto(foto.status) }}</p>
+                  @if (foto.status === 'selecionada' && resultado() === null) {
+                    <button
+                      type="button"
+                      (click)="removerFoto(foto.id)"
+                      class="mt-1 rounded border border-slate-700 px-2 py-0.5 text-xs text-slate-200 transition hover:border-rose-400 hover:text-rose-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                    >
+                      Remover
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="mt-2 text-xs text-slate-500" role="status">
+              Nenhuma foto selecionada.
+            </p>
+          }
+          <p class="mt-2 text-xs text-slate-500">
+            O corpo do check-in não inclui arquivos; nenhuma foto é enviada antes da confirmação da
+            entrada.
+          </p>
+        </section>
+
         <button
           type="submit"
-          [disabled]="enviando() || coordenador.bloqueado()"
+          [disabled]="enviando() || coordenador.bloqueado() || resultado() !== null"
           class="flex items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 font-semibold text-slate-950 transition hover:bg-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
         >
           @if (enviando() || coordenador.fase() === 'pendente') {

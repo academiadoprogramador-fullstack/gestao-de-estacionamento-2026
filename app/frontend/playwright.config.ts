@@ -70,7 +70,8 @@ export default defineConfig({
             ArmazenamentoFotos__R2__Endpoint:
               process.env['R2_API_ENDPOINT'] ?? 'https://exemplo.invalid',
             ArmazenamentoFotos__R2__Bucket:
-              process.env['ESTACIONAMENTO_R2_TESTE_BUCKET'] ?? 'bucket-e2e',
+              process.env['ESTACIONAMENTO_R2_TESTE_BUCKET'] ??
+              'gestao-de-estacionamento-testes',
             ArmazenamentoFotos__R2__AccessKeyId:
               process.env['R2_TEST_ACCESS_KEY_ID'] ?? 'e2e',
             ArmazenamentoFotos__R2__SecretAccessKey:

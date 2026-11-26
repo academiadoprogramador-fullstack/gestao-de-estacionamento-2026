@@ -40,7 +40,7 @@ Nenhum valor secreto é versionado, impresso em log ou enviado ao navegador. O b
 - `SkiaSharp` 4.157.0 foi executado em Linux x86-64, com encoding WebP e decodificação validados (imagem sintética de 320×200 produziu WebP válido).
 - `AWSSDK.S3` 4.1.2.1 foi fixado. O contrato real foi executado com o bucket privado de testes **`gestao-de-estacionamento-testes`**, usando as credenciais `R2_TEST_*` e imagens sintéticas: `PutObject`, `GetObject` e `DeleteObject` passaram.
 - O E2E Playwright anexou e leu uma foto de saída pela API/S3 de teste em `https://localhost:4300` e `https://localhost:4200`, sem expor chave do bucket ao navegador.
-- O bucket de desenvolvimento permanece configurado como **`gestao-estacionamento-dev`**. A conta Cloudflare exibida pelo solicitante possui hoje `gestao-de-estacionamento-dev` (com “de”); o solicitante informou que fará o ajuste no R2, mantendo o nome anterior na aplicação. O bucket de testes `gestao-de-estacionamento-testes` já está correto e foi o usado nas evidências.
+- O bucket de desenvolvimento é **`gestao-de-estacionamento-dev`**. O bucket de testes é **`gestao-de-estacionamento-testes`**. Os tokens correspondentes na Cloudflare são `gestao-de-estacionamento-dev-api` e `gestao-de-estacionamento-testes-api`; os valores de Access Key ID/Secret ficam em User Secrets/.env e não são versionados.
 - Nenhum valor secreto foi impresso em logs, artefatos ou documentação.
 
 ## Testes executados
@@ -65,7 +65,7 @@ npx playwright test
 
 ## Limitações e pendências
 
-- O bucket de desenvolvimento configurado (`gestao-estacionamento-dev`) será alinhado pelo solicitante no R2, mantendo o nome anterior na aplicação; a conta possui hoje `gestao-de-estacionamento-dev`.
+- Configuração R2: bucket de desenvolvimento `gestao-de-estacionamento-dev` e bucket de testes `gestao-de-estacionamento-testes`; tokens Cloudflare `gestao-de-estacionamento-dev-api` e `gestao-de-estacionamento-testes-api`, com Access Key ID/Secret somente em User Secrets/.env.
 - O contrato real e o E2E de upload foram validados com o bucket de testes `gestao-de-estacionamento-testes`.
 - Revisão manual de acessibilidade com tecnologia assistiva não executada; o alvo WCAG 2.2 AA não é declarado conformidade.
 - O orçamento é um controle conservador local, não uma trava de cobrança da Cloudflare. A conta deve ser conferida manualmente.

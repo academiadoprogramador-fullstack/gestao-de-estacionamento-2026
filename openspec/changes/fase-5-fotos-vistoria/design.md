@@ -150,4 +150,4 @@ Rollback: desabilitar `ArmazenamentoFotos:Habilitado` para interromper novos upl
 
 - Versões exatas de `AWSSDK.S3`, `SkiaSharp` e natives Linux serão fixadas após a prova F5-01; a escolha não altera abordagem, contratos ou tarefas. Se a prova falhar, a fase para e a biblioteca é revista com o solicitante.
 - A forma exata de reconciliação manual do consumo de outros ambientes/cópias será registrada no runbook local; o modelo já reserva a competência/ambiente para receber esses ajustes.
-- O contrato real com o R2 foi validado em 26/11/2026 com o bucket de testes `gestao-de-estacionamento-testes` (Put/Get/Delete e E2E). O bucket de desenvolvimento permanece `gestao-estacionamento-dev`; o solicitante fará o ajuste no R2. O bucket de testes não deve ser usado como produção.
+- O contrato real com o R2 foi validado em 26/11/2026 com os buckets `gestao-de-estacionamento-dev` e `gestao-de-estacionamento-testes` e tokens `gestao-de-estacionamento-dev-api`/`gestao-de-estacionamento-testes-api` (Put/Get/Delete e E2E). O bucket de testes não deve ser usado como produção.

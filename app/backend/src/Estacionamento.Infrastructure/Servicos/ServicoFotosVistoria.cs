@@ -107,6 +107,20 @@ public sealed class ServicoFotosVistoria : IServicoFotosVistoria
 
             if (!string.IsNullOrWhiteSpace(repeticao.ResultadoJson) && repeticao.CodigoResposta is not null)
             {
+                var fotoConfirmada = await _db.FotosVistoria
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(
+                        registro => registro.ResultadoIdempotenteId == repeticao.Id,
+                        cancellationToken);
+
+                if (fotoConfirmada is null ||
+                    !string.Equals(fotoConfirmada.Estado, EstadosFotoVistoria.Disponivel, StringComparison.Ordinal))
+                {
+                    throw ExcecaoAplicacao.NaoEncontrado(
+                        "photo_expired",
+                        "A foto venceu pela retenção e não está mais disponível.");
+                }
+
                 return ApoioFotos.DesserializarResultado(repeticao.ResultadoJson);
             }
 

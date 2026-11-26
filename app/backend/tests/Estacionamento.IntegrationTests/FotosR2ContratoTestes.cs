@@ -28,7 +28,7 @@ public sealed class FotosR2ContratoTestes
         var accessKey = Environment.GetEnvironmentVariable("R2_TEST_ACCESS_KEY_ID");
         var secret = Environment.GetEnvironmentVariable("R2_TEST_SECRET_ACCESS_KEY");
         var bucket = Environment.GetEnvironmentVariable("ESTACIONAMENTO_R2_TESTE_BUCKET")
-            ?? "gestao-estacionamento-dev";
+            ?? "gestao-de-estacionamento-testes";
 
         if (string.IsNullOrWhiteSpace(endpoint) ||
             string.IsNullOrWhiteSpace(accessKey) ||

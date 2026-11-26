@@ -8,7 +8,7 @@ Confirma a devolução do veículo com as condições de saída verificadas, enc
 
 ### Requirement: Prontidão e confirmação de entrega
 
-O sistema SHALL permitir somente a Caixa e Administrador consultar prontidão e confirmar explicitamente a entrega com as versões-base do atendimento, pedido, razão e controles de exceção. A prontidão SHALL informar condições e bloqueios sem texto sensível e SHALL NOT reservar a entrega (F4-R02/03/07).
+O sistema SHALL permitir somente a Caixa e Administrador consultar prontidão e confirmar explicitamente a entrega com as versões-base do atendimento, pedido, razão e controles de exceção. A prontidão SHALL informar condições, bloqueios e presença/quantidade de fotos de saída sem conteúdo sensível, SHALL NOT exigir fotos e SHALL NOT reservar a entrega (F4-R02/03/07; RF-13).
 
 #### Scenario: Entrega normal a partir dos dois estados
 
@@ -30,11 +30,16 @@ O sistema SHALL permitir somente a Caixa e Administrador consultar prontidão e 
 #### Scenario: Manobrista e sessão inválida
 
 - **WHEN** Manobrista abre a operação ou tenta consultar prontidão ou confirmar diretamente, ou uma chamada chega sem sessão válida
-- **THEN** Manobrista vê apenas dados operacionais e vistoria, sem controle de confirmação; a API nega prontidão e entrega ao perfil, e nega acesso sem sessão válida
+- **THEN** Manobrista vê apenas dados operacionais, vistoria e fotos sem controle de confirmação; a API nega prontidão e entrega ao perfil, e nega acesso sem sessão válida
+
+#### Scenario: Fotos opcionais não bloqueiam
+
+- **WHEN** a vistoria de saída não possui foto, o armazenamento está indisponível ou o orçamento de fotos está suspenso
+- **THEN** a prontidão continua informando a ausência/indisponibilidade e a entrega textual pode ser confirmada se as demais condições estiverem satisfeitas
 
 ### Requirement: Encerramento e liberação atômicos
 
-A confirmação SHALL gravar uma única entrega e os consumos aplicáveis, encerrar pedido e atendimento, fechar somente sua ocupação aberta e confirmar eventos e recibo idempotente conjuntamente. O UTC da entrega, registrado com o ator do servidor, SHALL ser o mesmo do fim da ocupação (F4-R04).
+A confirmação SHALL gravar uma única entrega e os consumos aplicáveis, encerrar pedido e atendimento, fechar somente sua ocupação aberta e confirmar eventos, recibo idempotente e fechamento da janela de fotos conjuntamente. O UTC da entrega, registrado com o ator do servidor, SHALL ser o mesmo do fim da ocupação e SHALL impedir que upload concorrente confirme foto depois da entrega (F4-R04; RF-13).
 
 #### Scenario: Liberação reutilizável
 
@@ -54,8 +59,13 @@ A confirmação SHALL gravar uma única entrega e os consumos aplicáveis, encer
 #### Scenario: Replay não afeta nova ocupação
 
 - **WHEN** o mesmo ator autorizado repete chave e conteúdo após commit, inclusive após nova entrada na vaga
-- **THEN** recebe o recibo original e nenhuma entrega, liberação ou consumo adicional ocorre; nova ação para o pedido entregue é recusada
+- **THEN** recebe o recibo original e nenhuma entrega, liberação, consumo ou reabertura de fotos ocorre; nova ação para o pedido entregue é recusada
 - **AND** a mesma chave com conteúdo ou versão-base diferente conflita
+
+#### Scenario: Upload concorrente com a entrega
+
+- **WHEN** um envio de foto de saída está em andamento quando a entrega é confirmada
+- **THEN** a confirmação da foto revalida a janela e é recusada ou reconciliada como órfã, sem expor imagem após o encerramento
 
 ### Requirement: Recuperação de tentativa incerta e feedback acessível
 

@@ -157,6 +157,7 @@ Toda a seção `ContasSinteticas`, incluindo e-mails e senhas, pertence a User S
     "IntervaloPollingSegundos": 30
   },
   "ArmazenamentoFotos": {
+    "Habilitado": true,
     "R2": {
       "Endpoint": "https://<ACCOUNT_ID>.r2.cloudflarestorage.com",
       "RegiaoAssinatura": "auto",
@@ -165,9 +166,21 @@ Toda a seção `ContasSinteticas`, incluindo e-mails e senhas, pertence a User S
     "Limites": {
       "MaximoFotosPorVistoria": 5,
       "TamanhoMaximoArquivoMiB": 5,
-      "AvisoConsumoPercentual": 70,
-      "BloqueioConsumoPercentual": 80
-    }
+      "MaximoMegapixels": 20,
+      "MaximoPixelsPorLado": 10000,
+      "LadoMaiorSaidaPixels": 2560,
+      "QualidadeWebp": 85,
+      "TimeoutProcessamentoSegundos": 30
+    },
+    "Orcamento": {
+      "FranquiaBytesMensal": 10737418240,
+      "FranquiaOperacoesClasseAMensal": 1000000,
+      "FranquiaOperacoesClasseBMensal": 10000000,
+      "AvisoPercentual": 70,
+      "BloqueioPercentual": 80
+    },
+    "RetencaoDias": 90,
+    "DiasParaReconciliarOrfao": 1
   },
   "Retencao": {
     "DadosOperacionaisDias": 90,
@@ -231,11 +244,17 @@ Crie `~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.jso
     "Manobrista": { "Email": "<EMAIL_SINTETICO_MANOBRISTA>", "Senha": "<SENHA_EXCLUSIVA_MANOBRISTA>" }
   },
   "Autenticacao": { "Jwt": { "Chaves": { "v1": "<CHAVE_JWT_ALEATORIA_DE_32_BYTES_EM_BASE64>" } } },
-  "ProtecaoDados": { "Chaves": { "v1": "<CHAVE_AES_ALEATORIA_DE_32_BYTES_EM_BASE64>" } }
+  "ProtecaoDados": { "Chaves": { "v1": "<CHAVE_AES_ALEATORIA_DE_32_BYTES_EM_BASE64>" } },
+  "ArmazenamentoFotos": {
+    "R2": {
+      "AccessKeyId": "<ACCESS_KEY_ID_DO_R2>",
+      "SecretAccessKey": "<SECRET_ACCESS_KEY_DO_R2>"
+    }
+  }
 }
 ```
 
-`chmod 600 ~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.json`. A senha em `<MSSQL_SA_PASSWORD>` deve ser exatamente a mesma fornecida ao Compose; alterar a variável depois que o volume foi inicializado não altera a senha do SQL. Não use `appsettings*.json` para esses valores e não copie o arquivo para build/deploy. Essa conexão administrativa é exclusiva de `Development`; não a reutilize em `Testing` ou `Production`.
+`chmod 600 ~/.microsoft/usersecrets/gestao-estacionamento-api-development/secrets.json`. A senha em `<MSSQL_SA_PASSWORD>` deve ser exatamente a mesma fornecida ao Compose; alterar a variável depois que o volume foi inicializado não altera a senha do SQL. Não use `appsettings*.json` para esses valores e não copie o arquivo para build/deploy. Essa conexão administrativa é exclusiva de `Development`; não a reutilize em `Testing` ou `Production`. As credenciais `ArmazenamentoFotos:R2:AccessKeyId` e `SecretAccessKey` também ficam em User Secrets; endpoint, região, bucket, limites e orçamento permanecem em `appsettings.Development.json`.
 
 **3. Iniciar a API e a SPA no host, em origens HTTPS distintas**
 
@@ -282,6 +301,10 @@ npm test -- --run
 # Defina E2E_CONEXAO, E2E_JWT_CHAVE, E2E_AES_CHAVE e E2E_*_EMAIL/SENHA
 # apontando para catálogo e contas sintéticas isolados.
 npx playwright test
+
+# Contrato real opcional com o R2 de teste (bucket privado e imagens sintéticas)
+# Defina ESTACIONAMENTO_TESTE_R2=1, R2_API_ENDPOINT, R2_TEST_ACCESS_KEY_ID,
+# R2_TEST_SECRET_ACCESS_KEY e ESTACIONAMENTO_R2_TESTE_BUCKET.
 ```
 
 Os testes de integração criam catálogos `EstacionamentoTeste_*` e os removem ao final; eles validam o host local e não carregam User Secrets pessoais (`ESTACIONAMENTO_DESABILITAR_USER_SECRETS=1`). O E2E inicia a API em `Development` com credenciais explícitas e catálogo isolado, sem tocar no banco de desenvolvimento.

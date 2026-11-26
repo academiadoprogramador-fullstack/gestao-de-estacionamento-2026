@@ -61,6 +61,9 @@ public static class TiposEventoAtendimento
     public const string AutorizacaoConsumida = "autorizacao_consumida";
     public const string EntregaConfirmada = "entrega_confirmada";
     public const string VagaLiberada = "vaga_liberada";
+    public const string FotoAnexada = "foto_anexada";
+    public const string FotoLida = "foto_lida";
+    public const string FotoDescartada = "foto_descartada";
 
     /// <summary>
     /// Allowlist de eventos visíveis ao Manobrista. Exclui conferência,
@@ -77,7 +80,10 @@ public static class TiposEventoAtendimento
             VistoriaSaidaRegistrada,
             VistoriaSaidaLida,
             EntregaConfirmada,
-            VagaLiberada
+            VagaLiberada,
+            FotoAnexada,
+            FotoLida,
+            FotoDescartada
         };
 }
 
@@ -122,4 +128,7 @@ public static class TiposAuditoriaNegocio
     public const string AutorizacaoConsumida = "autorizacao_consumida";
     public const string EntregaConfirmada = "entrega_confirmada";
     public const string VagaLiberada = "vaga_liberada";
+    public const string FotoAnexada = "foto_anexada";
+    public const string FotoLida = "foto_lida";
+    public const string FotoDescartada = "foto_descartada";
 }

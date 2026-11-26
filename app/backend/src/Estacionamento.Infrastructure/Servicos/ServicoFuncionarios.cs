@@ -10,6 +10,7 @@ using Estacionamento.Domain.Autenticacao;
 using Estacionamento.Infrastructure.Identidade;
 using Estacionamento.Infrastructure.Persistencia;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace Estacionamento.Infrastructure.Servicos;
@@ -212,6 +213,38 @@ public sealed class ServicoFuncionarios : IServicoFuncionarios
         string? correlacao,
         CancellationToken cancellationToken = default)
     {
+        for (var tentativa = 0; tentativa < 3; tentativa += 1)
+        {
+            try
+            {
+                _db.ChangeTracker.Clear();
+                return await AlterarAcessoUmaVezAsync(
+                    ator,
+                    funcionarioId,
+                    requisicao,
+                    correlacao,
+                    cancellationToken);
+            }
+            catch (Exception excecao) when (tentativa < 2 && EhDeadlock(excecao))
+            {
+                // A transação foi revertida pelo SQL Server. Reexecutar a
+                // unidade completa é seguro porque nenhum efeito foi commitado.
+                await Task.Delay(20 * (tentativa + 1), cancellationToken);
+            }
+        }
+
+        throw ExcecaoAplicacao.Conflito(
+            "concurrency_conflict",
+            "A alteração de acesso concorreu com outra operação. Recarregue e tente novamente.");
+    }
+
+    private async Task<FuncionarioResumo> AlterarAcessoUmaVezAsync(
+        AtorAtual ator,
+        Guid funcionarioId,
+        RequisicaoAlterarAcesso requisicao,
+        string? correlacao,
+        CancellationToken cancellationToken = default)
+    {
         if (!ator.EhAdministrador)
         {
             throw ExcecaoAplicacao.AcessoNegado();
@@ -386,5 +419,18 @@ public sealed class ServicoFuncionarios : IServicoFuncionarios
         return duplicado
             ? ExcecaoAplicacao.Conflito("email_em_uso", "Já existe uma conta com o e-mail informado.")
             : ExcecaoAplicacao.Validacao("dados_conta_invalidos", "Não foi possível criar a conta com os dados informados.");
+    }
+
+    private static bool EhDeadlock(Exception excecao)
+    {
+        for (var atual = excecao; atual is not null; atual = atual.InnerException)
+        {
+            if (atual is SqlException sql && sql.Number == 1205)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

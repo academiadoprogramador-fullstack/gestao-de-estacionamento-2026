@@ -213,6 +213,21 @@
         </div>
       </section>
 
+      @if (atendimento(); as atendimentoAtual) {
+        @if (vistoriaRegistrada()) {
+          <app-fotos-vistoria
+            [atendimentoId]="atendimentoAtual.id"
+            tipo="saida"
+            titulo="Fotos da vistoria de saída"
+            [versaoAtendimento]="atendimentoAtual.versaoAtendimento || ''"
+            [podeEnviar]="!entregue()"
+            [quantidadeInicial]="prontidao()?.fotos?.quantidadeSaida || 0"
+            [janelaInicial]="prontidao()?.fotos?.janelaSaida || 'encerrada'"
+            [orcamentoInicial]="prontidao()?.fotos?.orcamento || null"
+          />
+        }
+      }
+
       @if (ehOperador() && !entregue()) {
         <section
           class="rounded-xl border border-slate-800 bg-slate-900/70"
@@ -273,6 +288,12 @@
                   · a autorização financeira não quita o saldo; o acerto posterior continua
                   possível.
                 }
+              </p>
+
+              <p class="text-xs text-slate-400">
+                Fotos da saída: opcionais ·
+                {{ pronta.fotos?.quantidadeSaida || 0 }} anexada(s) · a ausência ou falha do
+                armazenamento não bloqueia a entrega.
               </p>
 
               @if (pronta.bloqueios.length > 0) {

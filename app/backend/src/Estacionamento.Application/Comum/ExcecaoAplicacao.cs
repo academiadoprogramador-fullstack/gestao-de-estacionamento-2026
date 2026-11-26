@@ -8,7 +8,10 @@ public enum TipoFalha
     NaoEncontrado,
     Conflito,
     RegraNaoSatisfeita,
-    ProtecaoCampo
+    ProtecaoCampo,
+    Indisponivel,
+    ArquivoMuitoGrande,
+    FormatoNaoAceito
 }
 
 /// <summary>
@@ -55,4 +58,13 @@ public sealed class ExcecaoAplicacao : Exception
             TipoFalha.ProtecaoCampo,
             "field_protection_failure",
             "Não foi possível proteger ou ler o campo sensível.");
+
+    public static ExcecaoAplicacao Indisponivel(string codigo, string mensagem) =>
+        new(TipoFalha.Indisponivel, codigo, mensagem);
+
+    public static ExcecaoAplicacao ArquivoMuitoGrande(string codigo, string mensagem) =>
+        new(TipoFalha.ArquivoMuitoGrande, codigo, mensagem);
+
+    public static ExcecaoAplicacao FormatoNaoAceito(string codigo, string mensagem) =>
+        new(TipoFalha.FormatoNaoAceito, codigo, mensagem);
 }

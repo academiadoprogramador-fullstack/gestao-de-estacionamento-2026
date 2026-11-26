@@ -31,6 +31,7 @@ builder.Services.AdicionarAutorizacaoPorPerfil();
 builder.Services.AddSingleton<IRegistroBootstrap, RegistroBootstrap>();
 builder.Services.AddScoped<BootstrapDesenvolvimento>();
 builder.Services.AddScoped<ValidadorConfiguracaoInicial>();
+builder.Services.AddHostedService<ManutencaoFotosHostedService>();
 
 builder.Services.AddCors(options =>
 {

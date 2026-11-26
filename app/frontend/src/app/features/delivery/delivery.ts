@@ -24,6 +24,7 @@ import {
 import { codigoDoErro, mensagemDoErro } from '../../core/http/erro-api';
 import { SessaoService } from '../../core/sessao/sessao.service';
 import { formatarDataHora, formatarValor } from '../../shared/formato';
+import { FotosVistoria } from '../../shared/fotos-vistoria/fotos-vistoria';
 import { CoordenadorComandoService } from '../check-in/coordenador-comando';
 import { AtendimentoBusca, RetiradaDetalheFinanceira } from '../retiradas/retiradas.tipos';
 import { CorpoConfirmacaoEntrega, DeliveryApiService } from './delivery.service';
@@ -46,6 +47,7 @@ type ConteudoComando =
   selector: 'app-delivery',
   imports: [
     RouterLink,
+    FotosVistoria,
     LucideCheck,
     LucideCircleCheck,
     LucideCircleX,

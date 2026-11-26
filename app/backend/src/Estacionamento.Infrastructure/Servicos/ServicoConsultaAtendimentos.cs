@@ -2,6 +2,7 @@ using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Auditoria;
 using Estacionamento.Application.Comum;
 using Estacionamento.Application.Entrega;
+using Estacionamento.Application.Fotos;
 using Estacionamento.Application.Retiradas;
 using Estacionamento.Application.Seguranca;
 using Estacionamento.Application.Tempo;
@@ -23,19 +24,22 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
     private readonly IAuditoriaNegocio _auditoria;
     private readonly IRelogio _relogio;
     private readonly IServicoConsultaRetiradas _retiradas;
+    private readonly IServicoFotosVistoria _fotos;
 
     public ServicoConsultaAtendimentos(
         EstacionamentoDbContext db,
         ICriptografiaCampos criptografia,
         IAuditoriaNegocio auditoria,
         IRelogio relogio,
-        IServicoConsultaRetiradas retiradas)
+        IServicoConsultaRetiradas retiradas,
+        IServicoFotosVistoria fotos)
     {
         _db = db;
         _criptografia = criptografia;
         _auditoria = auditoria;
         _relogio = relogio;
         _retiradas = retiradas;
+        _fotos = fotos;
     }
 
     public async Task<Pagina<AtendimentoLista>> BuscarAsync(
@@ -103,7 +107,17 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
                     atendimento.Titular,
                     atendimento.Estado,
                     vaga == null ? string.Empty : vaga.Codigo,
-                    atendimento.EntradaUtc))
+                    atendimento.EntradaUtc,
+                    null,
+                    null,
+                    _db.FotosVistoria.Count(foto =>
+                        foto.AtendimentoId == atendimento.Id &&
+                        foto.Tipo == "entrada" &&
+                        foto.Estado == "disponivel"),
+                    _db.FotosVistoria.Count(foto =>
+                        foto.AtendimentoId == atendimento.Id &&
+                        foto.Tipo == "saida" &&
+                        foto.Estado == "disponivel")))
             .Skip((pagina - 1) * tamanho)
             .Take(tamanho)
             .ToListAsync(cancellationToken);
@@ -151,7 +165,15 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
                 item.VagaCodigo,
                 item.Atendimento.EntradaUtc,
                 item.PedidoId,
-                item.EstadoRetirada))
+                item.EstadoRetirada,
+                _db.FotosVistoria.Count(foto =>
+                    foto.AtendimentoId == item.Atendimento.Id &&
+                    foto.Tipo == "entrada" &&
+                    foto.Estado == "disponivel"),
+                _db.FotosVistoria.Count(foto =>
+                    foto.AtendimentoId == item.Atendimento.Id &&
+                    foto.Tipo == "saida" &&
+                    foto.Estado == "disponivel")))
             .ToListAsync(cancellationToken);
 
         return new Pagina<AtendimentoLista>(itens, pagina, tamanho, total);
@@ -193,6 +215,7 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
             .AsNoTracking()
             .AnyAsync(vistoria => vistoria.AtendimentoId == atendimentoAtual.Id, cancellationToken);
         var entrega = await CarregarEntregaAsync(atendimentoAtual.Id, cancellationToken);
+        var fotos = await _fotos.ObterResumoAsync(ator, atendimentoAtual.Id, cancellationToken);
 
         if (!ator.EhOperador)
         {
@@ -209,7 +232,8 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
                 atendimentoAtual.RowVersion,
                 retirada as ResumoRetiradaOperacional,
                 vistoriaSaidaRegistrada,
-                entrega);
+                entrega,
+                fotos);
         }
 
         var versaoTarifa = await _db.TarifasDiarias
@@ -232,7 +256,8 @@ public sealed class ServicoConsultaAtendimentos : IServicoConsultaAtendimentos
             atendimentoAtual.TarifaValorSnapshot,
             retirada as ResumoRetiradaFinanceiro,
             vistoriaSaidaRegistrada,
-            entrega);
+            entrega,
+            fotos);
     }
 
     private async Task<ResumoEntrega?> CarregarEntregaAsync(

@@ -66,6 +66,15 @@ export default defineConfig({
             ContasSinteticas__Caixa__Senha: process.env['E2E_CAIXA_SENHA']!,
             ContasSinteticas__Manobrista__Email: process.env['E2E_MANOBRISTA_EMAIL']!,
             ContasSinteticas__Manobrista__Senha: process.env['E2E_MANOBRISTA_SENHA']!,
+            ArmazenamentoFotos__Habilitado: process.env['E2E_R2_HABILITADO'] ?? 'false',
+            ArmazenamentoFotos__R2__Endpoint:
+              process.env['R2_API_ENDPOINT'] ?? 'https://exemplo.invalid',
+            ArmazenamentoFotos__R2__Bucket:
+              process.env['ESTACIONAMENTO_R2_TESTE_BUCKET'] ?? 'bucket-e2e',
+            ArmazenamentoFotos__R2__AccessKeyId:
+              process.env['R2_TEST_ACCESS_KEY_ID'] ?? 'e2e',
+            ArmazenamentoFotos__R2__SecretAccessKey:
+              process.env['R2_TEST_SECRET_ACCESS_KEY'] ?? 'e2e',
             Cors__OrigensPermitidas__0: spaUrl,
             Cors__OrigensPermitidas__1: apiUrl,
           },

@@ -3,6 +3,7 @@ using Estacionamento.Api.Infra;
 using Estacionamento.Application.Atendimentos;
 using Estacionamento.Application.Comum;
 using Estacionamento.Application.Entrega;
+using Estacionamento.Application.Fotos;
 using Estacionamento.Application.Retiradas;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,17 +24,20 @@ public sealed class AtendimentosController : ControllerBase
     private readonly IServicoConsultaAtendimentos _consulta;
     private readonly IServicoRetiradas _retiradas;
     private readonly IServicoVistoriaSaida _vistoriaSaida;
+    private readonly IServicoFotosVistoria _fotos;
 
     public AtendimentosController(
         IServicoAtendimentos atendimentos,
         IServicoConsultaAtendimentos consulta,
         IServicoRetiradas retiradas,
-        IServicoVistoriaSaida vistoriaSaida)
+        IServicoVistoriaSaida vistoriaSaida,
+        IServicoFotosVistoria fotos)
     {
         _atendimentos = atendimentos;
         _consulta = consulta;
         _retiradas = retiradas;
         _vistoriaSaida = vistoriaSaida;
+        _fotos = fotos;
     }
 
     [HttpPost]
@@ -166,6 +170,126 @@ public sealed class AtendimentosController : ControllerBase
             cancellationToken));
 
     /// <summary>
+    /// Lista os metadados das fotos disponíveis da vistoria. O conteúdo e as
+    /// chaves do bucket nunca entram nesta projeção.
+    /// </summary>
+    [HttpGet("{id:guid}/inspections/{tipo}/photos")]
+    [Authorize(Policy = PoliticasAutorizacao.Funcionario)]
+    [ProducesResponseType<ListaFotosVistoria>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ListarFotos(
+        Guid id,
+        string tipo,
+        CancellationToken cancellationToken) =>
+        Ok(await _fotos.ListarAsync(
+            AtorHttp.Obter(User),
+            id,
+            tipo,
+            cancellationToken));
+
+    /// <summary>
+    /// Anexa uma única foto à vistoria textual já salva. Entrada restrita a
+    /// Caixa/Administrador; saída disponível aos três perfis. Exige
+    /// <c>Idempotency-Key</c> e a versão-base do atendimento no formulário.
+    /// </summary>
+    [HttpPost("{id:guid}/inspections/{tipo}/photos")]
+    [Authorize(Policy = PoliticasAutorizacao.Funcionario)]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    [ProducesResponseType<ResultadoFoto>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status415UnsupportedMediaType)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> EnviarFoto(
+        Guid id,
+        string tipo,
+        [FromForm] EnviarFotoFormulario formulario,
+        CancellationToken cancellationToken)
+    {
+        if (formulario.Arquivo is null)
+        {
+            throw ExcecaoAplicacao.Validacao(
+                "photo_required",
+                "Envie exatamente uma foto JPEG, PNG ou WebP estática.");
+        }
+
+        var versao = LerVersao(formulario.VersaoAtendimentoEsperada);
+
+        var resultado = await _fotos.EnviarAsync(
+            AtorHttp.Obter(User),
+            id,
+            tipo,
+            new ArquivoFoto(
+                formulario.Arquivo.FileName,
+                formulario.Arquivo.ContentType,
+                formulario.Arquivo.Length,
+                formulario.Arquivo.OpenReadStream()),
+            versao,
+            ParametrosHttp.LerChaveIdempotencia(Request),
+            CorrelacaoHttp.Obter(HttpContext),
+            cancellationToken);
+
+        return Created(resultado.Location, resultado);
+    }
+
+    /// <summary>
+    /// Leitura explícita e auditada do conteúdo. A auditoria é confirmada antes
+    /// de abrir o stream; o MIME é do servidor e a resposta nunca é cacheada.
+    /// </summary>
+    [HttpGet("{id:guid}/inspections/{tipo}/photos/{fotoId:guid}/content")]
+    [Authorize(Policy = PoliticasAutorizacao.Funcionario)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> ConteudoFoto(
+        Guid id,
+        string tipo,
+        Guid fotoId,
+        CancellationToken cancellationToken)
+    {
+        var conteudo = await _fotos.AbrirConteudoAsync(
+            AtorHttp.Obter(User),
+            id,
+            tipo,
+            fotoId,
+            CorrelacaoHttp.Obter(HttpContext),
+            cancellationToken);
+
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers.ContentDisposition = $"inline; filename=\"{conteudo.NomeArquivo}\"";
+
+        return new FileStreamResult(conteudo.Conteudo, conteudo.Mime)
+        {
+            EnableRangeProcessing = false
+        };
+    }
+
+    private static byte[] LerVersao(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+        {
+            throw ExcecaoAplicacao.Validacao(
+                "stale_attendance_version",
+                "Informe a versão atual do atendimento para anexar a foto.");
+        }
+
+        try
+        {
+            return Convert.FromBase64String(valor);
+        }
+        catch (FormatException)
+        {
+            throw ExcecaoAplicacao.Validacao(
+                "stale_attendance_version",
+                "A versão do atendimento é inválida. Recarregue o estado atual.");
+        }
+    }
+
+    /// <summary>
     /// Registra a vistoria textual de saída, única e imutável. Aceita os três
     /// perfis e exige <c>Idempotency-Key</c> e a versão-base do atendimento.
     /// Respostas: 201 com recibo mínimo; 400 texto/versão inválidos; 403 perfil;
@@ -225,3 +349,8 @@ public sealed record RegistrarEntradaRequisicao(
     string? Documento,
     string? Vistoria,
     Guid VagaId);
+
+/// <summary>Formulário multipart de uma única foto; versão-base vem do cliente.</summary>
+public sealed record EnviarFotoFormulario(
+    IFormFile? Arquivo,
+    string? VersaoAtendimentoEsperada);

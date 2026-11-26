@@ -187,3 +187,27 @@ O sistema SHALL descartar fotos após 90 dias contados do marco mais recente de 
 
 - **WHEN** o funcionário consulta uma foto confirmada
 - **THEN** a interface não oferece exclusão, substituição ou novo upload fora da janela da vistoria
+
+### Requirement: Envio de fotos pré-selecionadas no check-in
+
+Após o check-in confirmado, o sistema SHALL aceitar o envio individual das fotos pré-selecionadas na entrada, uma por requisição, com chave idempotente própria, e SHALL revalidar vínculo, janela, versão e limite. Falha de uma foto SHALL NOT desfazer a entrada nem impedir a repetição das demais (RF-13).
+
+#### Scenario: Fila de fotos após o check-in
+
+- **WHEN** o check-in é confirmado e a SPA carrega a versão do atendimento
+- **THEN** cada foto selecionada é enviada em uma requisição própria, com vínculo à vistoria de entrada e chave distinta
+
+#### Scenario: Falha isolada e repetição
+
+- **WHEN** uma das fotos falha enquanto outra é confirmada
+- **THEN** a entrada e as fotos confirmadas permanecem válidas, a foto afetada pode ser repetida com a mesma chave/conteúdo e as demais não são reenviadas
+
+#### Scenario: Janela encerrada durante a fila
+
+- **WHEN** o pedido de retirada é criado antes de uma foto pré-selecionada ser confirmada
+- **THEN** a API recusa apenas essa foto, a entrada continua registrada e a tela informa que o anexo de entrada foi encerrado
+
+#### Scenario: Nenhum envio antes da confirmação
+
+- **WHEN** o check-in ainda está pendente, incerto ou foi rejeitado
+- **THEN** nenhuma reserva, objeto ou metadado de foto é criado, mesmo que arquivos tenham sido selecionados

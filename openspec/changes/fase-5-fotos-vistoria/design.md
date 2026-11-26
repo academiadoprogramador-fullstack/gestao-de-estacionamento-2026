@@ -109,13 +109,22 @@ O detalhe do atendimento e o histórico recebem `fotos: { entrada: { quantidade,
 Reutilizar os padrões de `core/comando` e os serviços de atendimento/delivery:
 
 - seção de fotos no detalhe de atendimentos para a vistoria de entrada, com envio só a Caixa/Admin e leitura pelos três; seção equivalente na operação de entrega para a saída, com envio pelos três;
+- no check-in, seleção prévia de até cinco arquivos em memória; após a confirmação, uma seção de fotos da vistoria recém-criada inicia o envio individual das seleções;
 - seleção de arquivo com `accept` de JPEG/PNG/WebP, validação de tamanho/MIME apenas como feedback; o servidor revalida;
 - lista com estado textual, contagem, janela, aviso de cota e ações “Ler foto”/“Enviar foto”, sem exclusão ou substituição;
 - leitura por `Blob` temporário, `URL.createObjectURL`, revogação ao fechar o diálogo, trocar seleção, sair da rota ou logout; sem cache, IndexedDB ou URL do R2;
 - tentativa de upload pendente/incerta apenas em memória, com bloqueio de navegação/logout, aviso de saída, repetição explícita pela mesma chave/conteúdo e nenhuma nova chave automática;
 - mensagens de limite, janela, formato, armazenamento e cota com resumo focado e `aria-invalid`/associação ao campo quando aplicável.
 
-Não criar galeria fora do atendimento nem nova rota de administração de fotos. O protótipo de referência é [atendimento-fotos-entrada.html](prototypes/atendimento-fotos-entrada.html) e [entrega-fotos-saida.html](prototypes/entrega-fotos-saida.html).
+Não criar galeria fora do atendimento nem nova rota de administração de fotos. O protótipo de referência é [atendimento-fotos-entrada.html](prototypes/atendimento-fotos-entrada.html), [check-in-fotos-entrada.html](prototypes/check-in-fotos-entrada.html) e [entrega-fotos-saida.html](prototypes/entrega-fotos-saida.html).
+
+### D5-11 — Pré-seleção de fotos no check-in
+
+O formulário de check-in mantém um array em memória com até cinco `File` (`fotosSelecionadas`), validado localmente por MIME, tamanho e quantidade. O `POST /attendances` continua recebendo apenas os campos textuais e a chave do check-in; nenhum arquivo, base64 ou chave de foto entra nesse corpo ou na transação. O componente `CheckIn` exibe as fotos como “aguardando check-in” e permite removê-las antes do envio.
+
+Quando o check-in retorna sucesso, a SPA consulta `GET /attendances/{id}` para obter `versaoAtendimento` e o resumo de fotos. Se a consulta falhar, a entrada permanece confirmada e a tela oferece recarregar o atendimento ou continuar sem fotos; nenhuma foto é enviada sem versão válida. Com a versão, a seção de fotos de entrada é renderizada em modo de fila e envia uma foto por requisição, em sequência, cada uma com sua própria `Idempotency-Key`, usando o mesmo coordenador de comando em memória. Uma foto incerta interrompe a fila e exige repetição explícita; uma foto confirmada sai da fila; uma foto rejeitada permanece para correção/repetição ou descarte, sem desfazer a entrada. O limite de cinco é revalidado no servidor.
+
+Se o check-in for rejeitado, nenhuma foto é enviada e as seleções continuam em memória para correção; se for incerto, a mesma tentativa de check-in deve ser repetida antes de qualquer foto. Iniciar outro check-in, trocar ator/rota, fazer logout ou confirmar a saída do navegador descarta as seleções não enviadas; não há storage, cookie ou restauração. Fotos já confirmadas permanecem no atendimento e continuam disponíveis no detalhe até o pedido de retirada. Alternativa descartada: enviar as fotos junto do multipart do check-in, que misturaria I/O externo à transação e faria uma falha de foto bloquear a entrada.
 
 ### D5-10 — Configuração, versões e falha fechada
 
@@ -125,6 +134,7 @@ Fixar `AWSSDK.S3`, `SkiaSharp` e `SkiaSharp.NativeAssets.Linux` em `Directory.Pa
 
 ## Prototype
 
+- [check-in-fotos-entrada.html](prototypes/check-in-fotos-entrada.html): formulário de check-in com seleção prévia em memória, confirmação da entrada e fila de envio das fotos com falha/retry.
 - [atendimento-fotos-entrada.html](prototypes/atendimento-fotos-entrada.html): detalhe do atendimento, vistoria de entrada, galeria, janela, perfis, limite, orçamento, tentativa incerta e leitura auditada.
 - [entrega-fotos-saida.html](prototypes/entrega-fotos-saida.html): vistoria de saída, galeria, prontidão, entrega, fechamento da janela e chegada concorrente.
 
@@ -138,6 +148,7 @@ Os protótipos usam CSS inline com utilitários de **Tailwind CSS 4.3.5** (distr
 - **Imagem maliciosa ou metadados residuais** → magic bytes, limite antes da alocação, reencode sem cópia de metadados, teste com fixture EXIF/GPS e contrato real R2.
 - **Limite de cinco sob concorrência** → bloqueio/versão na mesma fronteira da vistoria/pedido/entrega e índice/constraint; testar com escritores SQL independentes.
 - **Retenção apaga cedo demais** → elegibilidade derivada de entrega e quitação, leitura nega vencido antes da remoção, lote retomável e auditoria sem conteúdo.
+- **Fila de fotos após o check-in** → seleção apenas em memória, envio por arquivo após a versão do atendimento, falha isolada sem rollback da entrada e repetição explícita da mesma chave; sem storage no navegador.
 - **SkiaSharp/AWSSDK incompatíveis com Linux/R2** → prova F5-01 bloqueante antes do fluxo; se falhar, parar e rever a biblioteca, sem trocar a política de metadados.
 
 ## Migration Plan

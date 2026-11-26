@@ -1,6 +1,6 @@
 # Tasks — Fase 5: fotos das vistorias
 
-Antes de editar código, registrar revisão e aceite dos artefatos SDD e iniciar o fluxo Apply explicitamente. Rastreabilidade: PRD §5.6 e RF-13; TDD §4.4 (F5-T01–07) e roadmap F5-01–07. Os itens abaixo ainda não foram executados. Protótipos de referência: [atendimento-fotos-entrada.html](prototypes/atendimento-fotos-entrada.html) e [entrega-fotos-saida.html](prototypes/entrega-fotos-saida.html).
+Antes de editar código, registrar revisão e aceite dos artefatos SDD e iniciar o fluxo Apply explicitamente. Rastreabilidade: PRD §5.6 e RF-13; TDD §4.4 (F5-T01–07) e roadmap F5-01–07. Os itens abaixo ainda não foram executados. Protótipos de referência: [check-in-fotos-entrada.html](prototypes/check-in-fotos-entrada.html), [atendimento-fotos-entrada.html](prototypes/atendimento-fotos-entrada.html) e [entrega-fotos-saida.html](prototypes/entrega-fotos-saida.html).
 
 ## 1. Prova técnica, dependências e configuração — F5-01
 
@@ -40,7 +40,7 @@ Antes de editar código, registrar revisão e aceite dos artefatos SDD e iniciar
 - [x] 6.1 Implementar no detalhe de atendimento a seção de fotos da vistoria de entrada conforme [atendimento-fotos-entrada.html](prototypes/atendimento-fotos-entrada.html): contagem, janela, envio só a Caixa/Admin, consulta pelos três, estados de limite/cota/armazenamento e leitura em blob temporário com revogação. Verificar com Vitest os perfis, erros focados, descarte de respostas tardias e nenhuma URL do R2 (spec `fotos-vistoria`).
 - [x] 6.2 Implementar na operação de entrega a seção de fotos de saída e a prontidão com “fotos opcionais” conforme [entrega-fotos-saida.html](prototypes/entrega-fotos-saida.html), incluindo envio pelos três perfis até a entrega, fechamento da janela e contingência textual. Verificar com Vitest perfis, bloqueios, entrega sem fotos e janela encerrada (specs `vistoria-saida`, `entrega-veiculo`).
 - [x] 6.3 Reutilizar o coordenador de comandos para tentativa incerta de upload: bloquear navegação/logout, avisar saída do browser, repetir explicitamente a mesma chave/conteúdo, não reenviar automaticamente e limpar ao trocar ator/rota/sessão. Cobrir com Vitest e verificar ausência de `localStorage`/`sessionStorage`/IndexedDB (RNF-03; F5-T05).
-- [ ] 6.4 Revisar os dois protótipos e a SPA nos dois sentidos: todo cenário coberto aparece na interface e nenhum controle/estado novo carece de spec. Registrar a divergência intencional (Tailwind 4.3.5 nativo na SPA, controles de revisão apenas no protótipo) e fazer avaliação manual de teclado/foco/tecnologia assistiva com ambiente registrado, sem declarar WCAG por inferência (RNF-04; PRD §5.6).
+- [ ] 6.4 Revisar os protótipos e a SPA nos dois sentidos: todo cenário coberto aparece na interface e nenhum controle/estado novo carece de spec. Registrar a divergência intencional (Tailwind 4.3.5 nativo na SPA, controles de revisão apenas no protótipo) e fazer avaliação manual de teclado/foco/tecnologia assistiva com ambiente registrado, sem declarar WCAG por inferência (RNF-04; PRD §5.6).
 
 ## 7. Gate local, evidências e documentação — F5-06/07
 
@@ -48,6 +48,14 @@ Antes de editar código, registrar revisão e aceite dos artefatos SDD e iniciar
 - [x] 7.2 Executar a suíte opt-in de contrato real com R2 privado e imagens sintéticas, incluindo queda após `PutObject`, reconciliação, limpeza de órfão e leitura de conteúdo; registrar bucket/ambiente, resultados e o que não foi provado (F5-T07).
 - [x] 7.3 Documentar o runbook de reconciliação de consumo (franquias, ajustes de outros ambientes/cópias, aviso 70%/suspensão 80%, conferência manual da conta e contingência textual) e validar que nenhum passo imprime credenciais ou chaves (DT-18/23; F5-T06).
 - [x] 7.4 Atualizar o roadmap do TDD somente para verificações efetivamente concluídas, manter PRD/TDD coerentes com decisões posteriores e rodar `openspec validate --all --strict`. Checar rastreabilidade RF-13, F5-T01–07, F5-01–07 e os protótipos antes da revisão do PR.
+
+## 8. Check-in com pré-seleção de fotos — F5-05
+
+- [ ] 8.1 Permitir ao formulário de check-in selecionar 0–5 fotos JPEG/PNG/WebP de até 5 MiB, validar localmente e manter os arquivos somente em memória, sem enviar conteúdo de foto no corpo, na chave ou na transação do check-in. Cobrir com Vitest: seleção válida, sexta foto, formato/tamanho inválido, remoção antes do envio e ausência de upload antes do `201` (spec `atendimentos`; D5-11).
+- [ ] 8.2 Após o check-in confirmado, consultar a versão do atendimento e renderizar a fila de fotos da vistoria criada, enviando uma foto por requisição com chave própria e estados por foto. Verificar que a entrada permanece confirmada se a consulta de versão falhar e que nenhuma foto é enviada antes do sucesso (specs `atendimentos`, `fotos-vistoria`; D5-11).
+- [ ] 8.3 Tratar falha isolada de foto após o check-in: manter a entrada e as fotos confirmadas, permitir repetir somente a foto afetada com mesma chave/conteúdo, impedir reenvio automático com chave nova e descartar seleções não enviadas em novo check-in, logout, troca de rota ou saída confirmada do navegador. Cobrir com Vitest e Playwright (RNF-03; D5-11).
+- [ ] 8.4 Atualizar o protótipo [check-in-fotos-entrada.html](prototypes/check-in-fotos-entrada.html) e revisar a SPA nos dois sentidos: seleção antes do check-in, confirmação, fila, falha/retry, check-in rejeitado/incerto e saída. Fazer avaliação manual de teclado/foco/tecnologia assistiva com ambiente registrado, sem declarar WCAG por inferência (RNF-04; PRD §5.6).
+- [ ] 8.5 Executar Vitest, Playwright e as regressões das Fases 1–4; atualizar `docs/fases/fase-5.md`, roadmap/TDD e evidências com os novos cenários de check-in, sem alterar a conclusão dos gates anteriores.
 
 ## Workflow follow-up
 

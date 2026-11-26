@@ -1,0 +1,448 @@
+<!--
+  High-fidelity prototype — Check-in com pré-seleção de fotos
+  Source: proposal.md (What Changes), specs/atendimentos/spec.md, specs/fotos-vistoria/spec.md
+  Style: Tailwind CSS 4.3.5 (inlined utility subset, MIT, https://tailwindcss.com) + project palette and inline CSS.
+  Covered:
+    - Seleção prévia de fotos no formulário de check-in / Fotos selecionadas antes do check-in; Limite ou arquivo inválido na seleção; Check-in rejeitado ou incerto antes das fotos -> selection list, memory-only notice, local validation and rejected/uncertain states.
+    - Envio de fotos após a confirmação do check-in / Check-in confirmado e fila de fotos; Falha isolada de foto; Versão ou detalhe indisponível; Saída antes da conclusão das fotos -> success panel, per-photo queue, retry, unavailable state and discard notice.
+    - Envio de fotos pré-selecionadas no check-in / Fila de fotos após o check-in; Falha isolada e repetição; Janela encerrada durante a fila; Nenhum envio antes da confirmação -> queue status, window-closed message and no-upload-before-success.
+    - Anexos opcionais e janelas por vistoria / Perfil não autorizado -> Caixa/Admin only, optional photos.
+    - Validação e normalização da imagem / Formato ou conteúdo inválido; Limites excedidos -> client feedback only, server authority note.
+    - Armazenamento privado e metadados mínimos / Metadados confirmados -> no bucket key or URL in UI.
+  Not specified (presentational only): chrome reused from the app, fictional identities and review controls.
+  Open questions: none. No network, backend or storage; reloading restores the synthetic data.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protótipo — Check-in com fotos</title>
+  <style>
+    /*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
+    @layer utilities {
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border-width: 0; }
+      .break-words { overflow-wrap: break-word; }
+    }
+    :root { color-scheme: dark; font: 16px/1.5 system-ui,sans-serif; color: #e2e8f0; background: #020617; }
+    * { box-sizing: border-box; } [hidden] { display: none !important; }
+    body { margin: 0; } a { color: #7dd3fc; } :focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+    header { padding: .9rem max(1rem,calc((100% - 70rem)/2)); border-bottom: 1px solid #334155; font-weight: 700; }
+    header span { margin-left: .7rem; font-weight: 400; color: #94a3b8; }
+    main, .review { width: min(70rem,calc(100% - 2rem)); margin: 1rem auto; }
+    .review, .card, dialog { padding: 1rem; border: 1px solid #334155; border-radius: .8rem; background: #0f172a; }
+    .review { border-color: #80601f; color: #fde68a; background: #201809; font-size: .875rem; }
+    summary { cursor: pointer; } .row { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,22rem),1fr)); gap: 1rem; align-items: start; }
+    .eyebrow, h2 { letter-spacing: .09em; text-transform: uppercase; font-size: .85rem; }
+    .eyebrow { color: #7dd3fc; font-weight: 750; margin: 1.25rem 0 .25rem; }
+    h1 { margin: 0; color: #fff; font-size: 1.8rem; } h2, h3 { margin: 0 0 .6rem; }
+    .muted { color: #a5b4c7; } .badge { border-radius: 2rem; padding: .25rem .65rem; background: #17304b; color: #bae6fd; font-weight: 650; }
+    .meta { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit,minmax(9rem,1fr)); margin: .75rem 0 1rem; padding: .85rem; background: #0d1b2e; border: 1px solid #1e3a53; border-radius: .65rem; }
+    dt { font-size: .8rem; color: #a5b4c7; } dd { margin: 0; font-weight: 650; }
+    output, #notice:not(:empty), #problem:not(:empty), .alert { display: block; border: 1px solid #3b5975; border-radius: .5rem; padding: .7rem; margin: .65rem 0; background: #0d2238; }
+    output { white-space: pre-wrap; } #problem:not(:empty) { color: #fecdd3; background: #341722; border-color: #9f5266; }
+    .alert.warning { color: #fde68a; background: #201809; border-color: #80601f; }
+    .alert.danger { color: #fecdd3; background: #341722; border-color: #9f5266; }
+    button, input, textarea, select { font: inherit; color: inherit; background: #020617; border: 1px solid #64748b; border-radius: .5rem; padding: .5rem .65rem; }
+    button { font-weight: 650; cursor: pointer; } button:disabled { opacity: .55; cursor: default; }
+    .primary { color: #02121f; background: #38bdf8; border-color: #38bdf8; }
+    label { display: block; margin-top: .7rem; color: #cbd5e1; }
+    input[type="text"], textarea, select { display: block; width: 100%; margin-top: .25rem; }
+    .photos { display: grid; grid-template-columns: repeat(auto-fit,minmax(10rem,1fr)); gap: .75rem; padding: 0; margin: .8rem 0; list-style: none; }
+    .photo { padding: .55rem; border: 1px solid #334155; border-radius: .65rem; background: #0b1728; }
+    .photo img { display: block; width: 100%; height: 6.5rem; object-fit: cover; border-radius: .45rem; background: #1e293b; }
+    .photo p { margin: .4rem 0; font-size: .82rem; }
+    .pill { display: inline-block; padding: .1rem .45rem; border-radius: 1rem; background: #14532d; color: #bbf7d0; font-size: .76rem; }
+    .pill.pending { background: #422006; color: #fde68a; }
+    .pill.fail { background: #4c0519; color: #fecdd3; }
+    .steps { margin: .5rem 0; padding-left: 1.2rem; } .steps li + li { margin-top: .3rem; }
+    .success { border-color: #15803d; background: #052e1a; }
+    .success h2 { color: #bbf7d0; }
+    code { font-family: ui-monospace, SFMono-Regular, monospace; }
+    @media (max-width: 48rem) { header { padding-inline: 1rem; } }
+  </style>
+</head>
+<body>
+  <header>Gestão de estacionamento <span>Operação · Check-in</span></header>
+  <details class="review" open>
+    <summary>Protótipo para revisão · dados fictícios · sem servidor</summary>
+    <div class="row">
+      <label>Perfil simulado
+        <select id="role">
+          <option>Caixa</option>
+          <option>Administrador</option>
+          <option value="Manobrista">Manobrista (sem acesso ao check-in)</option>
+        </select>
+      </label>
+      <label>Cenário simulado
+        <select id="fixture">
+          <option value="form">Formulário com duas fotos selecionadas</option>
+          <option value="success">Check-in confirmado · fila de fotos</option>
+          <option value="failure">Check-in confirmado · uma foto falhou</option>
+          <option value="unavailable">Check-in confirmado · versão indisponível</option>
+          <option value="rejected">Check-in rejeitado</option>
+          <option value="uncertain">Check-in incerto</option>
+          <option value="empty">Formulário sem fotos</option>
+        </select>
+      </label>
+      <label>Próxima resposta do check-in
+        <select id="submit-response">
+          <option value="ok">Confirmado</option>
+          <option value="rejected">Rejeitado</option>
+          <option value="lost">Resposta perdida</option>
+        </select>
+      </label>
+    </div>
+  </details>
+
+  <main>
+    <nav aria-label="Retorno"><a href="#">← Área de trabalho</a></nav>
+    <p class="eyebrow">Operação</p>
+    <h1>Check-in</h1>
+    <p id="problem" tabindex="-1" role="alert"></p>
+    <p id="notice" role="status"></p>
+
+    <section id="no-access" class="card alert danger" hidden>
+      O Manobrista não registra entradas nem seleciona fotos de check-in. A consulta das fotos confirmadas permanece
+      disponível no atendimento.
+    </section>
+
+    <div id="workspace" class="grid">
+      <section class="card" aria-labelledby="form-title">
+        <h2 id="form-title">Dados da entrada</h2>
+        <p class="muted">Horário, operador, identificador e tarifa são do servidor.</p>
+
+        <div class="grid">
+          <div>
+            <label for="placa">Placa</label>
+            <input id="placa" type="text" value="DEMO123" autocomplete="off">
+            <label for="modelo">Modelo</label>
+            <input id="modelo" type="text" value="Modelo sintético">
+            <label for="titular">Titular</label>
+            <input id="titular" type="text" value="Titular sintético">
+          </div>
+          <div>
+            <label for="documento">Documento do titular</label>
+            <input id="documento" type="text" value="000.000.000-00">
+            <label for="vaga">Vaga livre</label>
+            <select id="vaga"><option>B-07</option><option>C-02</option></select>
+          </div>
+        </div>
+
+        <label for="vistoria">Vistoria textual de entrada (obrigatória)</label>
+        <textarea id="vistoria" rows="4">Pintura sintética íntegra; interior sem avarias simuladas.</textarea>
+
+        <section class="card" aria-labelledby="photos-title" style="margin-top:1rem">
+          <h2 id="photos-title">Fotos opcionais da entrada</h2>
+          <p class="muted">
+            Selecione até 5 fotos agora. Elas ficam somente em memória e só são enviadas depois do check-in
+            confirmado. A entrada continua válida sem fotos.
+          </p>
+          <label for="fotos">Selecionar fotos</label>
+          <input id="fotos" type="file" accept="image/jpeg,image/png,image/webp" multiple
+            aria-describedby="fotos-help fotos-error">
+          <p id="fotos-help" class="muted">
+            JPEG, PNG ou WebP estático, até 5 MiB, 20 MP e 10.000 px por lado. A validação local é apenas
+            feedback; o servidor revalida.
+          </p>
+          <p id="fotos-error" class="alert danger" hidden></p>
+          <p id="photos-note" class="alert warning" hidden></p>
+          <ul class="photos" id="selected-photos" aria-label="Fotos selecionadas antes do check-in"></ul>
+          <p id="empty-photos" class="muted" hidden>Nenhuma foto selecionada. A entrada textual pode ser registrada.</p>
+        </section>
+
+        <div class="row" style="margin-top:1rem">
+          <button class="primary" id="submit" type="button">Registrar entrada</button>
+          <button id="clear" type="button">Limpar fotos</button>
+        </div>
+        <p class="muted" style="font-size:.82rem">
+          O corpo do check-in envia apenas os campos textuais. Nenhum arquivo ou chave de foto é incluído na
+          transação da entrada.
+        </p>
+      </section>
+
+      <section class="card" aria-labelledby="side-title">
+        <h2 id="side-title">Estado do fluxo</h2>
+        <p class="muted" id="flow-state">Formulário em memória; nenhum upload iniciado.</p>
+        <ul class="steps">
+          <li>Seleção local não reserva vaga nem cria atendimento.</li>
+          <li>O check-in é atômico e não depende das fotos.</li>
+          <li>Após o <code>201</code>, a versão do atendimento é carregada.</li>
+          <li>Cada foto usa uma chave idempotente própria.</li>
+          <li>Falha de foto não desfaz a entrada.</li>
+        </ul>
+        <p id="window-note" class="alert warning" hidden>
+          A janela de fotos de entrada encerra quando o pedido de retirada for criado. Se isso ocorrer durante a
+          fila, a foto pendente é recusada e a entrada permanece válida.
+        </p>
+      </section>
+    </div>
+
+    <section id="success" class="card success" aria-labelledby="success-title" hidden>
+      <h2 id="success-title">Entrada registrada</h2>
+      <dl class="meta">
+        <div><dt>Identificador</dt><dd class="select-all">AT-DEMO-0042</dd></div>
+        <div><dt>Vaga</dt><dd>B-07</dd></div>
+        <div><dt>Horário</dt><dd>24/11/2026 às 10:42</dd></div>
+      </dl>
+      <p>
+        O check-in foi confirmado sem depender das fotos. A fila abaixo envia cada seleção separadamente, com
+        chave própria; uma falha não desfaz a entrada.
+      </p>
+      <ul id="queue" class="steps" aria-label="Fila de envio das fotos selecionadas"></ul>
+      <div id="queue-actions" class="row" hidden>
+        <button id="retry-photo" type="button">Repetir a foto que falhou</button>
+        <button id="continue-without" type="button">Continuar sem essa foto</button>
+      </div>
+      <p id="version-error" class="alert danger" hidden>
+        A versão do atendimento não pôde ser carregada. Nenhuma foto foi enviada; a entrada continua registrada.
+        <button id="reload-detail" type="button">Recarregar atendimento</button>
+      </p>
+      <div class="row" style="margin-top:1rem">
+        <button class="primary" id="new-checkin" type="button">Registrar outra entrada</button>
+        <button id="open-detail" type="button">Abrir detalhe do atendimento</button>
+      </div>
+    </section>
+
+    <section id="uncertain" class="card alert warning" role="alert" hidden>
+      <h2>Resultado incerto</h2>
+      <p>
+        A resposta do check-in se perdeu. Nenhuma foto foi enviada. Repita a tentativa com a mesma chave e o
+        mesmo conteúdo; as fotos selecionadas continuam apenas em memória.
+      </p>
+      <button id="retry-checkin" type="button">Repetir o check-in</button>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+
+    const byId = (id) => document.getElementById(id);
+    const role = byId("role");
+    const fixture = byId("fixture");
+    const response = byId("submit-response");
+    const selected = [];
+    let checkedIn = false;
+
+    const photoSvg = (index) => {
+      const labels = ["Frente", "Lateral", "Traseira", "Interior", "Painel"];
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="220" viewBox="0 0 360 220"><rect width="360" height="220" fill="#172033"/><rect x="22" y="92" width="316" height="78" rx="20" fill="#2b3d58"/><circle cx="94" cy="172" r="27" fill="#0b1220"/><circle cx="264" cy="172" r="27" fill="#0b1220"/><circle cx="94" cy="172" r="9" fill="#64748b"/><circle cx="264" cy="172" r="9" fill="#64748b"/><path d="M105 92 134 45h92l29 47" fill="#3b5170"/><text x="24" y="34" fill="#e2e8f0" font-family="system-ui" font-size="15" font-weight="700">Foto sintética ${index + 1} · ${labels[index]}</text><text x="24" y="54" fill="#94a3b8" font-family="system-ui" font-size="12">check-in · sem pessoas ou dados reais</text></svg>`;
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    };
+
+    const limparMensagens = () => {
+      ["problem", "notice", "fotos-error", "photos-note"].forEach((id) => {
+        byId(id).hidden = true;
+        byId(id).textContent = "";
+      });
+    };
+
+    const renderSelecionadas = () => {
+      const lista = byId("selected-photos");
+      lista.innerHTML = "";
+      selected.forEach((foto, index) => {
+        const li = document.createElement("li");
+        li.className = "photo";
+        li.innerHTML = `
+          <img src="${photoSvg(index)}" alt="Foto sintética ${index + 1} selecionada para o check-in">
+          <p><strong>${foto.name}</strong><br><span class="muted">${foto.status}</span></p>
+          <p><span class="pill ${foto.status === "Confirmada" ? "" : foto.status === "Falhou" ? "fail" : "pending"}">${foto.status}</span></p>
+          ${foto.status === "Selecionada" ? `<button type="button" data-remove="${index}">Remover</button>` : ""}`;
+        lista.append(li);
+      });
+      lista.querySelectorAll("[data-remove]").forEach((botao) => {
+        botao.addEventListener("click", () => {
+          if (checkedIn) return;
+          selected.splice(Number(botao.dataset.remove), 1);
+          renderSelecionadas();
+        });
+      });
+      byId("empty-photos").hidden = selected.length !== 0;
+      byId("photos-note").hidden = selected.length === 0;
+      byId("photos-note").textContent = selected.length
+        ? `${selected.length} foto(s) apenas em memória. O envio começa depois do check-in confirmado.`
+        : "";
+    };
+
+    const preencherCenario = () => {
+      checkedIn = false;
+      selected.length = 0;
+      limparMensagens();
+      byId("success").hidden = true;
+      byId("uncertain").hidden = true;
+      byId("workspace").hidden = false;
+      byId("no-access").hidden = true;
+      byId("version-error").hidden = true;
+      byId("queue-actions").hidden = true;
+      byId("flow-state").textContent = "Formulário em memória; nenhum upload iniciado.";
+      byId("window-note").hidden = true;
+      byId("submit").textContent = "Registrar entrada";
+      byId("submit").disabled = false;
+
+      if (role.value === "Manobrista") {
+        byId("workspace").hidden = true;
+        byId("no-access").hidden = false;
+        return;
+      }
+
+      const quantidade = fixture.value === "empty" ? 0 : fixture.value === "failure" ? 3 : 2;
+      for (let index = 0; index < quantidade; index += 1) {
+        selected.push({ name: `foto-sintetica-${index + 1}.jpg`, status: "Selecionada" });
+      }
+
+      if (fixture.value === "success" || fixture.value === "failure" || fixture.value === "unavailable") {
+        mostrarSucesso();
+      }
+      if (fixture.value === "rejected") {
+        byId("problem").hidden = false;
+        byId("problem").textContent = "A vaga selecionada não está mais livre. As fotos permanecem apenas em memória e nenhum upload foi iniciado.";
+      }
+      if (fixture.value === "uncertain") {
+        byId("uncertain").hidden = false;
+        byId("flow-state").textContent = "Check-in incerto; navegação bloqueada até repetir ou descartar.";
+      }
+
+      renderSelecionadas();
+    };
+
+    const mostrarSucesso = () => {
+      checkedIn = true;
+      byId("workspace").hidden = true;
+      byId("success").hidden = false;
+      byId("flow-state").textContent = "Check-in confirmado; fila de fotos em andamento.";
+      byId("window-note").hidden = false;
+      const fila = byId("queue");
+      fila.innerHTML = "";
+
+      selected.forEach((foto, index) => {
+        if (fixture.value === "unavailable") {
+          foto.status = "Não enviada";
+        } else if (fixture.value === "failure" && index === 2) {
+          foto.status = "Falhou";
+        } else if (fixture.value === "failure" && index === 1) {
+          foto.status = "Enviando…";
+        } else {
+          foto.status = "Confirmada";
+        }
+
+        const li = document.createElement("li");
+        li.innerHTML = `Foto ${index + 1} · ${foto.name} · <span class="pill ${foto.status === "Confirmada" ? "" : foto.status === "Falhou" ? "fail" : "pending"}">${foto.status}</span>`;
+        fila.append(li);
+      });
+
+      if (fixture.value === "failure") {
+        byId("queue-actions").hidden = false;
+      }
+      if (fixture.value === "unavailable") {
+        byId("version-error").hidden = false;
+      }
+    };
+
+    byId("fotos").addEventListener("change", (event) => {
+      const entrada = event.target;
+      const arquivos = Array.from(entrada.files || []);
+      const erro = byId("fotos-error");
+
+      if (checkedIn) {
+        return;
+      }
+
+      for (const arquivo of arquivos) {
+        if (selected.length >= 5) {
+          erro.hidden = false;
+          erro.textContent = "O limite de cinco fotos por vistoria foi atingido.";
+          break;
+        }
+        if (!["image/jpeg", "image/png", "image/webp"].includes(arquivo.type)) {
+          erro.hidden = false;
+          erro.textContent = "Formato não aceito. Envie JPEG, PNG ou WebP estático; SVG, animação e arquivo corrompido são recusados.";
+          continue;
+        }
+        if (arquivo.size > 5 * 1024 * 1024) {
+          erro.hidden = false;
+          erro.textContent = "Arquivo acima de 5 MiB. O check-in continua possível sem esta foto.";
+          continue;
+        }
+        selected.push({ name: arquivo.name, status: "Selecionada" });
+      }
+
+      entrada.value = "";
+      renderSelecionadas();
+    });
+
+    byId("clear").addEventListener("click", () => {
+      if (checkedIn) return;
+      selected.length = 0;
+      renderSelecionadas();
+    });
+
+    byId("submit").addEventListener("click", () => {
+      limparMensagens();
+      const resposta = response.value;
+      if (resposta === "rejected") {
+        byId("problem").hidden = false;
+        byId("problem").textContent = "A entrada foi recusada por validação ou regra. Nenhuma foto foi enviada; ajuste os dados e tente novamente.";
+        return;
+      }
+      if (resposta === "lost") {
+        byId("uncertain").hidden = false;
+        byId("flow-state").textContent = "Check-in incerto; nenhuma foto enviada.";
+        return;
+      }
+      mostrarSucesso();
+      byId("notice").hidden = false;
+      byId("notice").textContent = "Entrada registrada sem depender das fotos.";
+    });
+
+    byId("retry-checkin").addEventListener("click", () => {
+      byId("uncertain").hidden = true;
+      byId("notice").hidden = false;
+      byId("notice").textContent = "Repetição do check-in com a mesma chave e o mesmo conteúdo; as fotos continuam em memória.";
+    });
+
+    byId("retry-photo").addEventListener("click", () => {
+      fixture.value = "success";
+      selected.forEach((foto) => { if (foto.status === "Falhou" || foto.status === "Enviando…") foto.status = "Confirmada"; });
+      byId("queue-actions").hidden = true;
+      byId("notice").hidden = false;
+      byId("notice").textContent = "Somente a foto afetada foi repetida com a mesma chave e o mesmo conteúdo.";
+      mostrarSucesso();
+      byId("queue-actions").hidden = true;
+    });
+
+    byId("continue-without").addEventListener("click", () => {
+      fixture.value = "success";
+      selected.splice(selected.findIndex((foto) => foto.status === "Falhou"), 1);
+      byId("queue-actions").hidden = true;
+      byId("notice").hidden = false;
+      byId("notice").textContent = "A foto com falha foi mantida fora da fila; a entrada continua válida.";
+      mostrarSucesso();
+    });
+
+    byId("reload-detail").addEventListener("click", () => {
+      byId("version-error").hidden = true;
+      byId("notice").hidden = false;
+      byId("notice").textContent = "Atendimento recarregado; a fila pode ser retomada sem refazer o check-in.";
+    });
+
+    byId("new-checkin").addEventListener("click", () => {
+      selected.length = 0;
+      fixture.value = "empty";
+      preencherCenario();
+      byId("notice").hidden = false;
+      byId("notice").textContent = "Novo check-in iniciado; seleções não enviadas foram descartadas da memória.";
+    });
+
+    byId("open-detail").addEventListener("click", () => {
+      byId("notice").hidden = false;
+      byId("notice").textContent = "A consulta de fotos confirmadas permanece disponível no detalhe do atendimento até o pedido de retirada.";
+    });
+
+    role.addEventListener("change", preencherCenario);
+    fixture.addEventListener("change", preencherCenario);
+    response.addEventListener("change", preencherCenario);
+    preencherCenario();
+  </script>
+</body>
+</html>

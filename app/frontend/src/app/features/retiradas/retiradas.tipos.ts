@@ -1,4 +1,5 @@
 import { Pagina } from '../../core/http/erro-api';
+import { ResumoFotosVistoria } from '../../shared/fotos-vistoria/fotos-vistoria.tipos';
 
 /** Vínculo histórico da entrega com a vaga liberada naquela visita. */
 export interface ResumoEntrega {
@@ -109,6 +110,7 @@ export interface AtendimentoBusca extends AtendimentoResumo {
   readonly tarifaValorSnapshot?: number;
   readonly versaoAtendimento?: string;
   readonly vistoriaSaidaRegistrada?: boolean;
+  readonly fotos?: ResumoFotosVistoria | null;
   readonly entrega?: ResumoEntrega | null;
   readonly retirada?: {
     readonly pedidoId: string;

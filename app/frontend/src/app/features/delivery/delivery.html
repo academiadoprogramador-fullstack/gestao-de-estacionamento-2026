@@ -221,9 +221,9 @@
             titulo="Fotos da vistoria de saída"
             [versaoAtendimento]="atendimentoAtual.versaoAtendimento || ''"
             [podeEnviar]="!entregue()"
-            [quantidadeInicial]="prontidao()?.fotos?.quantidadeSaida || 0"
-            [janelaInicial]="prontidao()?.fotos?.janelaSaida || 'encerrada'"
-            [orcamentoInicial]="prontidao()?.fotos?.orcamento || null"
+            [quantidadeInicial]="atendimentoAtual.fotos?.quantidadeSaida ?? prontidao()?.fotos?.quantidadeSaida ?? 0"
+            [janelaInicial]="atendimentoAtual.fotos?.janelaSaida ?? prontidao()?.fotos?.janelaSaida ?? 'encerrada'"
+            [orcamentoInicial]="atendimentoAtual.fotos?.orcamento ?? prontidao()?.fotos?.orcamento ?? null"
           />
         }
       }

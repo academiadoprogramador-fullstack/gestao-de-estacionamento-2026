@@ -35,11 +35,13 @@ Credenciais somente em User Secrets/appsettings de ambiente:
 
 Nenhum valor secreto é versionado, impresso em log ou enviado ao navegador. O bucket é privado e o navegador acessa o conteúdo apenas pela API bearer.
 
-## Prova técnica e bloqueio do R2
+## Prova técnica e contrato R2
 
 - `SkiaSharp` 4.157.0 foi executado em Linux x86-64, com encoding WebP e decodificação validados (imagem sintética de 320×200 produziu WebP válido).
-- `AWSSDK.S3` 4.1.2.1 foi fixado. A tentativa de contrato real com o endpoint/bucket configurados e as credenciais de `User Secrets`/`.env` retornou `AccessDenied`/`Forbidden` em `PutObject`, `GetObject`, `DeleteObject` e `ListBuckets`. O mesmo ocorreu com as credenciais de teste e com variações de path-style. Nenhum valor secreto foi impresso.
-- A suíte `FotosR2ContratoTestes` fica opt-in (`ESTACIONAMENTO_TESTE_R2=1`) e termina inconclusiva quando o bucket/credencial recusa acesso. **O contrato real com o R2 e a execução E2E de upload não estão comprovados nesta entrega.** É necessário confirmar o nome do bucket, a conta do endpoint e a permissão `Object Read & Write` do token.
+- `AWSSDK.S3` 4.1.2.1 foi fixado. O contrato real foi executado com o bucket privado de testes **`gestao-de-estacionamento-testes`**, usando as credenciais `R2_TEST_*` e imagens sintéticas: `PutObject`, `GetObject` e `DeleteObject` passaram.
+- O E2E Playwright anexou e leu uma foto de saída pela API/S3 de teste em `https://localhost:4300` e `https://localhost:4200`, sem expor chave do bucket ao navegador.
+- O bucket de desenvolvimento permanece configurado como **`gestao-estacionamento-dev`**. A conta Cloudflare exibida pelo solicitante possui hoje `gestao-de-estacionamento-dev` (com “de”); o solicitante informou que fará o ajuste no R2, mantendo o nome anterior na aplicação. O bucket de testes `gestao-de-estacionamento-testes` já está correto e foi o usado nas evidências.
+- Nenhum valor secreto foi impresso em logs, artefatos ou documentação.
 
 ## Testes executados
 
@@ -47,21 +49,24 @@ Nenhum valor secreto é versionado, impresso em log ou enviado ao navegador. O b
 dotnet build app/backend/Estacionamento.slnx
 dotnet test app/backend/tests/Estacionamento.UnitTests
 ESTACIONAMENTO_TESTE_CONEXAO='Server=127.0.0.1,14330;Database=master;User Id=sa;Password=<...>;Encrypt=True;TrustServerCertificate=True' \
+ESTACIONAMENTO_TESTE_R2=1 ESTACIONAMENTO_R2_TESTE_BUCKET='gestao-de-estacionamento-testes' \
   dotnet test app/backend/tests/Estacionamento.IntegrationTests
 cd app/frontend && npm test
+# Playwright: E2E_* + E2E_R2_HABILITADO=true, E2E_FOTOS=1 e o bucket de teste
+npx playwright test
 ```
 
 - Unitários MSTest: **79 aprovados**, incluindo regras de janela/limite, validação de opções, formatos JPEG/PNG/WebP, redução sem ampliação, remoção de marcador EXIF/GPS, orientação, corrupção, dimensão excessiva e processamento concorrente limitado.
-- Integração MSTest com SQL Server 2022 real: **110 aprovados e 1 ignorado** (contrato real R2 opt-in). Cobrem entrada/saída com e sem fotos, perfis, limite de cinco sob concorrência, replay/conflito, falha de armazenamento, aviso/bloqueio/consumo desconhecido de orçamento, retenção, descarte, manutenção de órfãos e migration aditiva/rollback.
+- Integração MSTest com SQL Server 2022 real: **111 aprovados**, incluindo o contrato real opt-in com o bucket R2 de testes. Cobrem entrada/saída com e sem fotos, perfis, limite de cinco sob concorrência, replay/conflito, falha de armazenamento, aviso/bloqueio/consumo desconhecido de orçamento, retenção, descarte, manutenção de órfãos, migration aditiva/rollback e Put/Get/Delete no R2 privado.
 - Vitest: **84 aprovados**, incluindo consulta explícita, leitura em blob com revogação, envio idempotente, repetição da mesma tentativa, ocultação para perfil consultivo e validação local de formato/tamanho.
-- Playwright: **19 jornadas aprovadas** entre duas origens HTTPS locais (regressões das Fases 1–4). O cenário de upload/consulta de fotos com R2 real não foi executado porque o contrato R2 está bloqueado por `AccessDenied`.
+- Playwright: **21 jornadas aprovadas** entre duas origens HTTPS locais: 19 regressões das Fases 1–4 e 2 cenários da Fase 5 (anexar/ler foto no R2 de teste e contingência com falha do armazenamento).
 - `openspec validate --all --strict`: **18 itens aprovados, 0 falhas**.
 - Os arquivos placeholder `Test1.cs` dos dois projetos de teste foram removidos.
 
 ## Limitações e pendências
 
-- R2 real não validado; a aplicação usa o adaptador e o dublê em memória nos testes. Não declarar integração R2 concluída antes de corrigir o acesso ao bucket.
-- E2E Playwright com upload/consulta de fotos não executado nesta sessão; as jornadas existentes das Fases 1–4 são regressão obrigatória quando o R2 estiver disponível.
+- O bucket de desenvolvimento configurado (`gestao-estacionamento-dev`) será alinhado pelo solicitante no R2, mantendo o nome anterior na aplicação; a conta possui hoje `gestao-de-estacionamento-dev`.
+- O contrato real e o E2E de upload foram validados com o bucket de testes `gestao-de-estacionamento-testes`.
 - Revisão manual de acessibilidade com tecnologia assistiva não executada; o alvo WCAG 2.2 AA não é declarado conformidade.
 - O orçamento é um controle conservador local, não uma trava de cobrança da Cloudflare. A conta deve ser conferida manualmente.
 - Sem CI, Azure, publicação, quotas reais de produção ou SLA.

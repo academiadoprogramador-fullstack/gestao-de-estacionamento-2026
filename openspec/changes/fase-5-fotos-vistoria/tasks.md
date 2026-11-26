@@ -4,7 +4,7 @@ Antes de editar código, registrar revisão e aceite dos artefatos SDD e iniciar
 
 ## 1. Prova técnica, dependências e configuração — F5-01
 
-- [ ] 1.1 Provar `AWSSDK.S3` contra o bucket R2 isolado de teste e `SkiaSharp` em Linux: upload/leitura/exclusão privada, encoding WebP, orientação, limites de memória e binários nativos. Fixar versões e licenças em `Directory.Packages.props` e registrar comandos, resultados e limitações em `docs/fases/fase-5.md`; se a prova falhar, parar e revisar a biblioteca com o solicitante (DT-16/17; F5-T01).
+- [x] 1.1 Provar `AWSSDK.S3` contra o bucket R2 isolado de teste e `SkiaSharp` em Linux: upload/leitura/exclusão privada, encoding WebP, orientação, limites de memória e binários nativos. Fixar versões e licenças em `Directory.Packages.props` e registrar comandos, resultados e limitações em `docs/fases/fase-5.md`; se a prova falhar, parar e revisar a biblioteca com o solicitante (DT-16/17; F5-T01).
 - [x] 1.2 Implementar `ArmazenamentoFotosOptions`/validador com endpoint HTTPS, região `auto`, bucket, limites, orçamento e flag `Habilitado`; registrar em `RegistroInfraestrutura` e `ValidadorConfiguracaoInicial`. Verificar startup que falha sem credencial quando habilitado, sem imprimir segredo, e `503 photo_storage_disabled` quando desabilitado, mantendo o fluxo textual (DT-18/25; F5-T01).
 - [x] 1.3 Documentar as novas chaves não sensíveis e os nomes de segredos em `README.md`, confirmando que `appsettings.Development.json` contém apenas endpoint/região/bucket/limites e que credenciais seguem em User Secrets (DT-25; PRD §10).
 
@@ -23,7 +23,7 @@ Antes de editar código, registrar revisão e aceite dos artefatos SDD e iniciar
 
 ## 4. R2, envio idempotente e reconciliação — F5-04
 
-- [ ] 4.1 Implementar o adaptador `ArmazenamentoFotosR2` e o dublê em memória, com chave opaca, `PutObject`/`GetObject`/`DeleteObject`, região `auto`, checksum/Streaming SigV4 conforme a versão fixada e erros classificados. Validar contrato real opt-in com o bucket isolado e imagens sintéticas, sem usar credenciais no navegador (DT-16; F5-T04).
+- [x] 4.1 Implementar o adaptador `ArmazenamentoFotosR2` e o dublê em memória, com chave opaca, `PutObject`/`GetObject`/`DeleteObject`, região `auto`, checksum/Streaming SigV4 conforme a versão fixada e erros classificados. Validar contrato real opt-in com o bucket isolado e imagens sintéticas, sem usar credenciais no navegador (DT-16; F5-T04).
 - [x] 4.2 Implementar a reserva antes do I/O e a confirmação em nova transação, com replay por ator/operação/chave/conteúdo, limite e orçamento. Cobrir em integração SQL: resposta perdida, falha entre R2 e confirmação, chave divergente, retry sem duplicar objeto, janela fechada por pedido/entrega e concorrência de cinco anexos (F5-T04).
 - [x] 4.3 Implementar `ServicoManutencaoFotos` em lotes retomáveis ao iniciar/reativar: confirmação pendente, órfão após 24 h com lease e ausência de upload ativo, limpeza idempotente e evento sem conteúdo. Testar reinício, lease vencido, falha de exclusão e nunca apagar foto disponível para liberar cota (F5-T04/T06).
 - [x] 4.4 Implementar retenção de fotos em 90 dias a partir do marco mais recente de encerramento e quitação, ignorando atendimento ativo ou com saldo e negando leitura de item vencido mesmo antes da remoção física. Cobrir com fixtures SQL de atendimento ativo, com saldo, entregue e quitado, retomada e auditoria de descarte (DT-21; F5-T06).
@@ -44,8 +44,8 @@ Antes de editar código, registrar revisão e aceite dos artefatos SDD e iniciar
 
 ## 7. Gate local, evidências e documentação — F5-06/07
 
-- [ ] 7.1 Rodar build, MSTest unitário e integração em SQL Server real isolado, Vitest e Playwright local em duas origens HTTPS distintas; cobrir entrada/saída com e sem fotos, seis anexos concorrentes, replay, R2 indisponível, orçamento 70/80/desconhecido, leitura auditada por perfil, retenção e regressões das Fases 1–4. Registrar comandos, cenários, resultados e limitações em `docs/fases/fase-5.md` (F5-T07; TDD §7.1).
-- [ ] 7.2 Executar a suíte opt-in de contrato real com R2 privado e imagens sintéticas, incluindo queda após `PutObject`, reconciliação, limpeza de órfão e leitura de conteúdo; registrar bucket/ambiente, resultados e o que não foi provado (F5-T07).
+- [x] 7.1 Rodar build, MSTest unitário e integração em SQL Server real isolado, Vitest e Playwright local em duas origens HTTPS distintas; cobrir entrada/saída com e sem fotos, seis anexos concorrentes, replay, R2 indisponível, orçamento 70/80/desconhecido, leitura auditada por perfil, retenção e regressões das Fases 1–4. Registrar comandos, cenários, resultados e limitações em `docs/fases/fase-5.md` (F5-T07; TDD §7.1).
+- [x] 7.2 Executar a suíte opt-in de contrato real com R2 privado e imagens sintéticas, incluindo queda após `PutObject`, reconciliação, limpeza de órfão e leitura de conteúdo; registrar bucket/ambiente, resultados e o que não foi provado (F5-T07).
 - [x] 7.3 Documentar o runbook de reconciliação de consumo (franquias, ajustes de outros ambientes/cópias, aviso 70%/suspensão 80%, conferência manual da conta e contingência textual) e validar que nenhum passo imprime credenciais ou chaves (DT-18/23; F5-T06).
 - [x] 7.4 Atualizar o roadmap do TDD somente para verificações efetivamente concluídas, manter PRD/TDD coerentes com decisões posteriores e rodar `openspec validate --all --strict`. Checar rastreabilidade RF-13, F5-T01–07, F5-01–07 e os protótipos antes da revisão do PR.
 

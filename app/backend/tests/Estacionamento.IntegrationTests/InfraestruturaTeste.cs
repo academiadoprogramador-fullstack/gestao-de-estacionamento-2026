@@ -4,14 +4,17 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Estacionamento.Api.Inicializacao;
 using Estacionamento.Application.Configuracao;
+using Estacionamento.Application.Fotos;
 using Estacionamento.Application.Provisionamento;
 using Estacionamento.Infrastructure.Persistencia;
+using Estacionamento.Infrastructure.Servicos;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Estacionamento.IntegrationTests;
@@ -210,6 +213,8 @@ internal sealed class FabricaApiTeste : WebApplicationFactory<Program>
     private readonly string? _variavelUserSecretsAnterior;
     private readonly bool _removerBancoAoDispor;
 
+    public ArmazenamentoFotosEmMemoria ArmazenamentoFotos { get; } = new();
+
     public FabricaApiTeste(
         string ambiente = "Testing",
         bool aplicarMigrationsAntesDoStartup = true,
@@ -284,6 +289,12 @@ internal sealed class FabricaApiTeste : WebApplicationFactory<Program>
             ["ProtecaoDados:Chaves:v1"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             ["Cors:OrigensPermitidas:0"] = "https://localhost:4200",
             ["Cors:OrigensPermitidas:1"] = "https://localhost:4300",
+            ["ArmazenamentoFotos:Habilitado"] = "true",
+            ["ArmazenamentoFotos:R2:Endpoint"] = "https://storage.exemplo.invalid",
+            ["ArmazenamentoFotos:R2:RegiaoAssinatura"] = "auto",
+            ["ArmazenamentoFotos:R2:Bucket"] = "bucket-teste",
+            ["ArmazenamentoFotos:R2:AccessKeyId"] = "teste",
+            ["ArmazenamentoFotos:R2:SecretAccessKey"] = "teste",
             ["ContasSinteticas:Administrador:Email"] = contas.Administrador!.Email,
             ["ContasSinteticas:Administrador:Senha"] = contas.Administrador.Senha,
             ["ContasSinteticas:Caixa:Email"] = contas.Caixa!.Email,
@@ -321,6 +332,11 @@ internal sealed class FabricaApiTeste : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, configuracao) =>
         {
             configuracao.AddInMemoryCollection(ConfiguracaoPadrao());
+        });
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IArmazenamentoFotos>();
+            services.AddSingleton<IArmazenamentoFotos>(ArmazenamentoFotos);
         });
     }
 

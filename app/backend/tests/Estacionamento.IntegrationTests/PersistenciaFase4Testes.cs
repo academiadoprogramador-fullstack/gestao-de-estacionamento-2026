@@ -11,7 +11,7 @@ namespace Estacionamento.IntegrationTests;
 public sealed class PersistenciaFase4Testes
 {
     private const string MigracaoFase3 = "20261119160017_Fase3RetiradaCaixa";
-    private const string MigracaoFase4 = "20261123160433_Fase4EntregaLiberacao";
+    private const string MigracaoFase5 = "20261126151516_Fase5FotosVistoria";
 
     [TestMethod]
     public async Task MigracaoDaFase4EhAditivaNaoPreencheHistoricoEPodeSerRevertidaEmCatalogoDescartavel()
@@ -25,6 +25,9 @@ public sealed class PersistenciaFase4Testes
             Assert.IsTrue(SqlTeste.TabelaExiste(nomeBanco, "VistoriasSaida"));
             Assert.IsTrue(SqlTeste.TabelaExiste(nomeBanco, "EntregasVeiculo"));
             Assert.IsTrue(SqlTeste.TabelaExiste(nomeBanco, "ConsumosAutorizacao"));
+            Assert.IsTrue(SqlTeste.TabelaExiste(nomeBanco, "FotosVistoria"));
+            Assert.IsTrue(SqlTeste.TabelaExiste(nomeBanco, "ConsumosFotosMensais"));
+            Assert.IsTrue(SqlTeste.TabelaExiste(nomeBanco, "TarefasFotos"));
 
             var options = new DbContextOptionsBuilder<EstacionamentoDbContext>()
                 .UseSqlServer(SqlTeste.Conexao(nomeBanco))
@@ -81,7 +84,7 @@ public sealed class PersistenciaFase4Testes
                     (await db.PedidosRetirada.AsNoTracking().SingleAsync()).Id);
             }
 
-            Assert.AreEqual(MigracaoFase4, await UltimaMigracaoAsync(nomeBanco));
+            Assert.AreEqual(MigracaoFase5, await UltimaMigracaoAsync(nomeBanco));
         }
         finally
         {

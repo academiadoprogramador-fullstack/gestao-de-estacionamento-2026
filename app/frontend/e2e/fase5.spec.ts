@@ -296,4 +296,125 @@ test.describe.serial('Fase 5 — fotos das vistorias', () => {
     await expect(page.getByText(/Vistoria registrada/i)).toBeVisible();
     await expect(page.getByText('1 de 5 fotos')).toHaveCount(0);
   });
+
+  test('check-in seleciona fotos em memória e as envia após a confirmação', async ({
+    page,
+    request,
+  }) => {
+    const tokenAdministrador = await token(
+      request,
+      process.env['E2E_ADMIN_EMAIL']!,
+      process.env['E2E_ADMIN_SENHA']!,
+    );
+    const vagaId = await criarVaga(request, tokenAdministrador, `F5C-${sufixo}`);
+    await publicarTarifa(request, tokenAdministrador);
+
+    await entrar(page, process.env['E2E_CAIXA_EMAIL']!, process.env['E2E_CAIXA_SENHA']!);
+    await page.getByRole('link', { name: 'Check-in' }).click();
+
+    await page.locator('#placa').fill(`F5C${sufixo.slice(-4)}`);
+    await page.locator('#modelo-veiculo').fill('Modelo F5 check-in');
+    await page.locator('#titular').fill('Titular F5 check-in');
+    await page.locator('#documento').fill('222.222.222-22');
+    await page.locator('#vistoria').fill('Vistoria textual sintética do check-in com fotos.');
+    await page.locator('#vaga').selectOption(vagaId);
+
+    await page.locator('#fotos-checkin').setInputFiles({
+      name: 'foto-checkin.png',
+      mimeType: 'image/png',
+      buffer: pngSintetico,
+    });
+    await expect(page.getByText('Aguardando check-in')).toBeVisible();
+
+    const checkin = page.waitForResponse(
+      (resposta) =>
+        resposta.url().endsWith('/api/v1/attendances') &&
+        resposta.request().method() === 'POST',
+    );
+    const foto = page.waitForResponse(
+      (resposta) =>
+        resposta.url().includes('/inspections/entrada/photos') &&
+        resposta.request().method() === 'POST',
+    );
+
+    await page.getByRole('button', { name: 'Registrar entrada' }).click();
+    const respostaCheckin = await checkin;
+    expect(respostaCheckin.status()).toBe(201);
+    const corpoCheckin = respostaCheckin.request().postDataJSON() as Record<string, unknown>;
+    expect(corpoCheckin['foto']).toBeUndefined();
+    expect(JSON.stringify(corpoCheckin)).not.toContain('foto-checkin');
+
+    const respostaFoto = await foto;
+    expect(respostaFoto.status()).toBe(201);
+    await expect(page.getByText('Entrada registrada')).toBeVisible();
+    await expect(
+      page
+        .getByRole('list', { name: 'Fila de envio das fotos selecionadas' })
+        .getByText('Confirmada'),
+    ).toBeVisible();
+  });
+
+  test('falha de foto no check-in não desfaz a entrada e oferece repetição', async ({
+    page,
+    request,
+  }) => {
+    const tokenAdministrador = await token(
+      request,
+      process.env['E2E_ADMIN_EMAIL']!,
+      process.env['E2E_ADMIN_SENHA']!,
+    );
+    const vagaId = await criarVaga(request, tokenAdministrador, `F5F-${sufixo}`);
+    await publicarTarifa(request, tokenAdministrador);
+
+    await entrar(page, process.env['E2E_CAIXA_EMAIL']!, process.env['E2E_CAIXA_SENHA']!);
+    await page.getByRole('link', { name: 'Check-in' }).click();
+
+    await page.locator('#placa').fill(`F5F${sufixo.slice(-4)}`);
+    await page.locator('#modelo-veiculo').fill('Modelo F5 falha');
+    await page.locator('#titular').fill('Titular F5 falha');
+    await page.locator('#documento').fill('333.333.333-33');
+    await page.locator('#vistoria').fill('Vistoria textual sintética do check-in com falha de foto.');
+    await page.locator('#vaga').selectOption(vagaId);
+    await page.locator('#fotos-checkin').setInputFiles({
+      name: 'foto-checkin.png',
+      mimeType: 'image/png',
+      buffer: pngSintetico,
+    });
+
+    await page.route('**/inspections/entrada/photos', async (rota) => {
+      if (rota.request().method() === 'POST') {
+        await rota.fulfill({
+          status: 503,
+          contentType: 'application/problem+json',
+          body: JSON.stringify({
+            status: 503,
+            title: 'Armazenamento indisponível',
+            code: 'photo_storage_unavailable',
+          }),
+        });
+        return;
+      }
+
+      await rota.continue();
+    });
+
+    const checkin = page.waitForResponse(
+      (resposta) =>
+        resposta.url().endsWith('/api/v1/attendances') &&
+        resposta.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Registrar entrada' }).click();
+    expect((await checkin).status()).toBe(201);
+
+    await expect(page.getByText('Entrada registrada')).toBeVisible();
+    await expect(
+      page.getByText(/armazenamento privado de fotos está indisponível/i).first(),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Repetir a mesma foto' })).toBeVisible();
+    await expect(
+      page
+        .getByRole('list', { name: 'Fila de envio das fotos selecionadas' })
+        .getByText('Confirmada'),
+    ).toHaveCount(0);
+  });
 });

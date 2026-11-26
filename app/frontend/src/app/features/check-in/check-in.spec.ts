@@ -88,4 +88,134 @@ describe('CheckIn', () => {
     expect(componente.resumoVisivel()).toBe(false);
     expect(componente.coordenador.fase()).toBe('sucesso');
   });
+
+  it('seleciona fotos antes do check-in e só as envia depois da confirmação', async () => {
+    http = configurar();
+    const fixture = TestBed.createComponent(CheckIn);
+    const componente = fixture.componentInstance;
+    fixture.detectChanges();
+    http.expectOne((requisicao) => requisicao.url.includes('/api/v1/spaces')).flush(paginaVazia);
+    await aguardarAtualizacao(fixture);
+
+    preencherEntrada(componente);
+    componente.selecionarFotos({
+      target: {
+        files: [new File(['a'], 'frente.jpg', { type: 'image/jpeg' })],
+        value: '',
+      },
+    } as unknown as Event);
+
+    expect(componente.fotos().length).toBe(1);
+    expect(componente.fotos().every((foto) => foto.status === 'selecionada')).toBe(true);
+    http.expectNone((pedido) => pedido.method === 'POST');
+
+    const envio = componente.submeter(new Event('submit', { cancelable: true }));
+    const entrada = http.expectOne((pedido) => pedido.method === 'POST');
+    expect(entrada.request.body.foto).toBeUndefined();
+    entrada.flush({
+      atendimentoId: '22222222-2222-2222-2222-222222222222',
+      identificador: 'AT-2026-000001',
+      vagaId: '11111111-1111-1111-1111-111111111111',
+      vagaCodigo: 'A-01',
+      estado: 'ativo',
+      entradaUtc: new Date().toISOString(),
+      location: '/api/v1/attendances/22222222-2222-2222-2222-222222222222',
+    });
+
+    await aguardarAtualizacao(fixture);
+    http.expectOne((pedido) => pedido.url.includes('/api/v1/spaces')).flush(paginaVazia);
+    await aguardarAtualizacao(fixture);
+    http
+      .expectOne(
+        (pedido) =>
+          pedido.method === 'GET' &&
+          pedido.url.endsWith('/api/v1/attendances/22222222-2222-2222-2222-222222222222'),
+      )
+      .flush({ versaoAtendimento: 'BBBBBBB=' });
+
+    await aguardarAtualizacao(fixture);
+    const foto = http.expectOne(
+      (pedido) =>
+        pedido.method === 'POST' &&
+        pedido.url.endsWith('/attendances/22222222-2222-2222-2222-222222222222/inspections/entrada/photos'),
+    );
+    expect(foto.request.headers.get('Idempotency-Key')).toBeTruthy();
+    foto.flush({
+      fotoId: '33333333-3333-3333-3333-333333333333',
+      estado: 'disponivel',
+    });
+
+    await envio;
+    await aguardarAtualizacao(fixture);
+
+    expect(componente.resultado()?.identificador).toBe('AT-2026-000001');
+    expect(componente.fotos()[0].status).toBe('confirmada');
+    expect(componente.coordenador.fase()).toBe('sucesso');
+  });
+
+  it('mantém a entrada confirmada e permite repetir a mesma foto após falha incerta', async () => {
+    http = configurar();
+    const fixture = TestBed.createComponent(CheckIn);
+    const componente = fixture.componentInstance;
+    fixture.detectChanges();
+    http.expectOne((requisicao) => requisicao.url.includes('/api/v1/spaces')).flush(paginaVazia);
+    await aguardarAtualizacao(fixture);
+
+    preencherEntrada(componente);
+    componente.selecionarFotos({
+      target: {
+        files: [new File(['a'], 'frente.jpg', { type: 'image/jpeg' })],
+        value: '',
+      },
+    } as unknown as Event);
+
+    const envio = componente.submeter(new Event('submit', { cancelable: true }));
+    http.expectOne((pedido) => pedido.method === 'POST').flush({
+      atendimentoId: '22222222-2222-2222-2222-222222222222',
+      identificador: 'AT-2026-000001',
+      vagaId: '11111111-1111-1111-1111-111111111111',
+      vagaCodigo: 'A-01',
+      estado: 'ativo',
+      entradaUtc: new Date().toISOString(),
+      location: '/api/v1/attendances/22222222-2222-2222-2222-222222222222',
+    });
+    await aguardarAtualizacao(fixture);
+    http.expectOne((pedido) => pedido.url.includes('/api/v1/spaces')).flush(paginaVazia);
+    await aguardarAtualizacao(fixture);
+    http
+      .expectOne((pedido) => pedido.method === 'GET' && pedido.url.endsWith('/attendances/22222222-2222-2222-2222-222222222222'))
+      .flush({ versaoAtendimento: 'BBBBBBB=' });
+
+    await aguardarAtualizacao(fixture);
+    const primeiraFoto = http.expectOne(
+      (pedido) =>
+        pedido.method === 'POST' &&
+        pedido.url.endsWith('/attendances/22222222-2222-2222-2222-222222222222/inspections/entrada/photos'),
+    );
+    const chave = primeiraFoto.request.headers.get('Idempotency-Key');
+    primeiraFoto.flush(
+      { status: 503, code: 'photo_storage_unavailable' },
+      { status: 503, statusText: 'Service Unavailable' },
+    );
+    await envio;
+    await aguardarAtualizacao(fixture);
+
+    expect(componente.resultado()?.identificador).toBe('AT-2026-000001');
+    expect(componente.fotoIncerta()).toBe(true);
+    expect(componente.fotos()[0].status).toBe('incerta');
+
+    const repeticao = componente.repetirFoto();
+    const segundaFoto = http.expectOne(
+      (pedido) =>
+        pedido.method === 'POST' &&
+        pedido.url.endsWith('/attendances/22222222-2222-2222-2222-222222222222/inspections/entrada/photos'),
+    );
+    expect(segundaFoto.request.headers.get('Idempotency-Key')).toBe(chave);
+    segundaFoto.flush({ fotoId: '33333333-3333-3333-3333-333333333333', estado: 'disponivel' });
+    await repeticao;
+    await aguardarAtualizacao(fixture);
+
+    expect(componente.fotos()[0].status).toBe('confirmada');
+    expect(componente.coordenador.fase()).toBe('sucesso');
+  });
 });

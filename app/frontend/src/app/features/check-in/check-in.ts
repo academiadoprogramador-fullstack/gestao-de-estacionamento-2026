@@ -44,6 +44,24 @@ interface ResultadoEntrada {
   readonly location: string;
 }
 
+type StatusFotoCheckIn = 'selecionada' | 'enviando' | 'confirmada' | 'falhou' | 'incerta';
+
+interface FotoCheckIn {
+  readonly id: string;
+  readonly arquivo: File;
+  readonly nome: string;
+  readonly status: StatusFotoCheckIn;
+}
+
+interface DetalheAtendimentoFotos {
+  readonly versaoAtendimento?: string;
+}
+
+interface ConteudoFotoCheckIn {
+  readonly foto: FotoCheckIn;
+  readonly versaoAtendimento: string;
+}
+
 interface ModeloEntrada {
   placa: string;
   modelo: string;
@@ -119,6 +137,31 @@ export class CheckIn implements OnInit, OnDestroy {
   readonly resultado = signal<ResultadoEntrada | null>(null);
   readonly mensagemCopia = signal<string | null>(null);
 
+  readonly fotos = signal<readonly FotoCheckIn[]>([]);
+  readonly erroFotos = signal<string | null>(null);
+  readonly versaoAtendimento = signal<string | null>(null);
+  readonly carregandoVersao = signal(false);
+  readonly filaFotosAtiva = signal(false);
+
+  readonly fotoEmFalha = computed(
+    () => this.fotos().find((foto) => foto.status === 'falhou') ?? null,
+  );
+
+  readonly fotoIncerta = computed(
+    () =>
+      Boolean(this.resultado()) &&
+      this.coordenador.fase() === 'incerto' &&
+      this.fotos().some((foto) => foto.status === 'incerta'),
+  );
+
+  readonly checkInIncerto = computed(
+    () => !this.resultado() && this.coordenador.fase() === 'incerto',
+  );
+
+  readonly fotosPendentes = computed(
+    () => this.fotos().filter((foto) => foto.status === 'selecionada').length,
+  );
+
   readonly totalPaginasVagas = signal(1);
 
   ngOnInit(): void {
@@ -131,6 +174,125 @@ export class CheckIn implements OnInit, OnDestroy {
     if (this.coordenador.bloqueado()) {
       this.coordenador.descartar();
     }
+  }
+
+  selecionarFotos(evento: Event): void {
+    const entrada = evento.target as HTMLInputElement;
+    const arquivos = Array.from(entrada.files ?? []);
+    this.erroFotos.set(null);
+
+    if (this.resultado() || this.coordenador.bloqueado()) {
+      entrada.value = '';
+      return;
+    }
+
+    const aceitos = ['image/jpeg', 'image/png', 'image/webp'];
+    const limite = 5;
+    const novas: FotoCheckIn[] = [];
+
+    for (const arquivo of arquivos) {
+      if (this.fotos().length + novas.length >= limite) {
+        this.erroFotos.set('O limite de cinco fotos por vistoria foi atingido.');
+        break;
+      }
+
+      if (!aceitos.includes(arquivo.type)) {
+        this.erroFotos.set(
+          'Formato não aceito. Envie JPEG, PNG ou WebP estático; SVG, animação e arquivo corrompido são recusados.',
+        );
+        continue;
+      }
+
+      if (arquivo.size > 5 * 1024 * 1024) {
+        this.erroFotos.set('Arquivo acima de 5 MiB. O check-in continua possível sem esta foto.');
+        continue;
+      }
+
+      novas.push({
+        id: this.gerarIdFoto(),
+        arquivo,
+        nome: arquivo.name,
+        status: 'selecionada',
+      });
+    }
+
+    if (novas.length > 0) {
+      this.fotos.update((atuais) => [...atuais, ...novas]);
+    }
+
+    entrada.value = '';
+  }
+
+  removerFoto(id: string): void {
+    if (this.resultado() || this.coordenador.bloqueado()) {
+      return;
+    }
+
+    this.fotos.update((fotos) => fotos.filter((foto) => foto.id !== id));
+  }
+
+  async repetirFoto(): Promise<void> {
+    if (!this.fotoIncerta()) {
+      return;
+    }
+
+    const foto = this.fotos().find((item) => item.status === 'incerta');
+    if (!foto) {
+      return;
+    }
+
+    this.erroFotos.set(null);
+    this.atualizarStatusFoto(foto.id, 'enviando');
+
+    try {
+      await this.coordenador.repetir<ConteudoFotoCheckIn, unknown>((chave, conteudo) =>
+        this.enviarFoto(chave, conteudo));
+      this.atualizarStatusFoto(foto.id, 'confirmada');
+      await this.continuarFila();
+    } catch (erro) {
+      this.atualizarStatusFoto(
+        foto.id,
+        this.coordenador.fase() === 'incerto' ? 'incerta' : 'falhou',
+      );
+      this.erroFotos.set(mensagemDoErro(erro, 'Não foi possível repetir a foto.'));
+    }
+  }
+
+  async tentarFotoNovamente(): Promise<void> {
+    const foto = this.fotoEmFalha();
+    if (!foto || this.coordenador.bloqueado()) {
+      return;
+    }
+
+    this.erroFotos.set(null);
+    this.atualizarStatusFoto(foto.id, 'selecionada');
+    await this.iniciarFilaFotos();
+  }
+
+  async continuarSemFoto(): Promise<void> {
+    const foto = this.fotos().find(
+      (item) => item.status === 'falhou' || item.status === 'incerta',
+    );
+
+    if (!foto) {
+      return;
+    }
+
+    if (this.coordenador.fase() === 'incerto') {
+      this.coordenador.descartar();
+    }
+
+    this.fotos.update((fotos) => fotos.filter((item) => item.id !== foto.id));
+    this.erroFotos.set(null);
+    await this.iniciarFilaFotos();
+  }
+
+  async recarregarVersaoEIniciarFotos(): Promise<void> {
+    if (!this.resultado() || this.fotos().length === 0) {
+      return;
+    }
+
+    await this.carregarVersaoEIniciarFotos();
   }
 
   async carregarVagas(): Promise<void> {
@@ -167,6 +329,11 @@ export class CheckIn implements OnInit, OnDestroy {
 
   async submeter(evento: Event): Promise<void> {
     evento.preventDefault();
+
+    if (this.resultado() || this.coordenador.bloqueado()) {
+      return;
+    }
+
     this.marcarTocados();
     this.erro.set(null);
     this.mensagemCopia.set(null);
@@ -228,6 +395,21 @@ export class CheckIn implements OnInit, OnDestroy {
     }
   }
 
+  rotuloStatusFoto(status: StatusFotoCheckIn): string {
+    switch (status) {
+      case 'selecionada':
+        return 'Aguardando check-in';
+      case 'enviando':
+        return 'Enviando…';
+      case 'confirmada':
+        return 'Confirmada';
+      case 'incerta':
+        return 'Resultado incerto';
+      default:
+        return 'Falhou';
+    }
+  }
+
   async copiarIdentificador(): Promise<void> {
     const identificador = this.resultado()?.identificador;
     if (!identificador) {
@@ -245,11 +427,142 @@ export class CheckIn implements OnInit, OnDestroy {
   }
 
   novoCheckIn(): void {
+    if (this.coordenador.bloqueado() || this.filaFotosAtiva()) {
+      return;
+    }
+
     this.resultado.set(null);
     this.mensagemCopia.set(null);
     this.erro.set(null);
+    this.fotos.set([]);
+    this.erroFotos.set(null);
+    this.versaoAtendimento.set(null);
+    this.carregandoVersao.set(false);
     this.coordenador.descartar();
     void this.carregarVagas();
+  }
+
+  private async carregarVersaoEIniciarFotos(): Promise<void> {
+    const entrada = this.resultado();
+    if (!entrada || this.fotos().length === 0) {
+      return;
+    }
+
+    this.carregandoVersao.set(true);
+    this.erroFotos.set(null);
+
+    try {
+      const detalhe = await firstValueFrom(
+        this.http.get<DetalheAtendimentoFotos>(
+          urlApi(`/api/v1/attendances/${entrada.atendimentoId}`),
+        ),
+      );
+
+      if (!detalhe.versaoAtendimento) {
+        this.erroFotos.set(
+          'A versão do atendimento não foi retornada. Nenhuma foto foi enviada; a entrada continua registrada.',
+        );
+        return;
+      }
+
+      this.versaoAtendimento.set(detalhe.versaoAtendimento);
+      await this.iniciarFilaFotos();
+    } catch (erro) {
+      this.erroFotos.set(
+        mensagemDoErro(
+          erro,
+          'Não foi possível carregar a versão do atendimento. Nenhuma foto foi enviada; a entrada continua registrada.',
+        ),
+      );
+    } finally {
+      this.carregandoVersao.set(false);
+    }
+  }
+
+  private async iniciarFilaFotos(): Promise<void> {
+    if (this.filaFotosAtiva() || this.coordenador.bloqueado()) {
+      return;
+    }
+
+    const versao = this.versaoAtendimento();
+    if (!versao) {
+      this.erroFotos.set(
+        'A versão do atendimento não está disponível. Recarregue o atendimento antes de enviar as fotos.',
+      );
+      return;
+    }
+
+    this.filaFotosAtiva.set(true);
+    this.erroFotos.set(null);
+
+    try {
+      while (true) {
+        const proxima = this.fotos().find((foto) => foto.status === 'selecionada');
+        if (!proxima) {
+          break;
+        }
+
+        this.atualizarStatusFoto(proxima.id, 'enviando');
+
+        try {
+          await this.coordenador.executar<ConteudoFotoCheckIn, unknown>(
+            { foto: proxima, versaoAtendimento: versao },
+            (chave, conteudo) => this.enviarFoto(chave, conteudo),
+          );
+          this.atualizarStatusFoto(proxima.id, 'confirmada');
+        } catch (erro) {
+          this.atualizarStatusFoto(
+            proxima.id,
+            this.coordenador.fase() === 'incerto' ? 'incerta' : 'falhou',
+          );
+          this.erroFotos.set(mensagemDoErro(erro, 'Não foi possível enviar a foto selecionada.'));
+          break;
+        }
+      }
+    } finally {
+      this.filaFotosAtiva.set(false);
+    }
+  }
+
+  private async continuarFila(): Promise<void> {
+    if (this.coordenador.bloqueado()) {
+      return;
+    }
+
+    await this.iniciarFilaFotos();
+  }
+
+  private enviarFoto(chave: string, conteudo: ConteudoFotoCheckIn): Promise<unknown> {
+    const entrada = this.resultado();
+    if (!entrada) {
+      return Promise.reject(new Error('check_in_ausente'));
+    }
+
+    const formulario = new FormData();
+    formulario.append('arquivo', conteudo.foto.arquivo, conteudo.foto.nome);
+    formulario.append('versaoAtendimentoEsperada', conteudo.versaoAtendimento);
+
+    return firstValueFrom(
+      this.http.post(
+        urlApi(`/api/v1/attendances/${entrada.atendimentoId}/inspections/entrada/photos`),
+        formulario,
+        { headers: { 'Idempotency-Key': chave } },
+      ),
+    );
+  }
+
+  private atualizarStatusFoto(id: string, status: StatusFotoCheckIn): void {
+    this.fotos.update((fotos) =>
+      fotos.map((foto) => (foto.id === id ? { ...foto, status } : foto)),
+    );
+  }
+
+  private gerarIdFoto(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
   private async enviar(chave: string, dados: ModeloEntrada): Promise<ResultadoEntrada> {
@@ -283,6 +596,7 @@ export class CheckIn implements OnInit, OnDestroy {
     this.formulario.vistoria().reset();
     this.formulario.vagaId().reset();
     await this.carregarVagas();
+    await this.carregarVersaoEIniciarFotos();
   }
 
   private tratarFalha(erro: unknown): void {

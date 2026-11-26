@@ -16,6 +16,7 @@
 - Endpoints `POST/GET /api/v1/attendances/{id}/inspections/{entrada|saida}/photos` e `GET .../{fotoId}/content`, com Problem Details, auditoria antes do stream, `no-store`, `nosniff` e MIME do servidor.
 - Detalhe, histórico e prontidão de entrega com quantidade/presença de fotos e estado do orçamento. Manobrista continua sem finanças, documento completo ou texto de vistoria.
 - Componente Angular `app-fotos-vistoria`, integrado ao detalhe do atendimento e à operação de entrega, com consulta explícita, upload opcional, leitura em blob temporário, revogação de URL, erros focados e tentativa incerta em memória.
+- Check-in com pré-seleção de até cinco fotos em memória; o formulário envia a entrada sem conteúdo de foto, consulta a versão do atendimento após o `201` e envia cada seleção individualmente, com chave própria. Falha de foto não desfaz a entrada, e seleções não enviadas são descartadas ao iniciar outro check-in, sair da rota/logout ou confirmar a saída do navegador.
 - Migration aditiva `20261126151516_Fase5FotosVistoria` após `20261123160433_Fase4EntregaLiberacao`; vistorias existentes permanecem textuais.
 
 ## Configuração
@@ -58,8 +59,8 @@ npx playwright test
 
 - Unitários MSTest: **79 aprovados**, incluindo regras de janela/limite, validação de opções, formatos JPEG/PNG/WebP, redução sem ampliação, remoção de marcador EXIF/GPS, orientação, corrupção, dimensão excessiva e processamento concorrente limitado.
 - Integração MSTest com SQL Server 2022 real: **111 aprovados**, incluindo o contrato real opt-in com o bucket R2 de testes. Cobrem entrada/saída com e sem fotos, perfis, limite de cinco sob concorrência, replay/conflito, falha de armazenamento, aviso/bloqueio/consumo desconhecido de orçamento, retenção, descarte, manutenção de órfãos, migration aditiva/rollback e Put/Get/Delete no R2 privado.
-- Vitest: **84 aprovados**, incluindo consulta explícita, leitura em blob com revogação, envio idempotente, repetição da mesma tentativa, ocultação para perfil consultivo e validação local de formato/tamanho.
-- Playwright: **21 jornadas aprovadas** entre duas origens HTTPS locais: 19 regressões das Fases 1–4 e 2 cenários da Fase 5 (anexar/ler foto no R2 de teste e contingência com falha do armazenamento).
+- Vitest: **86 aprovados**, incluindo seleção de fotos no check-in sem upload prévio, fila pós-confirmação, repetição da mesma foto, consulta explícita, leitura em blob com revogação, envio idempotente e validação local de formato/tamanho.
+- Playwright: **23 jornadas aprovadas** entre duas origens HTTPS locais: 19 regressões das Fases 1–4 e 4 cenários da Fase 5 (foto de saída no R2, contingência de armazenamento, check-in com pré-seleção e falha de foto no check-in).
 - `openspec validate --all --strict`: **18 itens aprovados, 0 falhas**.
 - Os arquivos placeholder `Test1.cs` dos dois projetos de teste foram removidos.
 

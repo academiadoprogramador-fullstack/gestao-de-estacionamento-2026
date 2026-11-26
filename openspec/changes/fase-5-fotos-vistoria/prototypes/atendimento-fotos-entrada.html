@@ -1,0 +1,428 @@
+<!--
+  High-fidelity prototype — Fotos da vistoria de entrada
+  Source: proposal.md (What Changes), specs/fotos-vistoria/spec.md, specs/consulta-atendimentos/spec.md
+  Style: Tailwind CSS 4.3.5 (inlined utility subset, MIT, https://tailwindcss.com) + project palette and inline CSS.
+  Covered:
+    - Anexos opcionais e janelas por vistoria / Vistoria sem fotos; Anexo dentro da janela; Janela encerrada; Perfil não autorizado -> gallery, upload form, per-profile notice, window-closed state.
+    - Validação e normalização da imagem / Imagem válida normalizada; Formato ou conteúdo inválido; Limites excedidos; Metadados removidos -> file picker, validation errors and processing summary.
+    - Armazenamento privado e metadados mínimos / Metadados confirmados; Bucket privado; Falha do armazenamento -> photo cards without storage keys, unavailable state.
+    - Consulta explícita, auditada e sem cache / Consulta de metadados; Leitura de conteúdo; Falha de auditoria ou vínculo; Item vencido -> explicit read dialog and error.
+    - Limite de cinco sob concorrência / Quinto anexo aceito; Sexto anexo concorrente; Repetição da mesma foto -> counter, disabled add and sixth-attempt conflict.
+    - Envio idempotente e reconciliação / Resposta perdida após envio; Falha entre armazenamento e confirmação; Chave reutilizada com outro conteúdo; Limpeza de órfão -> pending attempt, explicit replay, reconciliation notice.
+    - Orçamento de consumo e contingência / Aviso de consumo; Bloqueio antes de exceder; Consumo desconhecido; R2 indisponível -> warning banner, blocked upload and textual fallback.
+    - Retenção e descarte de fotos / Atendimento vencido; Atendimento ativo ou com saldo; Nenhuma exclusão manual -> history and no delete action.
+    - Projeções por perfil no servidor / Fotos apenas por vínculo -> count in detail without keys or image content.
+    - Detalhe do atendimento com retirada e caixa / Atendimento ativo sem pedido; Atendimento com pedido; Manobrista sem finanças -> detail projection by profile.
+    - Histórico de retirada e caixa por perfil / Histórico operacional do manobrista; Auditoria sem conteúdo -> photo events without binary.
+  Not specified (presentational only): chrome reused from the app, fictional identities and review controls.
+  Open questions: none. No network, backend or storage; reloading restores the synthetic data.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protótipo — Fotos da vistoria de entrada</title>
+  <style>
+    /*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
+    @layer utilities {
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border-width: 0; }
+      .break-words { overflow-wrap: break-word; }
+    }
+    :root { color-scheme: dark; font: 16px/1.5 system-ui,sans-serif; color: #e2e8f0; background: #020617; }
+    * { box-sizing: border-box; } [hidden] { display: none !important; }
+    body { margin: 0; } a { color: #7dd3fc; } :focus-visible { outline: 2px solid #38bdf8; outline-offset: 3px; }
+    header { padding: .9rem max(1rem,calc((100% - 70rem)/2)); border-bottom: 1px solid #334155; font-weight: 700; }
+    header span { margin-left: .7rem; font-weight: 400; color: #94a3b8; }
+    main, .review { width: min(70rem,calc(100% - 2rem)); margin: 1rem auto; }
+    .review, .card, dialog { padding: 1rem; border: 1px solid #334155; border-radius: .8rem; background: #0f172a; }
+    .review { border-color: #80601f; color: #fde68a; background: #201809; font-size: .875rem; }
+    summary { cursor: pointer; } .row { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,22rem),1fr)); gap: 1rem; align-items: start; }
+    .eyebrow, h2 { letter-spacing: .09em; text-transform: uppercase; font-size: .85rem; }
+    .eyebrow { color: #7dd3fc; font-weight: 750; margin: 1.25rem 0 .25rem; }
+    h1 { margin: 0; color: #fff; font-size: 1.8rem; } h2, h3 { margin: 0 0 .6rem; }
+    .muted { color: #a5b4c7; } .badge { border-radius: 2rem; padding: .25rem .65rem; background: #17304b; color: #bae6fd; font-weight: 650; }
+    .meta { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit,minmax(9rem,1fr)); margin: .75rem 0 1rem; padding: .85rem; background: #0d1b2e; border: 1px solid #1e3a53; border-radius: .65rem; }
+    dt { font-size: .8rem; color: #a5b4c7; } dd { margin: 0; font-weight: 650; }
+    output, #notice:not(:empty), #problem:not(:empty), .alert { display: block; border: 1px solid #3b5975; border-radius: .5rem; padding: .7rem; margin: .65rem 0; background: #0d2238; }
+    output { white-space: pre-wrap; } #problem:not(:empty) { color: #fecdd3; background: #341722; border-color: #9f5266; }
+    .alert.warning { color: #fde68a; background: #201809; border-color: #80601f; }
+    .alert.danger { color: #fecdd3; background: #341722; border-color: #9f5266; }
+    button, input, select { font: inherit; color: inherit; background: #020617; border: 1px solid #64748b; border-radius: .5rem; padding: .5rem .65rem; }
+    button { font-weight: 650; cursor: pointer; } button:disabled { opacity: .55; cursor: default; }
+    .primary { color: #02121f; background: #38bdf8; border-color: #38bdf8; }
+    .danger { color: #fff1f2; background: #9f1239; border-color: #be123c; }
+    .photos { display: grid; grid-template-columns: repeat(auto-fit,minmax(10rem,1fr)); gap: .75rem; padding: 0; margin: .8rem 0; list-style: none; }
+    .photo { padding: .55rem; border: 1px solid #334155; border-radius: .65rem; background: #0b1728; }
+    .photo img { display: block; width: 100%; height: 7rem; object-fit: cover; border-radius: .45rem; background: #1e293b; }
+    .photo p { margin: .45rem 0; font-size: .85rem; } .photo button { width: 100%; }
+    .steps { margin: .5rem 0; padding-left: 1.2rem; } .steps li + li { margin-top: .3rem; }
+    .counter { font-weight: 750; color: #bae6fd; }
+    dialog { color: inherit; width: min(32rem, calc(100% - 2rem)); } dialog::backdrop { background: #020617cc; }
+    dialog img { width: 100%; border-radius: .6rem; background: #1e293b; }
+    .history { margin: .5rem 0 0; padding-left: 1.2rem; } .history li + li { margin-top: .4rem; }
+    .pill { display: inline-block; padding: .1rem .45rem; border-radius: 1rem; background: #14532d; color: #bbf7d0; font-size: .78rem; }
+    .pill.pending { background: #422006; color: #fde68a; }
+  </style>
+</head>
+<body>
+  <header>Gestão de estacionamento <span>Consulta de atendimento</span></header>
+  <details class="review" open>
+    <summary>Protótipo para revisão · dados fictícios · sem servidor</summary>
+    <div class="row">
+      <label>Perfil simulado
+        <select id="role">
+          <option>Caixa</option>
+          <option>Administrador</option>
+          <option>Manobrista</option>
+          <option value="Sessão inválida">Sessão inválida</option>
+        </select>
+      </label>
+      <label>Cenário simulado
+        <select id="fixture">
+          <option value="active">Ativo, sem pedido, duas fotos</option>
+          <option value="active-zero">Ativo, sem pedido, sem fotos</option>
+          <option value="window-closed">Pedido registrado · janela encerrada</option>
+          <option value="limit">Cinco fotos confirmadas</option>
+          <option value="storage-down">R2 indisponível</option>
+          <option value="quota-warning">Consumo em 70%</option>
+          <option value="quota-blocked">Consumo ultrapassaria 80%</option>
+          <option value="quota-unknown">Consumo desconhecido</option>
+          <option value="uncertain">Resposta perdida após envio</option>
+          <option value="expired">Atendimento vencido pela retenção</option>
+          <option value="delivered">Entregue · fotos consultáveis</option>
+        </select>
+      </label>
+      <label>Próxima resposta do envio
+        <select id="upload-response">
+          <option value="ok">Foto confirmada</option>
+          <option value="lost">Resposta perdida após o R2</option>
+          <option value="conflict">Chave reutilizada com outro conteúdo</option>
+        </select>
+      </label>
+      <label>Próxima leitura de foto
+        <select id="read-response">
+          <option value="ok">Normal</option>
+          <option value="fail">Falha na auditoria</option>
+        </select>
+      </label>
+    </div>
+  </details>
+
+  <main>
+    <nav aria-label="Retorno"><a href="#">← Atendimentos</a></nav>
+    <p class="eyebrow">Atendimento</p>
+    <h1>AT-DEMO-0042</h1>
+    <p id="problem" tabindex="-1" role="alert"></p>
+    <p id="notice" role="status"></p>
+    <div id="quota-warning" class="alert warning" hidden>
+      Consumo de fotos em <strong id="quota-percent">70%</strong> da franquia compartilhada. Envios e leituras continuam disponíveis dentro do limite.
+    </div>
+
+    <dl class="meta">
+      <div><dt>Veículo</dt><dd>DEMO0042 · Série fictícia</dd></div>
+      <div><dt>Vaga</dt><dd>B-07</dd></div>
+      <div><dt>Entrada</dt><dd>24/11/2026 às 08:15</dd></div>
+      <div><dt>Estado</dt><dd><span class="badge" id="state">Ativo</span></dd></div>
+      <div><dt>Retirada</dt><dd id="withdrawal">Sem pedido</dd></div>
+    </dl>
+
+    <div class="grid">
+      <section class="card" aria-labelledby="inspection-title">
+        <h2 id="inspection-title">Vistoria de entrada</h2>
+        <p class="muted">Texto obrigatório salvo no check-in. Fotos são opcionais e não alteram este registro.</p>
+        <p><strong>Observações registradas</strong> · Operador de teste · 24/11/2026 às 08:15</p>
+        <button id="read-inspection" type="button">Consultar texto da vistoria</button>
+        <output id="inspection-text" class="break-words" aria-label="Texto da vistoria de entrada" hidden></output>
+        <div id="inspection-error" class="alert danger" hidden>Não foi possível registrar a auditoria da leitura. O texto não foi exibido.</div>
+      </section>
+
+      <section class="card" aria-labelledby="photos-title">
+        <h2 id="photos-title">Fotos da vistoria</h2>
+        <p class="muted">Janela de envio: após salvar o texto até o pedido de retirada.</p>
+        <p><span class="counter" id="photo-count">2 de 5 fotos</span> <span class="muted">· armazenamento privado, leitura pela API</span></p>
+
+        <p id="profile-note" class="alert" hidden></p>
+        <p id="window-note" class="alert" hidden></p>
+        <p id="storage-note" class="alert danger" hidden></p>
+        <p id="limit-note" class="alert" hidden></p>
+
+        <form id="upload-form" novalidate>
+          <label for="photo-input">Anexar uma foto</label>
+          <p id="photo-help" class="muted">JPEG, PNG ou WebP estático, até 5 MiB, 20 MP e 10.000 px por lado na seleção. A imagem será normalizada em WebP sem EXIF/GPS.</p>
+          <input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="photo-help photo-error">
+          <p id="photo-error" class="alert danger" hidden></p>
+          <button class="primary" id="upload" type="submit">Enviar foto</button>
+        </form>
+
+        <div id="attempt" class="alert warning" hidden>
+          <strong>Tentativa incerta.</strong> A resposta não foi confirmada. A foto só será anunciada como disponível após reconciliação.
+          <div class="row"><button id="retry" type="button">Repetir a mesma tentativa</button><button id="discard" type="button">Descartar da tela</button></div>
+        </div>
+
+        <ul class="photos" id="gallery" aria-label="Fotos confirmadas da vistoria de entrada"></ul>
+        <p id="empty" class="muted" hidden>Nenhuma foto anexada. A vistoria textual permanece válida.</p>
+        <p id="expired-note" class="alert" hidden>As fotos deste atendimento venceram pela retenção e não podem ser listadas ou lidas.</p>
+      </section>
+    </div>
+
+    <section class="card" aria-labelledby="history-title">
+      <h2 id="history-title">Histórico do atendimento</h2>
+      <ul class="history" id="history">
+        <li>Entrada registrada por Caixa de teste · 24/11/2026 08:15 · sem texto ou documento no evento</li>
+        <li>Foto 1 anexada por Caixa de teste · 24/11/2026 09:02 · sem chave ou binário no evento</li>
+        <li>Foto 2 anexada por Caixa de teste · 24/11/2026 09:04 · sem chave ou binário no evento</li>
+      </ul>
+    </section>
+  </main>
+
+  <dialog id="photo-dialog" aria-labelledby="photo-dialog-title" aria-describedby="photo-dialog-info">
+    <h3 id="photo-dialog-title">Leitura de foto</h3>
+    <p id="photo-dialog-info" class="muted">A leitura é explícita e auditada antes de transmitir a imagem. Nenhuma URL do armazenamento é exposta.</p>
+    <img id="photo-dialog-image" alt="Foto sintética da vistoria de entrada" src="">
+    <div class="row">
+      <form method="dialog"><button type="submit" autofocus>Fechar</button></form>
+    </div>
+  </dialog>
+
+  <script>
+    "use strict";
+
+    const byId = (id) => document.getElementById(id);
+    const role = byId("role");
+    const fixture = byId("fixture");
+    const uploadResponse = byId("upload-response");
+    const readResponse = byId("read-response");
+    const gallery = byId("gallery");
+    const uploadForm = byId("upload-form");
+    const photoInput = byId("photo-input");
+    const uploadButton = byId("upload");
+    const count = byId("photo-count");
+
+    const scenarios = {
+      active: { photos: 2, window: "open" },
+      "active-zero": { photos: 0, window: "open" },
+      "window-closed": { photos: 2, window: "closed", withdrawal: "Pedido RET-DEMO-0011 · 24/11/2026 10:10" },
+      limit: { photos: 5, window: "open" },
+      "storage-down": { photos: 0, window: "open", storageDown: true },
+      "quota-warning": { photos: 2, window: "open", quotaWarning: true },
+      "quota-blocked": { photos: 2, window: "open", quotaBlocked: true },
+      "quota-unknown": { photos: 2, window: "open", quotaUnknown: true },
+      uncertain: { photos: 2, window: "open", uncertain: true },
+      expired: { photos: 2, window: "closed", expired: true, withdrawal: "Pedido RET-DEMO-0011 · 24/11/2026 10:10" },
+      delivered: { photos: 2, window: "closed", delivered: true, withdrawal: "Pedido RET-DEMO-0011 · 24/11/2026 10:10" }
+    };
+
+    const photoSvg = (index) => {
+      const labels = ["Frente", "Lateral", "Traseira", "Interior", "Painel"];
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="220" viewBox="0 0 360 220"><rect width="360" height="220" fill="#172033"/><rect x="22" y="92" width="316" height="78" rx="20" fill="#2b3d58"/><circle cx="94" cy="172" r="27" fill="#0b1220"/><circle cx="264" cy="172" r="27" fill="#0b1220"/><circle cx="94" cy="172" r="9" fill="#64748b"/><circle cx="264" cy="172" r="9" fill="#64748b"/><path d="M105 92 134 45h92l29 47" fill="#3b5170"/><text x="24" y="34" fill="#e2e8f0" font-family="system-ui" font-size="15" font-weight="700">Foto sintética ${index + 1} · ${labels[index]}</text><text x="24" y="54" fill="#94a3b8" font-family="system-ui" font-size="12">sem pessoas ou dados reais</text></svg>`;
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    };
+
+    const scenario = () => scenarios[fixture.value];
+
+    const clearMessages = () => {
+      ["problem", "notice", "profile-note", "window-note", "storage-note", "limit-note", "photo-error"].forEach((id) => {
+        byId(id).hidden = true;
+        byId(id).textContent = "";
+      });
+      byId("inspection-error").hidden = true;
+    };
+
+    const setButton = (id, label, disabled = false) => {
+      const button = byId(id);
+      button.textContent = label;
+      button.disabled = disabled;
+    };
+
+    const renderGallery = (data) => {
+      gallery.innerHTML = "";
+      const visible = data.expired ? 0 : data.photos;
+      for (let index = 0; index < visible; index += 1) {
+        const li = document.createElement("li");
+        li.className = "photo";
+        li.innerHTML = `
+          <img src="${photoSvg(index)}" alt="Foto sintética ${index + 1} da vistoria de entrada">
+          <p><strong>Foto ${index + 1}</strong><br><span class="muted">WebP · 2.560 px · sem EXIF/GPS</span></p>
+          <p><span class="pill">Disponível</span></p>
+          <button type="button" data-photo="${index + 1}">Ler foto</button>`;
+        gallery.append(li);
+      }
+      gallery.querySelectorAll("[data-photo]").forEach((button) => {
+        button.addEventListener("click", () => openPhoto(button.dataset.photo));
+      });
+      byId("empty").hidden = visible !== 0 || data.expired;
+      byId("expired-note").hidden = !data.expired;
+    };
+
+    const applyRole = (data) => {
+      const manobrista = role.value === "Manobrista";
+      const invalid = role.value === "Sessão inválida";
+      if (invalid) {
+        byId("problem").hidden = false;
+        byId("problem").textContent = "Sessão inválida. Entre novamente para consultar o atendimento.";
+        uploadForm.hidden = true;
+        gallery.hidden = true;
+        return;
+      }
+      gallery.hidden = false;
+      if (manobrista) {
+        uploadForm.hidden = true;
+        byId("profile-note").hidden = false;
+        byId("profile-note").textContent = "Seu perfil pode consultar as fotos da vistoria, mas não envia fotos de entrada.";
+      }
+      if (data.window === "closed" || data.delivered) {
+        uploadForm.hidden = true;
+        byId("window-note").hidden = false;
+        byId("window-note").textContent = data.delivered
+          ? "Atendimento entregue: a janela de fotos está encerrada. As fotos confirmadas permanecem consultáveis até a retenção."
+          : "Pedido de retirada registrado: a janela de fotos de entrada está encerrada.";
+      }
+      if (data.storageDown) {
+        byId("storage-note").hidden = false;
+        byId("storage-note").textContent = "Armazenamento de fotos indisponível. O atendimento e a vistoria textual continuam disponíveis; não há repetição automática.";
+      }
+      if (data.quotaUnknown) {
+        byId("storage-note").hidden = false;
+        byId("storage-note").textContent = "Consumo de fotos desconhecido. Envios e leituras de foto estão suspensos até a reconciliação; o fluxo textual continua.";
+        uploadForm.hidden = true;
+      }
+      if (data.quotaBlocked) {
+        byId("limit-note").hidden = false;
+        byId("limit-note").textContent = "Este envio ultrapassaria 80% da franquia de fotos. Anexos e leituras de foto estão limitados neste momento.";
+        uploadForm.hidden = true;
+      } else if (data.photos >= 5) {
+        byId("limit-note").hidden = false;
+        byId("limit-note").textContent = "Limite de cinco fotos atingido para esta vistoria. Não é possível excluir ou substituir fotos confirmadas.";
+        setButton("upload", "Limite de 5 fotos atingido", true);
+      }
+    };
+
+    const render = () => {
+      const data = scenario();
+      clearMessages();
+      byId("quota-warning").hidden = !data.quotaWarning && !data.quotaBlocked;
+      byId("quota-percent").textContent = data.quotaBlocked ? "82%" : "70%";
+      byId("state").textContent = data.delivered ? "Entregue" : "Ativo";
+      byId("withdrawal").textContent = data.withdrawal || "Sem pedido";
+      byId("photo-count").textContent = `${data.expired ? 0 : data.photos} de 5 fotos`;
+      byId("attempt").hidden = !data.uncertain;
+      uploadForm.hidden = false;
+      photoInput.value = "";
+      setButton("upload", "Enviar foto", false);
+      renderGallery(data);
+      applyRole(data);
+      if (!data.uncertain) {
+        byId("retry").hidden = true;
+      }
+    };
+
+    const openPhoto = (number) => {
+      if (readResponse.value === "fail") {
+        byId("problem").hidden = false;
+        byId("problem").textContent = "A leitura da foto falhou na auditoria. Nenhum conteúdo foi transmitido.";
+        return;
+      }
+      byId("photo-dialog-image").src = photoSvg(Number(number) - 1);
+      byId("photo-dialog").showModal();
+    };
+
+    byId("read-inspection").addEventListener("click", () => {
+      byId("inspection-error").hidden = false;
+      byId("inspection-text").hidden = true;
+      window.setTimeout(() => {
+        byId("inspection-error").hidden = true;
+        byId("inspection-text").hidden = false;
+        byId("inspection-text").textContent = "Pintura sintética íntegra; pequena marca fictícia no para-choque dianteiro; interior sem avarias simuladas.";
+      }, 250);
+    });
+
+    uploadForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = scenario();
+      const file = photoInput.files[0];
+      const error = byId("photo-error");
+      error.hidden = true;
+
+      if (!file) {
+        error.hidden = false;
+        error.textContent = "Selecione uma foto JPEG, PNG ou WebP para enviar.";
+        photoInput.focus();
+        return;
+      }
+      const accepted = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
+      if (!accepted) {
+        error.hidden = false;
+        error.textContent = "Formato não aceito. Envie JPEG, PNG ou WebP estático; SVG, animação e arquivos corrompidos são recusados.";
+        photoInput.focus();
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        error.hidden = false;
+        error.textContent = "Arquivo acima de 5 MiB. A vistoria textual continua válida sem esta foto.";
+        photoInput.focus();
+        return;
+      }
+      if (data.photos >= 5) {
+        error.hidden = false;
+        error.textContent = "A sexta foto foi recusada sob concorrência: o limite de cinco já foi atingido.";
+        photoInput.focus();
+        return;
+      }
+
+      setButton("upload", "Enviando e normalizando…", true);
+      byId("notice").hidden = false;
+      byId("notice").textContent = "Processando orientação, reduzindo para 2.560 px e regravando WebP sem metadados.";
+      window.setTimeout(() => {
+        if (uploadResponse.value === "conflict") {
+          setButton("upload", "Enviar foto", false);
+          byId("notice").hidden = true;
+          error.hidden = false;
+          error.textContent = "A mesma chave foi reutilizada com outro conteúdo. A tentativa original não foi alterada; inicie um novo envio explícito.";
+          return;
+        }
+        if (data.storageDown) {
+          setButton("upload", "Enviar foto", false);
+          byId("storage-note").hidden = false;
+          byId("storage-note").textContent = "O armazenamento recusou a conexão. Nenhuma foto foi confirmada; repita manualmente se necessário.";
+          return;
+        }
+        if (data.uncertain || uploadResponse.value === "lost") {
+          setButton("upload", "Enviar foto", false);
+          byId("attempt").hidden = false;
+          byId("retry").hidden = false;
+          byId("notice").hidden = true;
+          return;
+        }
+        data.photos += 1;
+        byId("notice").textContent = "Foto confirmada. Metadados mínimos e vínculo registrados; o texto da vistoria não foi alterado.";
+        renderGallery(data);
+        byId("photo-count").textContent = `${data.photos} de 5 fotos`;
+        setButton("upload", data.photos >= 5 ? "Limite de 5 fotos atingido" : "Enviar foto", data.photos >= 5);
+      }, 700);
+    });
+
+    byId("retry").addEventListener("click", () => {
+      byId("attempt").hidden = true;
+      byId("notice").hidden = false;
+      byId("notice").textContent = "Repetição explícita enviada com a mesma chave e o mesmo conteúdo. Nenhuma foto adicional será criada.";
+      const data = scenario();
+      data.photos += 1;
+      data.uncertain = false;
+      renderGallery(data);
+      byId("photo-count").textContent = `${data.photos} de 5 fotos`;
+    });
+
+    byId("discard").addEventListener("click", () => {
+      byId("attempt").hidden = true;
+      byId("notice").hidden = false;
+      byId("notice").textContent = "Tentativa descartada da tela. A reconciliação durável continua no servidor.";
+    });
+
+    role.addEventListener("change", render);
+    fixture.addEventListener("change", render);
+    render();
+  </script>
+</body>
+</html>
